@@ -1,0 +1,4 @@
+../Core/Src/jpeg_stream.c:12:6:JPEG_Stream_Init	4	static
+../Core/Src/jpeg_stream.c:17:10:JPEG_Stream_GetBuf	4	static
+../Core/Src/jpeg_stream.c:22:10:JPEG_Stream_GetMaxSize	4	static
+../Core/Src/jpeg_stream.c:27:10:JPEG_Stream_FindFrame	32	static

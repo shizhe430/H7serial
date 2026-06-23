@@ -1,0 +1,13 @@
+../Core/Src/ov2640_sccb.c:24:13:sccb_scl_hi	4	static
+../Core/Src/ov2640_sccb.c:25:13:sccb_scl_lo	4	static
+../Core/Src/ov2640_sccb.c:26:13:sccb_sda_hi	4	static
+../Core/Src/ov2640_sccb.c:27:13:sccb_sda_lo	4	static
+../Core/Src/ov2640_sccb.c:28:22:sccb_sda_read	4	static
+../Core/Src/ov2640_sccb.c:30:13:sccb_delay_us	32	static,ignoring_inline_asm
+../Core/Src/ov2640_sccb.c:63:13:sccb_start	8	static
+../Core/Src/ov2640_sccb.c:73:13:sccb_stop	8	static
+../Core/Src/ov2640_sccb.c:89:13:sccb_write_byte	24	static
+../Core/Src/ov2640_sccb.c:124:16:sccb_read_byte	16	static
+../Core/Src/ov2640_sccb.c:156:6:OV2640_SCCB_Init	32	static
+../Core/Src/ov2640_sccb.c:186:19:OV2640_SCCB_WriteReg	16	static
+../Core/Src/ov2640_sccb.c:196:19:OV2640_SCCB_ReadReg	16	static

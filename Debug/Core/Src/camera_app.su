@@ -1,0 +1,9 @@
+../Core/Src/camera_app.c:27:6:HAL_DCMI_FrameEventCallback	16	static
+../Core/Src/camera_app.c:33:6:HAL_DCMI_ErrorCallback	16	static
+../Core/Src/camera_app.c:41:6:CameraApp_SignalFrameDone	4	static
+../Core/Src/camera_app.c:48:13:dbg_print	16	static
+../Core/Src/camera_app.c:56:13:dbg_dump_dcmi_status	168	static
+../Core/Src/camera_app.c:77:13:ov2640_colorbar_enable	16	static
+../Core/Src/camera_app.c:91:13:ov2640_colorbar_disable	16	static
+../Core/Src/camera_app.c:103:6:CameraApp_Init	168	static
+../Core/Src/camera_app.c:231:6:CameraApp_Run	72	static,ignoring_inline_asm
