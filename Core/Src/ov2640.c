@@ -8,8 +8,8 @@
  * OV2640 底层驱动 (最简版)
  */
 
-#define OV2640_VIDEO_WIDTH               324U
-#define OV2640_VIDEO_HEIGHT              224U
+#define OV2640_VIDEO_WIDTH               320U
+#define OV2640_VIDEO_HEIGHT              240U
 #define OV2640_VIDEO_JPEG_QUALITY        0x20U
 #define OV2640_VIDEO_SENSOR_CLK_DIV      0x00U
 #define OV2640_VIDEO_DVP_PCLK_DIV        0x02U
@@ -172,6 +172,7 @@ uint8_t OV2640_SetOutputSize(uint16_t width, uint16_t height)
 uint8_t OV2640_StartSnapshot(void)
 {
     if ((s_initialized == 0U) || (s_frame_buf == NULL)) return OV2640_ERROR;
+    __HAL_DCMI_ENABLE_IT(&hdcmi, DCMI_IT_FRAME);
     return (HAL_DCMI_Start_DMA(&hdcmi, DCMI_MODE_SNAPSHOT, (uint32_t)s_frame_buf, s_frame_buf_len / 4U) == HAL_OK) ? OV2640_OK : OV2640_ERROR;
 }
 

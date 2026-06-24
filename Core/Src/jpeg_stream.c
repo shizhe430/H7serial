@@ -27,31 +27,40 @@ uint32_t JPEG_Stream_GetMaxSize(void)
 uint32_t JPEG_Stream_FindFrame(uint32_t *p_soi_offset)
 {
     uint32_t i;
-    uint32_t soi = 0U;
-    uint32_t eoi = 0U;
+    uint32_t soi = JPEG_BUF_SIZE;
+    uint32_t eoi = JPEG_BUF_SIZE;
 
-    for (i = 0U; i < JPEG_BUF_SIZE - 1U; i++)
+    for (i = JPEG_BUF_SIZE - 1U; i > 0U; i--)
     {
-        if (s_buf[i] == 0xFFU && s_buf[i + 1U] == 0xD8U)
+        if ((s_buf[i - 1U] == 0xFFU) && (s_buf[i] == 0xD9U))
         {
-            soi = i;
+            eoi = i + 1U;
             break;
         }
     }
 
-    for (i = soi + 2U; i < JPEG_BUF_SIZE - 1U; i++)
+    if (eoi == JPEG_BUF_SIZE)
     {
-        if (s_buf[i] == 0xFFU && s_buf[i + 1U] == 0xD9U)
+        if (p_soi_offset != NULL)
         {
-            eoi = i + 2U;
+            *p_soi_offset = 0U;
+        }
+        return 0U;
+    }
+
+    for (i = eoi - 1U; i > 0U; i--)
+    {
+        if ((s_buf[i - 1U] == 0xFFU) && (s_buf[i] == 0xD8U))
+        {
+            soi = i - 1U;
             break;
         }
     }
 
     if (p_soi_offset != NULL)
     {
-        *p_soi_offset = soi;
+        *p_soi_offset = (soi < JPEG_BUF_SIZE) ? soi : 0U;
     }
 
-    return (eoi > soi) ? (eoi - soi) : 0U;
+    return (soi < eoi) ? (eoi - soi) : 0U;
 }

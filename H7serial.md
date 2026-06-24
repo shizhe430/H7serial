@@ -1,5 +1,112 @@
 # H7serial — STM32H743IIT6 OV2640 图像采集工程
 
+---
+
+## 2026-06-23 Working Update
+
+- Git rollback baseline created: `47ed3b2` (`baseline: import current H7serial project and blueprint`)
+- Rules file added: `rules/H7serial.rules.md`
+- Current status update:
+  - `D6 = PB8` and `D7 = PB9` hardware mapping has been corrected in CubeMX/H7 code.
+  - The remaining bad-JPEG symptom was finally traced to `D5 = PD3` hardware non-contact.
+  - Software proof:
+    - with `PD3` internal pull-up / no-pull, captured header showed `FF F8 FF E0 20 30 6A 66`
+    - with `PD3` internal pull-down, captured header flipped to `DF D8 DF C0 00 10 4A 46`
+    - this proved `D5/PD3` was floating rather than being validly driven
+  - After physically fixing the `OV2640 D5 -> STM32 PD3` connection, the H7 capture log became:
+    - `head=FF D8 FF E0 00 10`
+    - `tail=.. .. FF D9`
+    - `soi=1 eoi=1 off=0 len≈3110`
+  - This confirms:
+    - DCMI data bus is now valid
+    - OV2640 JPEG output is valid
+    - reverse JPEG frame extraction is valid
+    - the current remaining step is to disable diagnostic text mode and validate real XCAM display
+- Current analysis:
+  - The issue is not only `PCLK` instability.
+  - The H7 project had drifted away from the verified U5 reference in several key places:
+    - JPEG path did not apply `YUV422 -> JPEG` in the verified order.
+    - Output size programming only wrote part of the DSP resize registers.
+    - Color bar test used the wrong `COM7` bit.
+    - XCAM path used continuous timed capture plus debug UART noise, which is fragile.
+    - `115200` baud is too low for practical `324x224` JPEG preview in XCAM.
+- Current fix direction already applied in code:
+  - Align OV2640 JPEG configuration closer to the verified open-source flow.
+  - Use proper DSP output-size registers for `324x224`.
+  - Switch XCAM runtime path back to single-frame `SNAPSHOT`.
+  - Reduce UART debug contamination of the JPEG stream.
+  - Raise USART1 baud rate to `921600`.
+  - Re-enable `DCMI_IT_FRAME` before each snapshot start, otherwise `g_frame_done` never releases and XCAM stays black with only a few received bytes.
+- New confirmed finding after XCAM retest:
+  - Current black screen is no longer a "no data" issue. `XCAM V1.3` shows sustained RX throughput around `38~40 KB/s`, but `FrameSize/Width/Height` stay `0`.
+  - The immediate root cause in the H7 code was a regression in JPEG frame extraction:
+    - The blueprint-required behavior is to search from the end of the DMA buffer and pick the last complete `FFD8 ... FFD9` frame.
+    - `jpeg_stream.c` had been changed to search forward for the first `SOI -> EOI`, which can select stale bytes or a cross-frame fragment when the buffer contains residual data.
+    - This exactly matches the symptom "XCAM keeps receiving bytes but never recognizes a valid JPEG frame".
+  - Corrective action applied:
+    - `JPEG_Stream_FindFrame()` restored to reverse-search `EOI -> SOI`.
+    - `camera_app.c` now rejects any candidate span whose first two bytes are not `FFD8` or last two bytes are not `FFD9`.
+  - Remaining comparison gap with the verified U5 project:
+    - `cursor/CoreU5` succeeds with `320x240`, not `324x224`.
+  - Current validation build direction:
+    - H7 output size has been temporarily aligned to `320x240` to match the proven U5 XCAM path exactly.
+    - Once XCAM can display valid frames on H7, resize will be moved back toward the user target `324x224` in a controlled follow-up step.
+  - New H7/HAL timing finding:
+    - In STM32H7 HAL DCMI, `DCMI_IT_FRAME` is enabled by the HAL only after the DMA transfer-complete path reaches the final transfer count.
+    - That means `FRAME` is not a safe "DMA data is already fully in RAM" signal if user code manually enables it too early and immediately calls `HAL_DCMI_Stop()`.
+    - The H7 app has now been adjusted to wait for a short DMA/FIFO settle window after `FrameEvent` before stopping DCMI, reducing the chance of truncating the JPEG tail.
+  - Current diagnostic mode:
+    - `CAMERA_JPEG_DIAG` is temporarily enabled.
+    - Firmware now sends one text diagnostic line per captured frame instead of the JPEG payload.
+    - Diagnostic mode must also print failure-path tags such as `probe fail`, `init fail`, `start`, `timeout`, `noframe`, `dcmierr`, because "no serial output" is otherwise ambiguous.
+    - Required next observation is the actual `[JPEG]` line showing:
+      - offset
+      - length
+      - DMA `NDTR`
+      - DCMI `SR`
+      - total `SOI/EOI` marker counts
+      - first 6 bytes at the chosen frame start
+      - last 4 bytes at the chosen frame end
+  - Diagnostic conclusion from `[JPEG]` logs:
+    - The stream usually contains a syntactically complete JPEG span (`SOI=1`, `EOI=1`, `off=0`, `len≈3400`), so frame extraction is no longer the primary problem.
+    - But the payload bytes are corrupted in a very specific way:
+      - expected JPEG-like head should resemble `FF D8 FF E0 ...`
+      - many captured heads instead look like `FF D8 EB D0 D3 CC` or `FF D8 E3 E0 E6 D9`
+      - many tail-adjacent bytes also cluster near `0xC0/0xE0/0xF0`
+    - This pattern strongly suggests DCMI data-bus high bits are stuck high during capture, especially `D6/D7`.
+  - New stronger evidence from the `noframe` logs:
+      - captured start bytes became `FF F8 FF E0 E0 F0 EA E6`
+      - the expected JPEG/JFIF start is typically `FF D8 FF E0 00 10 4A 46`
+      - bytewise comparison shows a near-exact `OR 0xE0` pattern on the data bytes:
+        - `00 -> E0`
+        - `10 -> F0`
+        - `4A -> EA`
+        - `46 -> E6`
+      - this is no longer "random corruption"; it indicates `D5/D6/D7` are being sampled as logic-high.
+    - On this H7 board the active data mapping is:
+      - `D5 = PD3`
+      - `D6 = PE5`
+      - `D7 = PE6`
+    - Therefore the highest-probability fault focus is now the three-bit group `PD3/PE5/PE6`, not the JPEG state machine and not the DCMI sync polarity.
+  - Root cause confirmed by hardware pin audit:
+    - The actual board wiring for the upper two camera data bits is:
+      - `D6 = PB8`
+      - `D7 = PB9`
+    - The earlier H7 project had incorrectly mapped them to `PE5/PE6`.
+    - After correcting CubeMX to `PB8/PB9`, the software side must still manually restore the blueprint-critical settings that CubeMX overwrote:
+      - `PCKPolarity = RISING`
+      - `SYSCFG_SWITCH_PA0 = OPEN`
+      - `USART1 baud = 921600`
+      - `DMA2_Stream3_IRQn priority = 5`
+      - `DCMI_IRQHandler()` declaration/implementation must exist after CubeMX regeneration; losing it breaks the frame-done callback path.
+    - `CAMERA_JPEG_DIAG` should normally stay disabled after the pin fix so the firmware sends real JPEG data to `XCAM`.
+    - Current software mitigation under test:
+      - remove internal pull-ups on DCMI data pins in `dcmi.c`, because the captured-byte pattern is consistent with upper data bits being biased high.
+    - Result after removing pull-ups:
+      - corruption pattern stayed essentially unchanged, so the issue is not merely caused by `GPIO_PULLUP` on all DCMI data pins.
+    - Current rule after that test:
+      - revert DCMI data pins to the blueprint's original `GPIO_PULLUP` configuration.
+      - do not keep experimental pulldown settings on `PE5/PE6` as a long-term branch.
 ## 目标
 将 `cursor/CoreU5` 中的 OV2640 相关底层能力迁移到当前 `Core` 工程，形成适配 STM32H743IIT6 的纯底层图像采集方案。
 
@@ -8,7 +115,7 @@
 | 功能 | 引脚 | 说明 |
 |------|------|------|
 | DCMI_D0~D4 | PC6, PC7, PC8, PC9, PC11 | |
-| DCMI_D5~D7 | PD3, PE5, PE6 | CubeMX 实际生成 |
+| DCMI_D5~D7 | PD3, PB8, PB9 | 当前已确认真实连线 |
 | DCMI_VSYNC | PB7 | |
 | DCMI_HREF | PH8 | |
 | DCMI_PCLK | PA6 | |
@@ -190,4 +297,3 @@ CubeMX 重新生成后需要手动恢复：
 - `0x3C` 读回 `0x00`（DSP无时钟）
 - DCMI SR 始终全零: VSYNC=0, HSYNC=0, FNE=0
 - SCCB 能读 ID，寄存器也能读写——数字部分正常，模拟部分(PLL/晶振)停摆
-

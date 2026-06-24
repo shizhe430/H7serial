@@ -66,10 +66,16 @@ int main(void)
   MPU_Config();
 
   /* Enable the CPU Cache */
+
+  /* Enable I-Cache---------------------------------------------------------*/
   SCB_EnableICache();
+
+  /* Enable D-Cache---------------------------------------------------------*/
   SCB_EnableDCache();
 
   /* MCU Configuration--------------------------------------------------------*/
+
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
 
   /* USER CODE BEGIN Init */
@@ -88,10 +94,7 @@ int main(void)
   MX_DMA_Init();
   MX_USART1_UART_Init();
   MX_DCMI_Init();
-
   /* USER CODE BEGIN 2 */
-  HAL_UART_Transmit(&huart1, (uint8_t *)"*** BUILD MARK A124 ***\r\n", 25, HAL_MAX_DELAY);
-
   CameraApp_Init();
 
   /* USER CODE END 2 */
@@ -216,6 +219,13 @@ void Error_Handler(void)
   /* USER CODE END Error_Handler_Debug */
 }
 #ifdef USE_FULL_ASSERT
+/**
+  * @brief  Reports the name of the source file and the source line number
+  *         where the assert_param error has occurred.
+  * @param  file: pointer to the source file name
+  * @param  line: assert_param error line source number
+  * @retval None
+  */
 void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */

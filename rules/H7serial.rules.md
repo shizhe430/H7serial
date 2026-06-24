@@ -19,4 +19,13 @@ Before changing camera, DCMI, DMA, SCCB, cache, or UART streaming logic:
 
 ## Current Goal
 
-Make the STM32H743 project output a stable `324x224` OV2640 JPEG stream that can be displayed in XCAM.
+Make the STM32H743 project output a stable `320x240` OV2640 JPEG stream that can be displayed in XCAM.
+
+## Current Diagnostic Rule
+
+- For XCAM black-screen cases with nonzero RX count, check JPEG frame extraction before changing DCMI polarity.
+- Prefer the last complete `FFD8 ... FFD9` span in the DMA buffer; do not use the first forward match when residual bytes may exist in the buffer.
+- The verified active H7 camera data mapping is:
+  - `D5 = PD3`
+  - `D6 = PB8`
+  - `D7 = PB9`
