@@ -1,0 +1,12 @@
+../Core/Src/ov2640.c:99:16:ov2640_write_reg	8	static
+../Core/Src/ov2640.c:116:16:ov2640_write_table	16	static
+../Core/Src/ov2640.c:109:13:ov2640_sw_reset	8	static
+../Core/Src/ov2640.c:129:9:OV2640_IsReady	0	static
+../Core/Src/ov2640.c:131:9:OV2640_ProbeID	24	static
+../Core/Src/ov2640.c:145:9:OV2640_SetOutputFormatJPEG	8	static
+../Core/Src/ov2640.c:155:9:OV2640_SetOutputSize	8	static
+../Core/Src/ov2640.c:172:9:OV2640_StartSnapshot	8	static
+../Core/Src/ov2640.c:179:9:OV2640_StopCapture	8	static
+../Core/Src/ov2640.c:184:6:OV2640_AttachFrameBuffer	0	static
+../Core/Src/ov2640.c:186:9:OV2640_Probe	16	static
+../Core/Src/ov2640.c:201:9:OV2640_Init	16	static

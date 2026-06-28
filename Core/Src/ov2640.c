@@ -10,7 +10,7 @@
 
 #define OV2640_VIDEO_WIDTH               320U
 #define OV2640_VIDEO_HEIGHT              240U
-#define OV2640_VIDEO_JPEG_QUALITY        0x20U
+#define OV2640_VIDEO_JPEG_QUALITY        0x18U
 #define OV2640_VIDEO_SENSOR_CLK_DIV      0x00U
 #define OV2640_VIDEO_DVP_PCLK_DIV        0x02U
 
@@ -75,6 +75,23 @@ static const uint8_t ov2640_jpeg_cfg[][2] = {
     {0xE5, 0x1F},
     {0xD7, 0x03},
     {0xDA, 0x10},
+    {0xE0, 0x00},
+};
+
+static const uint8_t ov2640_rgb565_cfg[][2] = {
+    {0xFF, 0x00},
+    {0xDA, 0x09},
+    {0xD7, 0x03},
+    {0xDF, 0x02},
+    {0x33, 0xA0},
+    {0x3C, 0x00},
+    {0xE1, 0x67},
+    {0xFF, 0x01},
+    {0xE0, 0x00},
+    {0xE1, 0x00},
+    {0xE5, 0x00},
+    {0xD7, 0x00},
+    {0xDA, 0x00},
     {0xE0, 0x00},
 };
 
@@ -150,6 +167,11 @@ uint8_t OV2640_SetOutputFormatJPEG(void)
     }
 
     return (ov2640_write_table(ov2640_jpeg_cfg, sizeof(ov2640_jpeg_cfg) / sizeof(ov2640_jpeg_cfg[0])) == OV2640_OK) ? OV2640_OK : OV2640_ERROR;
+}
+
+uint8_t OV2640_SetOutputFormatRGB565(void)
+{
+    return (ov2640_write_table(ov2640_rgb565_cfg, sizeof(ov2640_rgb565_cfg) / sizeof(ov2640_rgb565_cfg[0])) == OV2640_OK) ? OV2640_OK : OV2640_ERROR;
 }
 
 uint8_t OV2640_SetOutputSize(uint16_t width, uint16_t height)

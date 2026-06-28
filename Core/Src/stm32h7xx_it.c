@@ -22,6 +22,9 @@
 #include "stm32h7xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "usart.h"
+#include <stdio.h>
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -51,12 +54,25 @@
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+static void fault_dump_regs(const char *tag)
+{
+  char buf[192];
+  int len = snprintf(buf, sizeof(buf),
+                     "[FAULT:%s] CFSR=0x%08lX HFSR=0x%08lX BFAR=0x%08lX MMFAR=0x%08lX\r\n",
+                     tag,
+                     (unsigned long)SCB->CFSR,
+                     (unsigned long)SCB->HFSR,
+                     (unsigned long)SCB->BFAR,
+                     (unsigned long)SCB->MMFAR);
+  HAL_UART_Transmit(&huart1, (uint8_t *)buf, (uint16_t)len, HAL_MAX_DELAY);
+}
 
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
 extern DMA_HandleTypeDef hdma_dcmi;
 extern DCMI_HandleTypeDef hdcmi;
+extern UART_HandleTypeDef huart1;
 /* USER CODE BEGIN EV */
 
 /* USER CODE END EV */
@@ -85,11 +101,14 @@ void NMI_Handler(void)
 void HardFault_Handler(void)
 {
   /* USER CODE BEGIN HardFault_IRQn 0 */
+  fault_dump_regs("Hard");
 
   /* USER CODE END HardFault_IRQn 0 */
   while (1)
   {
     /* USER CODE BEGIN W1_HardFault_IRQn 0 */
+    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_1);
+    for (volatile uint32_t i = 0; i < 6000000; i++) {}
     /* USER CODE END W1_HardFault_IRQn 0 */
   }
 }
@@ -100,11 +119,14 @@ void HardFault_Handler(void)
 void MemManage_Handler(void)
 {
   /* USER CODE BEGIN MemoryManagement_IRQn 0 */
+  fault_dump_regs("Mem");
 
   /* USER CODE END MemoryManagement_IRQn 0 */
   while (1)
   {
     /* USER CODE BEGIN W1_MemoryManagement_IRQn 0 */
+    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_1);
+    for (volatile uint32_t i = 0; i < 6000000; i++) {}
     /* USER CODE END W1_MemoryManagement_IRQn 0 */
   }
 }
@@ -115,11 +137,14 @@ void MemManage_Handler(void)
 void BusFault_Handler(void)
 {
   /* USER CODE BEGIN BusFault_IRQn 0 */
+  fault_dump_regs("Bus");
 
   /* USER CODE END BusFault_IRQn 0 */
   while (1)
   {
     /* USER CODE BEGIN W1_BusFault_IRQn 0 */
+    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_1);
+    for (volatile uint32_t i = 0; i < 6000000; i++) {}
     /* USER CODE END W1_BusFault_IRQn 0 */
   }
 }
@@ -130,11 +155,14 @@ void BusFault_Handler(void)
 void UsageFault_Handler(void)
 {
   /* USER CODE BEGIN UsageFault_IRQn 0 */
+  fault_dump_regs("Usage");
 
   /* USER CODE END UsageFault_IRQn 0 */
   while (1)
   {
     /* USER CODE BEGIN W1_UsageFault_IRQn 0 */
+    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_1);
+    for (volatile uint32_t i = 0; i < 6000000; i++) {}
     /* USER CODE END W1_UsageFault_IRQn 0 */
   }
 }

@@ -30,8 +30,11 @@ Core/Src/camera_app.o: ../Core/Src/camera_app.c ../Core/Inc/camera_app.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pwr_ex.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_uart.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_uart_ex.h \
- ../Core/Inc/ov2640.h ../Core/Inc/ov2640_sccb.h ../Core/Inc/jpeg_stream.h \
- ../Core/Inc/dcmi.h ../Core/Inc/main.h ../Core/Inc/usart.h
+ ../Core/Inc/dcmi.h ../Core/Inc/main.h ../Core/Inc/jpeg_stream.h \
+ ../Core/Inc/ov2640.h ../Core/Inc/ov2640_sccb.h ../Core/Inc/usart.h \
+ ../X-CUBE-AI/App/waterlevel.h ../X-CUBE-AI/App/waterlevel_config.h \
+ ../Middlewares/ST/AI/Inc/ai_platform.h \
+ ../X-CUBE-AI/App/waterlevel_data_params.h ../Core/Inc/test_image_input.h
 ../Core/Inc/camera_app.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h:
 ../Core/Inc/stm32h7xx_hal_conf.h:
@@ -64,9 +67,14 @@ Core/Src/camera_app.o: ../Core/Src/camera_app.c ../Core/Inc/camera_app.h \
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pwr_ex.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_uart.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_uart_ex.h:
-../Core/Inc/ov2640.h:
-../Core/Inc/ov2640_sccb.h:
-../Core/Inc/jpeg_stream.h:
 ../Core/Inc/dcmi.h:
 ../Core/Inc/main.h:
+../Core/Inc/jpeg_stream.h:
+../Core/Inc/ov2640.h:
+../Core/Inc/ov2640_sccb.h:
 ../Core/Inc/usart.h:
+../X-CUBE-AI/App/waterlevel.h:
+../X-CUBE-AI/App/waterlevel_config.h:
+../Middlewares/ST/AI/Inc/ai_platform.h:
+../X-CUBE-AI/App/waterlevel_data_params.h:
+../Core/Inc/test_image_input.h:

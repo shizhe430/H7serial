@@ -107,6 +107,41 @@
     - Current rule after that test:
       - revert DCMI data pins to the blueprint's original `GPIO_PULLUP` configuration.
       - do not keep experimental pulldown settings on `PE5/PE6` as a long-term branch.
+
+## 2026-06-27 AI Integration Update
+
+- Current branch remains `codex/xcubeai`.
+- Camera application now supports two compile-time modes in `Core/Inc/camera_app.h`:
+  - `APP_MODE_XCAM_VIEW`
+    - keeps the known-good JPEG snapshot path for XCAM preview
+    - still uses `JPEG_Stream` as the DCMI DMA target
+  - `APP_MODE_AI_INFER`
+    - does **not** upload JPEG to XCAM
+    - switches OV2640 output format to `RGB565`
+    - captures one raw `320x240` frame directly through DCMI DMA
+    - preprocesses to model input and runs `waterlevel`
+- Important memory rule:
+  - JPEG mode and AI mode do **not** keep both large buffers resident at once.
+  - In `APP_MODE_AI_INFER`, DCMI uses a dedicated raw-frame buffer sized for one `RGB565 320x240` frame.
+  - In `APP_MODE_XCAM_VIEW`, DCMI continues using the original JPEG stream buffer.
+- Current H7 AI path design:
+  1. OV2640 raw output: `RGB565 320x240`
+  2. `RGB565 -> gray`
+  3. local contrast enhancement approximation for CLAHE intent
+  4. logical `320x240 -> pad to 320x320 -> center crop 224x224`
+  5. circular mask: center `(112,112)`, radius `100`
+  6. quantize to model input `int8`, zero point `-128`
+  7. optional brightness normalization toward nonzero mean `~0.355`
+  8. run `waterlevel` and print class / confidence / reg / inference time
+- Current generated model facts confirmed from `waterlevel_generate_report.txt`:
+  - input: `int8 1x224x224x1`, `scale=0.003921569`, `zero_point=-128`
+  - output0 logits: `int8 x5`, `scale=0.105105773`, `zero_point=42`
+  - output1 reg(sigmoid): `int8 x1`, `scale=0.000057468`, `zero_point=-128`
+- Current status:
+  - `camera_app.c` object-level compile was validated for both:
+    - `APP_MODE_XCAM_VIEW`
+    - `APP_MODE_AI_INFER`
+  - Full project link/build was not run in terminal because this shell session does not expose `make`.
 ## 目标
 将 `cursor/CoreU5` 中的 OV2640 相关底层能力迁移到当前 `Core` 工程，形成适配 STM32H743IIT6 的纯底层图像采集方案。
 
@@ -297,3 +332,52 @@ CubeMX 重新生成后需要手动恢复：
 - `0x3C` 读回 `0x00`（DSP无时钟）
 - DCMI SR 始终全零: VSYNC=0, HSYNC=0, FNE=0
 - SCCB 能读 ID，寄存器也能读写——数字部分正常，模拟部分(PLL/晶振)停摆
+---
+
+## 2026-06-27 AI inference HardFault
+
+- 现象：`APP_MODE_AI_INFER` 下日志停在 `[AI] infer start`。
+- 故障寄存器：`[FAULT:Hard] CFSR=0x01000000 HFSR=0x40000000`。
+- 结论：这是 `UNALIGNED` 使用错误，不是相机链路错误；问题点在 `ai_waterlevel_run()` 内部。
+
+### 已修复
+
+1. `Core/Src/main.c`
+   - 清除 `SCB_CCR_UNALIGN_TRP_Msk`
+   - 保留 `DSB/ISB`
+2. `Core/Src/main.c`
+   - AXI SRAM MPU 非缓存区从 `256KB` 扩到 `512KB`
+3. `Core/Src/camera_app.c`
+   - AI `activations/input/output` 改成独立 `AI_ALIGNED(32)` 静态数组
+   - 不再把这些大数组塞进 `g_ai_ctx` 结构体
+
+### 回归检查
+
+- 每次 CubeMX / X-CUBE-AI 重新生成后，复查：
+  - `SCB->CCR &= ~SCB_CCR_UNALIGN_TRP_Msk;`
+  - `MPU_REGION_SIZE_512KB`
+  - AI 大缓冲仍是独立对齐数组
+
+### 当前状态
+
+- `APP_MODE_AI_INFER` 已可连续运行，不再 HardFault。
+- 当前总耗时约 `1.58s` 一帧，主要瓶颈在固件侧预处理，不在 `ai_waterlevel_run()` 本身。
+- 串口日志不能再使用 `%f`，否则 `newlib-nano` 下会出现 `conf/reg` 空白和乱码；统一改为整数定点打印。
+
+### 2026-06-27 进一步结论
+
+- 当前部署模型不是 “Cube.AI 随机量化” 产物：
+  - `waterlevel_generate_report.txt` 显示导入文件就是 `v3_w05_pretrained_no_se_PerChannel_quant_calib_200_npz_1.onnx`
+  - 输入/输出与内部算子均为 `int8`
+- 因此，当前 “稳定误判 low” 的更高概率原因不是运行时量化失败，而是 **MCU 端输入分布和训练端预处理仍不完全一致**。
+- 当前 H7 端已实现：
+  - `320x240` 相机输入
+  - 中心裁剪等价于 `320x320 pad` 后再 `224x224 crop`
+  - 圆形遮罩
+- 当前 H7 端仍与训练端存在的主要风险：
+  - CLAHE 不是 OpenCV 原版实现
+  - 尚未做 “导出 MCU 端 224x224 输入图” 与训练端逐像素比对
+- `nn=334ms` 不能据此判断模型跑成了 FP32：
+  - 当前工程运行在 `Debug/-O0`
+  - AI activations 位于非缓存 AXI SRAM
+  - 这两点都会显著拉慢 H7 上的推理时间

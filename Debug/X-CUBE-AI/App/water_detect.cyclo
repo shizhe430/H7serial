@@ -1,0 +1,13 @@
+../X-CUBE-AI/App/water_detect.c:3583:9:water_detect_configure_activations	2
+../X-CUBE-AI/App/water_detect.c:3790:9:water_detect_configure_weights	2
+../X-CUBE-AI/App/water_detect.c:4033:9:ai_water_detect_get_info	4
+../X-CUBE-AI/App/water_detect.c:4080:9:ai_water_detect_get_report	4
+../X-CUBE-AI/App/water_detect.c:4127:10:ai_water_detect_get_error	1
+../X-CUBE-AI/App/water_detect.c:4134:10:ai_water_detect_create	1
+../X-CUBE-AI/App/water_detect.c:4145:10:ai_water_detect_create_and_init	8
+../X-CUBE-AI/App/water_detect.c:4180:12:ai_water_detect_inputs_get	2
+../X-CUBE-AI/App/water_detect.c:4191:12:ai_water_detect_outputs_get	2
+../X-CUBE-AI/App/water_detect.c:4202:11:ai_water_detect_destroy	1
+../X-CUBE-AI/App/water_detect.c:4209:9:ai_water_detect_init	2
+../X-CUBE-AI/App/water_detect.c:4226:8:ai_water_detect_run	1
+../X-CUBE-AI/App/water_detect.c:4234:8:ai_water_detect_forward	1

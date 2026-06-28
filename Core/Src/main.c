@@ -16,6 +16,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "camera_app.h"
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -43,11 +44,19 @@
 void SystemClock_Config(void);
 static void MPU_Config(void);
 /* USER CODE BEGIN PFP */
+static void main_uart_print(const char *text);
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+static void main_uart_print(const char *text)
+{
+  if (text != NULL)
+  {
+    (void)HAL_UART_Transmit(&huart1, (uint8_t *)text, (uint16_t)strlen(text), HAL_MAX_DELAY);
+  }
+}
 
 /* USER CODE END 0 */
 
@@ -73,6 +82,11 @@ int main(void)
   /* Enable D-Cache---------------------------------------------------------*/
   SCB_EnableDCache();
 
+  /* X-CUBE-AI runtime may access packed internal buffers with unaligned reads. */
+  SCB->CCR &= ~SCB_CCR_UNALIGN_TRP_Msk;
+  __DSB();
+  __ISB();
+
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
@@ -95,7 +109,10 @@ int main(void)
   MX_USART1_UART_Init();
   MX_DCMI_Init();
   /* USER CODE BEGIN 2 */
+  HAL_Delay(4000U);
+  main_uart_print("\r\n[BOOT] main enter\r\n");
   CameraApp_Init();
+  main_uart_print("[BOOT] camera init return\r\n");
 
   /* USER CODE END 2 */
 
@@ -190,9 +207,9 @@ void MPU_Config(void)
   MPU_InitStruct.Enable = MPU_REGION_ENABLE;
   MPU_InitStruct.Number = MPU_REGION_NUMBER0;
   MPU_InitStruct.BaseAddress = 0x24000000;
-  MPU_InitStruct.Size = MPU_REGION_SIZE_256KB;
+  MPU_InitStruct.Size = MPU_REGION_SIZE_512KB;
   MPU_InitStruct.SubRegionDisable = 0x00;
-  MPU_InitStruct.TypeExtField = MPU_TEX_LEVEL0;
+  MPU_InitStruct.TypeExtField = MPU_TEX_LEVEL1;
   MPU_InitStruct.AccessPermission = MPU_REGION_PRIV_RW;
   MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_ENABLE;
   MPU_InitStruct.IsShareable = MPU_ACCESS_SHAREABLE;
@@ -213,8 +230,11 @@ void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
   __disable_irq();
+  main_uart_print("[FAULT] Error_Handler\r\n");
   while (1)
   {
+    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_1);
+    HAL_Delay(200);
   }
   /* USER CODE END Error_Handler_Debug */
 }

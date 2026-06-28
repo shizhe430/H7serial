@@ -1,0 +1,7 @@
+../Core/Src/ov2640_sccb.c:30:13:sccb_delay_us.constprop	8	static,ignoring_inline_asm
+../Core/Src/ov2640_sccb.c:89:13:sccb_write_byte	32	static
+../Core/Src/ov2640_sccb.c:73:13:sccb_stop	8	static
+../Core/Src/ov2640_sccb.c:63:13:sccb_start	8	static
+../Core/Src/ov2640_sccb.c:156:6:OV2640_SCCB_Init	56	static
+../Core/Src/ov2640_sccb.c:186:19:OV2640_SCCB_WriteReg	16	static
+../Core/Src/ov2640_sccb.c:196:19:OV2640_SCCB_ReadReg	32	static

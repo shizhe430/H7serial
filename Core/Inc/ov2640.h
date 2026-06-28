@@ -22,6 +22,7 @@ uint8_t OV2640_IsReady(void);
 uint8_t OV2640_ProbeID(uint16_t *mid, uint16_t *pid);
 uint8_t OV2640_Probe(uint16_t *mid, uint16_t *pid);  /* 仅上电+复位+SCCB+读ID */
 uint8_t OV2640_SetOutputFormatJPEG(void);
+uint8_t OV2640_SetOutputFormatRGB565(void);
 uint8_t OV2640_SetOutputSize(uint16_t width, uint16_t height);
 uint8_t OV2640_StartSnapshot(void);
 uint8_t OV2640_StopCapture(void);
