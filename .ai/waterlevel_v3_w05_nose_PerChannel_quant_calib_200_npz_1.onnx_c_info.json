@@ -12000,44 +12000,44 @@
   ],
   "environment": {
     "generated_model": {
-      "generated_time": "2026-06-28T20:47:21+0800",
+      "generated_time": "2026-06-28T20:51:06+0800",
       "model_files": [
         {
           "name": "waterlevel_data_params.h",
-          "signature": "0xe373bc86463df49e4fc6dc2e6cc9af2b"
+          "signature": "0x89f34769a925c2f3214d90550669bdce"
         },
         {
           "name": "waterlevel_data_params.c",
-          "signature": "0xe9efa310149e678f80de9b48b9705a55"
+          "signature": "0xfe4efae736915fe3c1e20d054bd6fedd"
         },
         {
           "name": "waterlevel_data.h",
-          "signature": "0xeeee58530a4f2e3809b4a74313c5d523"
+          "signature": "0x658105a2f9694500aa016b7b27121b81"
         },
         {
           "name": "waterlevel_data.c",
-          "signature": "0xce0ef11ec914754b5d868384f172f927"
+          "signature": "0x5075f4190e8c016721049651aef9a054"
         },
         {
           "name": "waterlevel_config.h",
-          "signature": "0x36edc55e64e9d6437daa748b0eecd1f5"
+          "signature": "0xeb4f446fcdf80cd8ecb471424988b44f"
         },
         {
           "name": "waterlevel.h",
-          "signature": "0x81cfce96092124b437bc42cb39be7ac4"
+          "signature": "0xbebd9ac37414814d760c59e16788d9f3"
         },
         {
           "name": "waterlevel.c",
-          "signature": "0x7dafe0090905299fbdde8b810ad12104"
+          "signature": "0xf990a67208bc70dd22b7c0c9d39f9f76"
         }
       ],
       "name": "waterlevel"
     },
-    "network_signature": "0x47ffdeb08312db3c",
+    "network_signature": "0x7881f5f299813e29",
     "test_name": "",
     "tools": [
       {
-        "arguments": "analyze --target stm32h7 --name waterlevel -m D:/v3_w05_nose_PerChannel_quant_calib_200_npz_1.onnx --compression none --verbosity 1 -O time --workspace C:/Users/heshizhe/AppData/Local/Temp/mxAI_workspace221311256451001167516472590747922 --output D:/",
+        "arguments": "generate --target stm32h7 --name waterlevel -m D:/v3_w05_nose_PerChannel_quant_calib_200_npz_1.onnx --compression none --verbosity 1 -O time --workspace C:/Users/heshizhe/AppData/Local/Temp/mxAI_workspace223597930396006124795430042708048 --output D:/",
         "environment": [
           "STATS_TYPE=X-CUBE-AI"
         ],

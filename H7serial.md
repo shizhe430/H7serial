@@ -108,6 +108,158 @@
       - revert DCMI data pins to the blueprint's original `GPIO_PULLUP` configuration.
       - do not keep experimental pulldown settings on `PE5/PE6` as a long-term branch.
 
+## 2026-07-04 Model Replacement Preparation
+
+- Current verified camera baseline:
+  - `APP_MODE_XCAM_VIEW` is working again.
+  - `OV2640 -> JPEG snapshot -> XCAM` is the current known-good bring-up chain.
+  - The current image parameters produce images that the new PC-side model can classify correctly.
+- Current verified AI baseline:
+  - The correct H7 inference chain is:
+    - `OV2640 JPEG snapshot`
+    - `TJpgDec decode`
+    - training-aligned preprocess
+    - `X-CUBE-AI` inference
+  - The older direct `RGB565 -> infer` path is **not** the active baseline and must not be restored by accident.
+- Current purpose of the next step:
+  - replace the model through `CubeMX / X-CUBE-AI`
+  - preserve the already verified camera path
+  - preserve the training-aligned JPEG decode + preprocess chain
+
+### CubeMX / X-CUBE-AI replacement: previously observed failure modes
+
+1. `APP_MODE` was overwritten
+   - Symptom:
+     - user intended `APP_MODE_XCAM_VIEW`
+     - board booted into `APP_MODE_AI_TEST_IMAGE` or `APP_MODE_AI_INFER`
+   - Recovery:
+     - re-check `Core/Inc/camera_app.h`
+     - confirm:
+       - `APP_MODE_XCAM_VIEW`
+       - `APP_MODE_AI_INFER`
+       - `APP_MODE_AI_TEST_IMAGE`
+       - active `APP_MODE` value
+
+2. `DCMI_IRQHandler()` path was lost
+   - Symptom:
+     - build error: `hdcmi undeclared`
+     - or runtime capture never completes
+   - Recovery:
+     - re-check:
+       - `Core/Inc/stm32h7xx_it.h`
+       - `Core/Src/stm32h7xx_it.c`
+     - confirm:
+       - `extern DCMI_HandleTypeDef hdcmi;`
+       - `void DCMI_IRQHandler(void)`
+       - `HAL_DCMI_IRQHandler(&hdcmi);`
+
+3. camera-critical DCMI settings were overwritten
+   - Symptom:
+     - XCAM black screen
+     - `noframe`
+     - corrupted image
+     - no valid capture
+   - Recovery:
+     - re-check `Core/Src/dcmi.c`
+     - confirm:
+       - `PCKPolarity = DCMI_PCKPOLARITY_RISING`
+       - `VSPolarity = DCMI_VSPOLARITY_LOW`
+       - `HSPolarity = DCMI_HSPOLARITY_LOW`
+       - `ExtendedDataMode = DCMI_EXTEND_DATA_8B`
+       - `JPEGMode = DCMI_JPEG_DISABLE`
+
+4. GPIO mapping was overwritten
+   - Symptom:
+     - SCCB reads `mid=0xFFFF pid=0xFFFF`
+     - camera dark / no valid response
+     - or upper data bits corrupt image
+   - Recovery:
+     - re-check `Core/Src/gpio.c`
+     - confirm:
+       - `D5 = PD3`
+       - `D6 = PB8`
+       - `D7 = PB9`
+       - `PB3/PB4` remain SCCB open-drain pull-up
+       - `PA15` remains camera reset output
+       - `PA0` remains camera power-down output
+
+5. `PA0` analog switch / PWDN chain was broken by regeneration
+   - Symptom:
+     - probe fails even though wiring is correct
+   - Recovery:
+     - re-check `Core/Src/gpio.c`
+     - confirm:
+       - `HAL_SYSCFG_AnalogSwitchConfig(SYSCFG_SWITCH_PA0, SYSCFG_SWITCH_PA0_OPEN);`
+
+6. UART was overwritten
+   - Symptom:
+     - no XCAM image
+     - no useful boot log
+     - low throughput
+   - Recovery:
+     - re-check `Core/Src/usart.c`
+     - confirm `USART1 baud = 921600`
+
+7. AI runtime alignment / MPU safeguards were overwritten
+   - Symptom:
+     - boot prints stop before or during infer
+     - hard fault near `infer start`
+     - target appears to "run away" after flashing
+   - Recovery:
+     - re-check `Core/Src/main.c`
+     - confirm:
+       - `SCB->CCR &= ~SCB_CCR_UNALIGN_TRP_Msk;`
+       - AXI SRAM MPU region still covers the full `0x24000000-0x2407FFFF` 512KB window
+   - Note:
+     - this was a real prior failure source on H7 + `X-CUBE-AI`
+
+8. custom JPEG decode path was dropped from the build
+   - Symptom:
+     - build failure
+     - AI mode compiles but no longer uses the verified preprocess path
+   - Recovery:
+     - confirm these files still exist and still participate in build:
+       - `Core/Src/jpeg_decode.c`
+       - `Core/Src/tjpgd.c`
+       - `Core/Inc/jpeg_decode.h`
+       - `Core/Inc/tjpgd.h`
+       - `Core/Inc/tjpgdcnf.h`
+
+9. wrong generated model set was linked
+   - Symptom:
+     - compile succeeds but inference results obviously belong to the wrong network
+   - Recovery:
+     - inspect generated files under `X-CUBE-AI/App`
+     - verify the app is using the intended model family
+     - pay attention if both `waterlevel_*` and `water_detect_*` coexist
+
+10. generated/imported garbage source files broke the build
+   - Symptom:
+     - errors like:
+       - missing `../Common/camera.h`
+       - unexpected `reg51.h`
+       - unrelated legacy camera/demo files being compiled
+   - Recovery:
+     - inspect `X-CUBE-AI/App`
+     - remove or exclude unrelated imported demo sources before debugging runtime
+
+### Fast recovery order after model regeneration
+
+1. Confirm `APP_MODE` in `camera_app.h`
+2. Confirm boot log still prints
+3. Confirm `CameraApp_Init()` / `CameraApp_Run()` still called in `main.c`
+4. Confirm `probe ok mid=0x7FA2 pid=0x2642`
+5. Confirm XCAM view still works in `APP_MODE_XCAM_VIEW`
+6. Confirm AI path still uses `JPEG snapshot -> TJpgDec decode -> preprocess -> infer`
+7. Confirm generated model report matches `camera_app.c` input/output parsing
+8. Only then debug model accuracy
+
+### Model swap acceptance rule
+
+- Do not start investigating model accuracy until both are true:
+  - `APP_MODE_XCAM_VIEW` image is normal
+  - `APP_MODE_AI_TEST_IMAGE` matches PC-side inference on the same fixed test image
+
 ## 2026-06-27 AI Integration Update
 
 - Current branch remains `codex/xcubeai`.
@@ -381,3 +533,205 @@ CubeMX 重新生成后需要手动恢复：
   - 当前工程运行在 `Debug/-O0`
   - AI activations 位于非缓存 AXI SRAM
   - 这两点都会显著拉慢 H7 上的推理时间
+
+---
+
+## 2026-07-01 CubeMX / X-CUBE-AI Model Replacement Recovery Checklist
+
+### Current AI baseline
+
+- The current H7 AI path to preserve is:
+  - `OV2640 JPEG snapshot`
+  - `TJpgDec decode`
+  - `training-aligned preprocess`
+  - `X-CUBE-AI infer`
+- Do not accidentally fall back to the older experimental `RGB565 direct -> infer` branch when regenerating the project.
+- The current preprocess expectation is:
+  - `320x240`
+  - `CLAHE`
+  - `pad to 320x320`
+  - `center crop to 224x224`
+  - `circular mask radius=100`
+  - then convert to the model input format
+
+### Before replacing the model
+
+1. Commit the current working state to git first.
+2. Record the current generated model name and the matching `*_generate_report.txt`.
+3. Change only the CubeMX / X-CUBE-AI model configuration first.
+4. Regenerate once, then repair and verify the camera/AI chain in a controlled order.
+
+### Files most likely to be broken by regeneration
+
+- `Core/Inc/camera_app.h`
+  - keep `APP_MODE_XCAM_VIEW`
+  - keep `APP_MODE_AI_INFER`
+  - keep `APP_MODE_AI_TEST_IMAGE`
+  - re-check the default `APP_MODE`
+- `Core/Src/camera_app.c`
+  - keep the current AI flow:
+    - `camera_app_capture_jpeg_snapshot()`
+    - `jpeg_to_ai_input()`
+    - `camera_app_ai_run()`
+  - do not revert to the old raw RGB565 path by mistake
+  - re-check all model input/output scale and zero-point constants
+- `Core/Src/main.c`
+  - keep:
+    - `SCB->CCR &= ~SCB_CCR_UNALIGN_TRP_Msk;`
+    - `__DSB();`
+    - `__ISB();`
+  - keep AXI SRAM MPU settings:
+    - `BaseAddress = 0x24000000`
+    - `Size = MPU_REGION_SIZE_512KB`
+    - `TypeExtField = MPU_TEX_LEVEL1`
+    - `IsCacheable = MPU_ACCESS_NOT_CACHEABLE`
+  - keep `CameraApp_Init();`
+  - keep `CameraApp_Run();`
+- `Core/Src/dcmi.c`
+  - keep `PCKPolarity = DCMI_PCKPOLARITY_RISING`
+  - keep the verified mapping:
+    - `PD3 = D5`
+    - `PB8 = D6`
+    - `PB9 = D7`
+- `Core/Src/usart.c`
+  - keep `USART1 BaudRate = 921600`
+- `Core/Src/stm32h7xx_it.c`
+  - keep `#include "dcmi.h"`
+  - keep `DCMI_IRQHandler()`
+  - keep `HAL_DCMI_IRQHandler(&hdcmi);`
+- `Core/Src/ov2640.c`
+  - keep `OV2640_VIDEO_JPEG_QUALITY = 0x03U`
+  - keep the current `320x240` output size
+  - keep the current JPEG register programming order
+
+### Non-generated files that must remain in the build
+
+- `Core/Src/jpeg_decode.c`
+- `Core/Inc/jpeg_decode.h`
+- `Core/Src/tjpgd.c`
+- `Core/Inc/tjpgd.h`
+- `Core/Inc/tjpgdcnf.h`
+
+Important:
+
+- These files are not CubeMX-generated peripheral files.
+- After regeneration, they may still exist on disk but silently drop out of the build.
+- Always verify both:
+  - the file still exists
+  - the project is still compiling and linking it
+
+### Build-list checks after regeneration
+
+The project has already had a failure mode where source files existed but were not part of the actual build. Re-check:
+
+- `Debug/Core/Src/subdir.mk`
+  - should still include:
+    - `../Core/Src/jpeg_decode.c`
+    - `../Core/Src/tjpgd.c`
+- `Debug/objects.list`
+  - should still include:
+    - `./Core/Src/jpeg_decode.o`
+    - `./Core/Src/tjpgd.o`
+
+If the regenerated project suddenly loses JPEG-decode or AI-preprocess behavior, inspect these first.
+
+### Model report items that must be re-synced
+
+Always use the new generated report under:
+
+- `X-CUBE-AI/App/<model>_generate_report.txt`
+
+Do not keep the previous quantization constants by habit. Re-check:
+
+- input shape
+- input type
+- input scale
+- input zero-point
+- logits output type/scale/zero-point
+- reg output type/scale/zero-point
+
+Current `waterlevel` example values are:
+
+- input: `int8(1x224x224x1)`, `QLinear(0.003921569, -128, int8)`
+- logits: `int8(1x5)`, `QLinear(0.094021469, -8, int8)`
+- reg: `int8(1x1)`, `QLinear(0.003912641, -128, int8)`
+
+These are mirrored in `Core/Src/camera_app.c` and must be re-checked after every model replacement:
+
+- `WATERLEVEL_IN_ZERO_POINT`
+- `WATERLEVEL_OUT0_SCALE`
+- `WATERLEVEL_OUT0_ZERO_POINT`
+- `WATERLEVEL_OUT1_SCALE`
+- `WATERLEVEL_OUT1_ZERO_POINT`
+
+If the new model is `float32` instead of `int8`, the current `int8` input/output parsing path is no longer valid and must be changed together with the model.
+
+### Generated-model selection check
+
+This project has already contained multiple generated model sets, for example:
+
+- `waterlevel_*`
+- `water_detect_*`
+
+After replacing the model, verify that `camera_app.c` is actually including and calling the intended generated network, rather than still linking an older one.
+
+### Recovery order after model replacement
+
+1. Make the project build cleanly first.
+2. Confirm boot logs still exist:
+   - `[BOOT] main enter`
+   - `[APP] CameraApp_Init enter`
+3. Confirm the camera chain still works:
+   - `[APP] probe ok`
+   - `[AI] capture ok`
+   - `[AI] prep ok`
+4. Then confirm the AI chain:
+   - `[AI] infer start`
+   - `[AI] infer ok`
+5. If `APP_MODE_XCAM_VIEW` is broken, fix camera/JPEG first.
+6. If `APP_MODE_XCAM_VIEW` is fine but `APP_MODE_AI_INFER` is wrong, inspect model I/O format and quantization first.
+
+### Fast validation sequence
+
+1. `APP_MODE_AI_TEST_IMAGE`
+   - feed the fixed test image
+   - compare MCU result with the PC-side result
+2. `APP_MODE_XCAM_VIEW`
+   - confirm the camera still outputs a stable image
+   - use this to re-adjust camera position if needed
+3. `APP_MODE_AI_INFER`
+   - only after the first two pass, test real-time inference
+
+If the fixed test image matches PC inference but the live camera result does not, the issue is much more likely to be:
+
+- preprocess mismatch
+- live image quality degradation
+- camera position / lighting drift
+
+### Common symptom -> first check
+
+- build error: `hdcmi undeclared`
+  - check whether `stm32h7xx_it.c` lost `#include "dcmi.h"`
+- flash succeeds but board boots badly / no UART log
+  - check `main.c` for boot prints, MPU settings, and UNALIGN handling
+  - then re-check clock/HSE/PLL settings
+- `APP_MODE_XCAM_VIEW` has no image
+  - check `dcmi.c` polarity and D5/D6/D7 mapping first
+  - then check `USART1` baud rate
+- AI always outputs the wrong class
+  - check the new `*_generate_report.txt`
+  - then check `camera_app.c` quantization constants
+  - then check that `jpeg_decode.c` still matches the training preprocess
+
+### Operational rule for the next model swap
+
+- Change only the model first, not the camera chain.
+- Validate camera output and AI output separately.
+- After every regeneration, restore the chain in this order:
+  - boot
+  - UART
+  - camera
+  - JPEG decode
+  - preprocess
+  - inference
+- If the project starts drifting in multiple places at once, stop and return to the last good git baseline instead of continuing to stack fixes.

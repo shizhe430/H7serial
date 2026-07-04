@@ -65,11 +65,11 @@ Before enabling or regenerating `X-CUBE-AI` from CubeMX:
 ## AI Mode Rule
 
 - `APP_MODE_XCAM_VIEW` and `APP_MODE_AI_INFER` must stay isolated.
-- Do not force AI mode through the JPEG preview path unless raw-frame capture is proven impossible.
+- The current H7 AI baseline is `JPEG snapshot -> TJpgDec decode -> training-aligned preprocess -> infer`.
 - Preferred AI path on H7:
-  - OV2640 output format `RGB565`
-  - DCMI snapshot raw frame capture
-  - firmware-side preprocess to `224x224x1 int8`
+  - OV2640 JPEG snapshot capture
+  - TJpgDec decode to camera frame
+  - firmware-side training-aligned preprocess to the model input
   - direct `waterlevel` inference
 - Keep XCAM preview mode on the existing JPEG path so camera bring-up remains independently verifiable.
 - On H7 + X-CUBE-AI, do not enable alignment trapping for the CM7 core while running the generated AI runtime.
@@ -77,9 +77,70 @@ Before enabling or regenerating `X-CUBE-AI` from CubeMX:
 - Keep the D1 AXI SRAM MPU region covering the full `0x24000000-0x2407FFFF` 512KB window once AI buffers are placed there.
 - After any CubeMX/X-CUBE-AI regeneration, re-check:
   - `camera_app.h` still has both mode macros
-  - `ov2640.h/.c` still contains `OV2640_SetOutputFormatRGB565()`
-  - `camera_app.c` still selects:
-    - JPEG buffer in `APP_MODE_XCAM_VIEW`
-    - raw RGB565 frame buffer in `APP_MODE_AI_INFER`
+  - `camera_app.c` still uses:
+    - JPEG snapshot capture in `APP_MODE_AI_INFER`
+    - `jpeg_to_ai_input()` before inference
+  - `jpeg_decode.c` still matches the training preprocess contract
   - `main.c` still clears `SCB_CCR_UNALIGN_TRP_Msk` before AI inference is used
   - `main.c` still configures AXI SRAM MPU size as `MPU_REGION_SIZE_512KB`
+
+## Model Replacement Rule
+
+- Before replacing the model with CubeMX / X-CUBE-AI, commit the current working state first.
+- The current H7 AI baseline is `JPEG snapshot -> TJpgDec decode -> training-aligned preprocess -> infer`.
+- Do not accidentally revert to the older `RGB565 direct -> infer` branch during regeneration.
+- After regeneration, re-check these files immediately:
+  - `Core/Inc/camera_app.h`
+  - `Core/Src/camera_app.c`
+  - `Core/Src/main.c`
+  - `Core/Src/dcmi.c`
+  - `Core/Src/usart.c`
+  - `Core/Src/stm32h7xx_it.c`
+  - `Core/Src/ov2640.c`
+- After regeneration, verify these invariants:
+  - `PCKPolarity = DCMI_PCKPOLARITY_RISING`
+  - `PD3/PB8/PB9 = D5/D6/D7`
+  - `USART1 baud = 921600`
+  - `SCB->CCR &= ~SCB_CCR_UNALIGN_TRP_Msk;`
+  - AXI SRAM MPU remains `0x24000000` / `512KB` / non-cacheable / `MPU_TEX_LEVEL1`
+  - `DCMI_IRQHandler()` still calls `HAL_DCMI_IRQHandler(&hdcmi);`
+- These custom files must remain in the build:
+  - `Core/Src/jpeg_decode.c`
+  - `Core/Src/tjpgd.c`
+  - `Core/Inc/jpeg_decode.h`
+  - `Core/Inc/tjpgd.h`
+  - `Core/Inc/tjpgdcnf.h`
+- Re-check the generated model report every time:
+  - `X-CUBE-AI/App/<model>_generate_report.txt`
+  - sync input/output shape, type, scale, and zero-point into `camera_app.c`
+- Re-check that the actual generated model set used by the app is the intended one, especially if both `waterlevel_*` and `water_detect_*` exist in the tree.
+- Re-check that CubeMX / X-CUBE-AI did not pull unrelated demo sources into `X-CUBE-AI/App` such as:
+  - legacy `ov2640.*`
+  - `test.c`
+  - any source that includes missing headers like `../Common/camera.h` or `reg51.h`
+- Recommended recovery order after model replacement:
+  1. boot log
+  2. UART
+  3. camera probe
+  4. JPEG capture
+  5. JPEG decode / preprocess
+  6. AI infer
+- If `APP_MODE_AI_TEST_IMAGE` matches PC but live AI is wrong, prioritize preprocess/image-quality/camera-position checks over model-runtime suspicion.
+
+## Rapid Recovery Checklist
+
+- If build fails with `hdcmi undeclared`:
+  - restore `extern DCMI_HandleTypeDef hdcmi;`
+  - restore `DCMI_IRQHandler()` calling `HAL_DCMI_IRQHandler(&hdcmi);`
+- If boot mode is wrong:
+  - re-check `Core/Inc/camera_app.h`
+  - CubeMX regeneration may have disturbed the active `APP_MODE`
+- If boot log exists but camera probe becomes `0xFFFF/0xFFFF`:
+  - first suspect `gpio.c` / `PA0` analog switch / SCCB pin configuration, not JPEG logic
+- If flashing succeeds but runtime hangs near inference:
+  - first re-check `main.c` for:
+    - `SCB->CCR &= ~SCB_CCR_UNALIGN_TRP_Msk;`
+    - AXI SRAM MPU region still `512KB`
+- If XCAM is black after regeneration:
+  - first re-check `dcmi.c`, `gpio.c`, and `usart.c`
+  - only debug JPEG framing after those invariants are restored

@@ -1,0 +1,8 @@
+../Core/Src/jpeg_decode.c:34:16:clamp_u8	3
+../Core/Src/jpeg_decode.c:47:13:clahe_build_lut_u8	13
+../Core/Src/jpeg_decode.c:125:16:clahe_apply_u8	3
+../Core/Src/jpeg_decode.c:150:16:apply_circle_mask_u8	2
+../Core/Src/jpeg_decode.c:167:21:tjpgd_input	5
+../Core/Src/jpeg_decode.c:197:16:rgb_to_gray	1
+../Core/Src/jpeg_decode.c:202:12:tjpgd_output	7
+../Core/Src/jpeg_decode.c:244:9:jpeg_to_ai_input	11

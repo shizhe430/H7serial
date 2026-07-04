@@ -9,15 +9,16 @@ C_SRCS += \
 ../Core/Src/dcmi.c \
 ../Core/Src/dma.c \
 ../Core/Src/gpio.c \
+../Core/Src/jpeg_decode.c \
 ../Core/Src/jpeg_stream.c \
 ../Core/Src/main.c \
 ../Core/Src/ov2640.c \
 ../Core/Src/ov2640_sccb.c \
 ../Core/Src/stm32h7xx_hal_msp.c \
 ../Core/Src/stm32h7xx_it.c \
-../Core/Src/syscalls.c \
 ../Core/Src/sysmem.c \
 ../Core/Src/system_stm32h7xx.c \
+../Core/Src/tjpgd.c \
 ../Core/Src/usart.c 
 
 OBJS += \
@@ -25,15 +26,16 @@ OBJS += \
 ./Core/Src/dcmi.o \
 ./Core/Src/dma.o \
 ./Core/Src/gpio.o \
+./Core/Src/jpeg_decode.o \
 ./Core/Src/jpeg_stream.o \
 ./Core/Src/main.o \
 ./Core/Src/ov2640.o \
 ./Core/Src/ov2640_sccb.o \
 ./Core/Src/stm32h7xx_hal_msp.o \
 ./Core/Src/stm32h7xx_it.o \
-./Core/Src/syscalls.o \
 ./Core/Src/sysmem.o \
 ./Core/Src/system_stm32h7xx.o \
+./Core/Src/tjpgd.o \
 ./Core/Src/usart.o 
 
 C_DEPS += \
@@ -41,15 +43,16 @@ C_DEPS += \
 ./Core/Src/dcmi.d \
 ./Core/Src/dma.d \
 ./Core/Src/gpio.d \
+./Core/Src/jpeg_decode.d \
 ./Core/Src/jpeg_stream.d \
 ./Core/Src/main.d \
 ./Core/Src/ov2640.d \
 ./Core/Src/ov2640_sccb.d \
 ./Core/Src/stm32h7xx_hal_msp.d \
 ./Core/Src/stm32h7xx_it.d \
-./Core/Src/syscalls.d \
 ./Core/Src/sysmem.d \
 ./Core/Src/system_stm32h7xx.d \
+./Core/Src/tjpgd.d \
 ./Core/Src/usart.d 
 
 
@@ -60,7 +63,7 @@ Core/Src/%.o Core/Src/%.su Core/Src/%.cyclo: ../Core/Src/%.c Core/Src/subdir.mk
 clean: clean-Core-2f-Src
 
 clean-Core-2f-Src:
-	-$(RM) ./Core/Src/camera_app.cyclo ./Core/Src/camera_app.d ./Core/Src/camera_app.o ./Core/Src/camera_app.su ./Core/Src/dcmi.cyclo ./Core/Src/dcmi.d ./Core/Src/dcmi.o ./Core/Src/dcmi.su ./Core/Src/dma.cyclo ./Core/Src/dma.d ./Core/Src/dma.o ./Core/Src/dma.su ./Core/Src/gpio.cyclo ./Core/Src/gpio.d ./Core/Src/gpio.o ./Core/Src/gpio.su ./Core/Src/jpeg_stream.cyclo ./Core/Src/jpeg_stream.d ./Core/Src/jpeg_stream.o ./Core/Src/jpeg_stream.su ./Core/Src/main.cyclo ./Core/Src/main.d ./Core/Src/main.o ./Core/Src/main.su ./Core/Src/ov2640.cyclo ./Core/Src/ov2640.d ./Core/Src/ov2640.o ./Core/Src/ov2640.su ./Core/Src/ov2640_sccb.cyclo ./Core/Src/ov2640_sccb.d ./Core/Src/ov2640_sccb.o ./Core/Src/ov2640_sccb.su ./Core/Src/stm32h7xx_hal_msp.cyclo ./Core/Src/stm32h7xx_hal_msp.d ./Core/Src/stm32h7xx_hal_msp.o ./Core/Src/stm32h7xx_hal_msp.su ./Core/Src/stm32h7xx_it.cyclo ./Core/Src/stm32h7xx_it.d ./Core/Src/stm32h7xx_it.o ./Core/Src/stm32h7xx_it.su ./Core/Src/syscalls.cyclo ./Core/Src/syscalls.d ./Core/Src/syscalls.o ./Core/Src/syscalls.su ./Core/Src/sysmem.cyclo ./Core/Src/sysmem.d ./Core/Src/sysmem.o ./Core/Src/sysmem.su ./Core/Src/system_stm32h7xx.cyclo ./Core/Src/system_stm32h7xx.d ./Core/Src/system_stm32h7xx.o ./Core/Src/system_stm32h7xx.su ./Core/Src/usart.cyclo ./Core/Src/usart.d ./Core/Src/usart.o ./Core/Src/usart.su
+	-$(RM) ./Core/Src/camera_app.cyclo ./Core/Src/camera_app.d ./Core/Src/camera_app.o ./Core/Src/camera_app.su ./Core/Src/dcmi.cyclo ./Core/Src/dcmi.d ./Core/Src/dcmi.o ./Core/Src/dcmi.su ./Core/Src/dma.cyclo ./Core/Src/dma.d ./Core/Src/dma.o ./Core/Src/dma.su ./Core/Src/gpio.cyclo ./Core/Src/gpio.d ./Core/Src/gpio.o ./Core/Src/gpio.su ./Core/Src/jpeg_decode.cyclo ./Core/Src/jpeg_decode.d ./Core/Src/jpeg_decode.o ./Core/Src/jpeg_decode.su ./Core/Src/jpeg_stream.cyclo ./Core/Src/jpeg_stream.d ./Core/Src/jpeg_stream.o ./Core/Src/jpeg_stream.su ./Core/Src/main.cyclo ./Core/Src/main.d ./Core/Src/main.o ./Core/Src/main.su ./Core/Src/ov2640.cyclo ./Core/Src/ov2640.d ./Core/Src/ov2640.o ./Core/Src/ov2640.su ./Core/Src/ov2640_sccb.cyclo ./Core/Src/ov2640_sccb.d ./Core/Src/ov2640_sccb.o ./Core/Src/ov2640_sccb.su ./Core/Src/stm32h7xx_hal_msp.cyclo ./Core/Src/stm32h7xx_hal_msp.d ./Core/Src/stm32h7xx_hal_msp.o ./Core/Src/stm32h7xx_hal_msp.su ./Core/Src/stm32h7xx_it.cyclo ./Core/Src/stm32h7xx_it.d ./Core/Src/stm32h7xx_it.o ./Core/Src/stm32h7xx_it.su ./Core/Src/sysmem.cyclo ./Core/Src/sysmem.d ./Core/Src/sysmem.o ./Core/Src/sysmem.su ./Core/Src/system_stm32h7xx.cyclo ./Core/Src/system_stm32h7xx.d ./Core/Src/system_stm32h7xx.o ./Core/Src/system_stm32h7xx.su ./Core/Src/tjpgd.cyclo ./Core/Src/tjpgd.d ./Core/Src/tjpgd.o ./Core/Src/tjpgd.su ./Core/Src/usart.cyclo ./Core/Src/usart.d ./Core/Src/usart.o ./Core/Src/usart.su
 
 .PHONY: clean-Core-2f-Src
 

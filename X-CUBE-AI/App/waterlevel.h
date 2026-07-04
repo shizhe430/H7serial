@@ -2,7 +2,7 @@
   ******************************************************************************
   * @file    waterlevel.h
   * @author  AST Embedded Analytics Research Platform
-  * @date    2026-06-27T18:29:35+0800
+  * @date    2026-06-28T20:51:06+0800
   * @brief   AI Tool Automatic Code Generator for Embedded NN computing
   ******************************************************************************
   * @attention
@@ -23,7 +23,7 @@
 
 /******************************************************************************/
 #define AI_WATERLEVEL_MODEL_NAME          "waterlevel"
-#define AI_WATERLEVEL_ORIGIN_MODEL_NAME   "v3_w05_pretrained_no_se_perchannel_quant_calib_200_npz_1"
+#define AI_WATERLEVEL_ORIGIN_MODEL_NAME   "v3_w05_nose_perchannel_quant_calib_200_npz_1"
 
 /******************************************************************************/
 #define AI_WATERLEVEL_ACTIVATIONS_ALIGNMENT   (4)

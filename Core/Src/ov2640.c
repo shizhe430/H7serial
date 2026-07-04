@@ -10,9 +10,11 @@
 
 #define OV2640_VIDEO_WIDTH               320U
 #define OV2640_VIDEO_HEIGHT              240U
-#define OV2640_VIDEO_JPEG_QUALITY        0x18U
+#define OV2640_VIDEO_JPEG_QUALITY        0x03U
 #define OV2640_VIDEO_SENSOR_CLK_DIV      0x00U
 #define OV2640_VIDEO_DVP_PCLK_DIV        0x02U
+#define OV2640_EXPECTED_MID              0x7FA2U
+#define OV2640_EXPECTED_PID              0x2642U
 
 static uint8_t s_initialized = 0U;
 static uint8_t *s_frame_buf = NULL;
@@ -103,6 +105,74 @@ static const uint8_t ov2640_video_fast_cfg[][2] = {
     {0xE0, 0x00},
 };
 
+static const uint8_t ov2640_light_mode_auto_cfg[][2] = {
+    {0xFF, 0x00}, {0xC7, 0x00},
+};
+static const uint8_t ov2640_light_mode_sunny_cfg[][2] = {
+    {0xFF, 0x00}, {0xC7, 0x40}, {0xCC, 0x5E}, {0xCD, 0x41}, {0xCE, 0x54},
+};
+static const uint8_t ov2640_light_mode_cloudy_cfg[][2] = {
+    {0xFF, 0x00}, {0xC7, 0x40}, {0xCC, 0x65}, {0xCD, 0x41}, {0xCE, 0x4F},
+};
+static const uint8_t ov2640_light_mode_office_cfg[][2] = {
+    {0xFF, 0x00}, {0xC7, 0x40}, {0xCC, 0x52}, {0xCD, 0x41}, {0xCE, 0x66},
+};
+static const uint8_t ov2640_light_mode_home_cfg[][2] = {
+    {0xFF, 0x00}, {0xC7, 0x40}, {0xCC, 0x42}, {0xCD, 0x3F}, {0xCE, 0x71},
+};
+
+static const uint8_t ov2640_saturation_0_cfg[][2] = {
+    {0xFF, 0x00}, {0x7C, 0x00}, {0x7D, 0x02}, {0x7C, 0x03}, {0x7D, 0x68}, {0x7D, 0x68},
+};
+static const uint8_t ov2640_saturation_1_cfg[][2] = {
+    {0xFF, 0x00}, {0x7C, 0x00}, {0x7D, 0x02}, {0x7C, 0x03}, {0x7D, 0x58}, {0x7D, 0x58},
+};
+static const uint8_t ov2640_saturation_2_cfg[][2] = {
+    {0xFF, 0x00}, {0x7C, 0x00}, {0x7D, 0x02}, {0x7C, 0x03}, {0x7D, 0x48}, {0x7D, 0x48},
+};
+static const uint8_t ov2640_saturation_3_cfg[][2] = {
+    {0xFF, 0x00}, {0x7C, 0x00}, {0x7D, 0x02}, {0x7C, 0x03}, {0x7D, 0x38}, {0x7D, 0x38},
+};
+static const uint8_t ov2640_saturation_4_cfg[][2] = {
+    {0xFF, 0x00}, {0x7C, 0x00}, {0x7D, 0x02}, {0x7C, 0x03}, {0x7D, 0x28}, {0x7D, 0x28},
+};
+
+static const uint8_t ov2640_brightness_0_cfg[][2] = {
+    {0xFF, 0x00}, {0x7C, 0x00}, {0x7D, 0x04}, {0x7C, 0x09}, {0x7D, 0x40}, {0x7D, 0x00},
+};
+static const uint8_t ov2640_brightness_1_cfg[][2] = {
+    {0xFF, 0x00}, {0x7C, 0x00}, {0x7D, 0x04}, {0x7C, 0x09}, {0x7D, 0x30}, {0x7D, 0x00},
+};
+static const uint8_t ov2640_brightness_2_cfg[][2] = {
+    {0xFF, 0x00}, {0x7C, 0x00}, {0x7D, 0x04}, {0x7C, 0x09}, {0x7D, 0x20}, {0x7D, 0x00},
+};
+static const uint8_t ov2640_brightness_3_cfg[][2] = {
+    {0xFF, 0x00}, {0x7C, 0x00}, {0x7D, 0x04}, {0x7C, 0x09}, {0x7D, 0x10}, {0x7D, 0x00},
+};
+static const uint8_t ov2640_brightness_4_cfg[][2] = {
+    {0xFF, 0x00}, {0x7C, 0x00}, {0x7D, 0x04}, {0x7C, 0x09}, {0x7D, 0x00}, {0x7D, 0x00},
+};
+
+static const uint8_t ov2640_contrast_0_cfg[][2] = {
+    {0xFF, 0x00}, {0x7C, 0x00}, {0x7D, 0x04}, {0x7C, 0x07}, {0x7D, 0x20}, {0x7D, 0x28}, {0x7D, 0x0C}, {0x7D, 0x06},
+};
+static const uint8_t ov2640_contrast_1_cfg[][2] = {
+    {0xFF, 0x00}, {0x7C, 0x00}, {0x7D, 0x04}, {0x7C, 0x07}, {0x7D, 0x20}, {0x7D, 0x24}, {0x7D, 0x16}, {0x7D, 0x06},
+};
+static const uint8_t ov2640_contrast_2_cfg[][2] = {
+    {0xFF, 0x00}, {0x7C, 0x00}, {0x7D, 0x04}, {0x7C, 0x07}, {0x7D, 0x20}, {0x7D, 0x20}, {0x7D, 0x20}, {0x7D, 0x06},
+};
+static const uint8_t ov2640_contrast_3_cfg[][2] = {
+    {0xFF, 0x00}, {0x7C, 0x00}, {0x7D, 0x04}, {0x7C, 0x07}, {0x7D, 0x20}, {0x7D, 0x1C}, {0x7D, 0x2A}, {0x7D, 0x06},
+};
+static const uint8_t ov2640_contrast_4_cfg[][2] = {
+    {0xFF, 0x00}, {0x7C, 0x00}, {0x7D, 0x04}, {0x7C, 0x07}, {0x7D, 0x20}, {0x7D, 0x18}, {0x7D, 0x34}, {0x7D, 0x06},
+};
+
+static const uint8_t ov2640_effect_normal_cfg[][2] = {
+    {0xFF, 0x00}, {0x7C, 0x00}, {0x7D, 0x00}, {0x7C, 0x05}, {0x7D, 0x80}, {0x7D, 0x80},
+};
+
 /* ── 内部函数 ── */
 
 static void ov2640_hw_reset(void)
@@ -141,6 +211,11 @@ static uint8_t ov2640_write_table(const uint8_t table[][2], uint32_t count)
     return OV2640_OK;
 }
 
+static uint8_t ov2640_apply_table(const uint8_t table[][2], uint32_t count)
+{
+    return ov2640_write_table(table, count);
+}
+
 /* ── 公开接口 ── */
 
 uint8_t OV2640_IsReady(void) { return s_initialized; }
@@ -159,6 +234,7 @@ uint8_t OV2640_ProbeID(uint16_t *mid, uint16_t *pid)
     return OV2640_OK;
 }
 
+
 uint8_t OV2640_SetOutputFormatJPEG(void)
 {
     if (ov2640_write_table(ov2640_yuv422_cfg, sizeof(ov2640_yuv422_cfg) / sizeof(ov2640_yuv422_cfg[0])) != OV2640_OK)
@@ -172,6 +248,69 @@ uint8_t OV2640_SetOutputFormatJPEG(void)
 uint8_t OV2640_SetOutputFormatRGB565(void)
 {
     return (ov2640_write_table(ov2640_rgb565_cfg, sizeof(ov2640_rgb565_cfg) / sizeof(ov2640_rgb565_cfg[0])) == OV2640_OK) ? OV2640_OK : OV2640_ERROR;
+}
+
+uint8_t OV2640_SetLightMode(ov2640_light_mode_t mode)
+{
+    switch (mode)
+    {
+    case OV2640_LIGHT_MODE_AUTO:   return ov2640_apply_table(ov2640_light_mode_auto_cfg, sizeof(ov2640_light_mode_auto_cfg) / sizeof(ov2640_light_mode_auto_cfg[0]));
+    case OV2640_LIGHT_MODE_SUNNY:  return ov2640_apply_table(ov2640_light_mode_sunny_cfg, sizeof(ov2640_light_mode_sunny_cfg) / sizeof(ov2640_light_mode_sunny_cfg[0]));
+    case OV2640_LIGHT_MODE_CLOUDY: return ov2640_apply_table(ov2640_light_mode_cloudy_cfg, sizeof(ov2640_light_mode_cloudy_cfg) / sizeof(ov2640_light_mode_cloudy_cfg[0]));
+    case OV2640_LIGHT_MODE_OFFICE: return ov2640_apply_table(ov2640_light_mode_office_cfg, sizeof(ov2640_light_mode_office_cfg) / sizeof(ov2640_light_mode_office_cfg[0]));
+    case OV2640_LIGHT_MODE_HOME:   return ov2640_apply_table(ov2640_light_mode_home_cfg, sizeof(ov2640_light_mode_home_cfg) / sizeof(ov2640_light_mode_home_cfg[0]));
+    default: return OV2640_ERROR;
+    }
+}
+
+uint8_t OV2640_SetColorSaturation(ov2640_color_saturation_t saturation)
+{
+    switch (saturation)
+    {
+    case OV2640_COLOR_SATURATION_0: return ov2640_apply_table(ov2640_saturation_0_cfg, sizeof(ov2640_saturation_0_cfg) / sizeof(ov2640_saturation_0_cfg[0]));
+    case OV2640_COLOR_SATURATION_1: return ov2640_apply_table(ov2640_saturation_1_cfg, sizeof(ov2640_saturation_1_cfg) / sizeof(ov2640_saturation_1_cfg[0]));
+    case OV2640_COLOR_SATURATION_2: return ov2640_apply_table(ov2640_saturation_2_cfg, sizeof(ov2640_saturation_2_cfg) / sizeof(ov2640_saturation_2_cfg[0]));
+    case OV2640_COLOR_SATURATION_3: return ov2640_apply_table(ov2640_saturation_3_cfg, sizeof(ov2640_saturation_3_cfg) / sizeof(ov2640_saturation_3_cfg[0]));
+    case OV2640_COLOR_SATURATION_4: return ov2640_apply_table(ov2640_saturation_4_cfg, sizeof(ov2640_saturation_4_cfg) / sizeof(ov2640_saturation_4_cfg[0]));
+    default: return OV2640_ERROR;
+    }
+}
+
+uint8_t OV2640_SetBrightness(ov2640_brightness_t brightness)
+{
+    switch (brightness)
+    {
+    case OV2640_BRIGHTNESS_0: return ov2640_apply_table(ov2640_brightness_0_cfg, sizeof(ov2640_brightness_0_cfg) / sizeof(ov2640_brightness_0_cfg[0]));
+    case OV2640_BRIGHTNESS_1: return ov2640_apply_table(ov2640_brightness_1_cfg, sizeof(ov2640_brightness_1_cfg) / sizeof(ov2640_brightness_1_cfg[0]));
+    case OV2640_BRIGHTNESS_2: return ov2640_apply_table(ov2640_brightness_2_cfg, sizeof(ov2640_brightness_2_cfg) / sizeof(ov2640_brightness_2_cfg[0]));
+    case OV2640_BRIGHTNESS_3: return ov2640_apply_table(ov2640_brightness_3_cfg, sizeof(ov2640_brightness_3_cfg) / sizeof(ov2640_brightness_3_cfg[0]));
+    case OV2640_BRIGHTNESS_4: return ov2640_apply_table(ov2640_brightness_4_cfg, sizeof(ov2640_brightness_4_cfg) / sizeof(ov2640_brightness_4_cfg[0]));
+    default: return OV2640_ERROR;
+    }
+}
+
+uint8_t OV2640_SetContrast(ov2640_contrast_t contrast)
+{
+    switch (contrast)
+    {
+    case OV2640_CONTRAST_0: return ov2640_apply_table(ov2640_contrast_0_cfg, sizeof(ov2640_contrast_0_cfg) / sizeof(ov2640_contrast_0_cfg[0]));
+    case OV2640_CONTRAST_1: return ov2640_apply_table(ov2640_contrast_1_cfg, sizeof(ov2640_contrast_1_cfg) / sizeof(ov2640_contrast_1_cfg[0]));
+    case OV2640_CONTRAST_2: return ov2640_apply_table(ov2640_contrast_2_cfg, sizeof(ov2640_contrast_2_cfg) / sizeof(ov2640_contrast_2_cfg[0]));
+    case OV2640_CONTRAST_3: return ov2640_apply_table(ov2640_contrast_3_cfg, sizeof(ov2640_contrast_3_cfg) / sizeof(ov2640_contrast_3_cfg[0]));
+    case OV2640_CONTRAST_4: return ov2640_apply_table(ov2640_contrast_4_cfg, sizeof(ov2640_contrast_4_cfg) / sizeof(ov2640_contrast_4_cfg[0]));
+    default: return OV2640_ERROR;
+    }
+}
+
+uint8_t OV2640_SetSpecialEffect(ov2640_special_effect_t effect)
+{
+    switch (effect)
+    {
+    case OV2640_SPECIAL_EFFECT_NORMAL:
+        return ov2640_apply_table(ov2640_effect_normal_cfg, sizeof(ov2640_effect_normal_cfg) / sizeof(ov2640_effect_normal_cfg[0]));
+    default:
+        return OV2640_ERROR;
+    }
 }
 
 uint8_t OV2640_SetOutputSize(uint16_t width, uint16_t height)
@@ -217,7 +356,17 @@ uint8_t OV2640_Probe(uint16_t *mid, uint16_t *pid)
     HAL_Delay(100U);
     OV2640_SCCB_Init();
     ov2640_sw_reset();
-    return OV2640_ProbeID(mid, pid);
+    if (OV2640_ProbeID(mid, pid) != OV2640_OK)
+    {
+        return OV2640_ERROR;
+    }
+
+    if ((*mid != OV2640_EXPECTED_MID) || (*pid != OV2640_EXPECTED_PID))
+    {
+        return OV2640_ERROR;
+    }
+
+    return OV2640_OK;
 }
 
 uint8_t OV2640_Init(void)
@@ -226,6 +375,7 @@ uint8_t OV2640_Init(void)
     /* 摄像头已上电, 只做SW复位+写表 */
     ov2640_sw_reset();
     if (OV2640_ProbeID(&mid, &pid) != OV2640_OK) return OV2640_ERROR;
+    if ((mid != OV2640_EXPECTED_MID) || (pid != OV2640_EXPECTED_PID)) return OV2640_ERROR;
     if (ov2640_write_table(ov2640_init_common_cfg, sizeof(ov2640_init_common_cfg) / sizeof(ov2640_init_common_cfg[0])) != OV2640_OK) return OV2640_ERROR;
     if (ov2640_write_table(ov2640_video_fast_cfg, sizeof(ov2640_video_fast_cfg) / sizeof(ov2640_video_fast_cfg[0])) != OV2640_OK) return OV2640_ERROR;
     if (OV2640_SetOutputFormatJPEG() != OV2640_OK) return OV2640_ERROR;

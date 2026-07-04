@@ -1,6 +1,7 @@
 #include "camera_app.h"
 #include "dcmi.h"
 #include "jpeg_stream.h"
+#include "jpeg_decode.h"
 #include "ov2640.h"
 #include "ov2640_sccb.h"
 #include "usart.h"
@@ -35,17 +36,21 @@ static volatile uint8_t g_frame_error = 0U;
 #define CAMERA_AI_CLAHE_TILE_H      (CAMERA_HEIGHT / CAMERA_AI_CLAHE_GRID_Y)
 #define CAMERA_AI_CLAHE_TILE_PIXELS (CAMERA_AI_CLAHE_TILE_W * CAMERA_AI_CLAHE_TILE_H)
 #define CAMERA_AI_CLAHE_CLIP_LIMIT  2U
-#define CAMERA_AI_CROP_X_OFFSET     52U
-#define CAMERA_AI_CROP_Y_OFFSET     4U
+#define CAMERA_AI_PAD_SIZE          320U
+#define CAMERA_AI_PAD_TOP           ((CAMERA_AI_PAD_SIZE - CAMERA_HEIGHT) / 2U)
+#define CAMERA_AI_PAD_LEFT          ((CAMERA_AI_PAD_SIZE - CAMERA_WIDTH) / 2U)
+#define CAMERA_AI_CROP_START_X      ((CAMERA_AI_PAD_SIZE - 224U) / 2U)
+#define CAMERA_AI_CROP_START_Y      ((CAMERA_AI_PAD_SIZE - 224U) / 2U)
+#define CAMERA_AI_ENABLE_BRIGHTNESS_NORM 0U
 #define CAMERA_AI_TARGET_MEAN_GRAY  91U
 
 #define CAMERA_DMA_SETTLE_SPINS   8192U
 #define CAMERA_DMA_STABLE_SPINS   64U
 
 #define WATERLEVEL_IN_ZERO_POINT  (-128)
-#define WATERLEVEL_OUT0_SCALE     (0.10510577261447906f)
-#define WATERLEVEL_OUT0_ZERO_POINT (42)
-#define WATERLEVEL_OUT1_SCALE     (5.746752503910102e-05f)
+#define WATERLEVEL_OUT0_SCALE     (0.094021469f)
+#define WATERLEVEL_OUT0_ZERO_POINT (-8)
+#define WATERLEVEL_OUT1_SCALE     (0.003912641f)
 #define WATERLEVEL_OUT1_ZERO_POINT (-128)
 
 typedef struct
@@ -276,6 +281,59 @@ static uint8_t camera_app_capture_snapshot(uint32_t timeout_ms)
     return (g_frame_error != 0U) ? 3U : 0U;
 }
 
+static uint8_t camera_app_capture_jpeg_snapshot(uint32_t timeout_ms, uint32_t *jpeg_off, uint32_t *jpeg_len)
+{
+    uint32_t start_tick;
+
+    if ((jpeg_off == NULL) || (jpeg_len == NULL))
+    {
+        return 1U;
+    }
+
+    *jpeg_off = 0U;
+    *jpeg_len = 0U;
+    g_frame_done = 0U;
+    g_frame_error = 0U;
+
+    if (OV2640_StartSnapshot() != OV2640_OK)
+    {
+        HAL_DCMI_Stop(&hdcmi);
+        HAL_Delay(20U);
+        return 1U;
+    }
+
+    start_tick = HAL_GetTick();
+    while (g_frame_done == 0U)
+    {
+        if ((HAL_GetTick() - start_tick) > timeout_ms)
+        {
+            HAL_DCMI_Stop(&hdcmi);
+            return 2U;
+        }
+    }
+
+    camera_app_wait_dma_settle();
+    HAL_DCMI_Stop(&hdcmi);
+
+    if (g_frame_error != 0U)
+    {
+        return 3U;
+    }
+
+    *jpeg_len = JPEG_Stream_FindFrame(jpeg_off);
+    if (*jpeg_len == 0U)
+    {
+        return 4U;
+    }
+
+    if ((*jpeg_off + *jpeg_len) > JPEG_Stream_GetMaxSize())
+    {
+        return 5U;
+    }
+
+    return 0U;
+}
+
 #if ((APP_MODE == APP_MODE_AI_INFER) || (APP_MODE == APP_MODE_AI_TEST_IMAGE))
 static const char *camera_ai_class_name(uint8_t class_id)
 {
@@ -449,22 +507,31 @@ static void camera_app_preprocess_rgb565_to_ai(const uint16_t *src_rgb565, ai_i8
 
     for (y = 0U; y < 224U; y++)
     {
-        uint32_t src_y = y + CAMERA_AI_CROP_Y_OFFSET;
         uint32_t x;
+        uint32_t square_y = y + CAMERA_AI_CROP_START_Y;
 
         for (x = 0U; x < 224U; x++)
         {
-            uint32_t src_x = x + CAMERA_AI_CROP_X_OFFSET;
             uint32_t dx = (x > CAMERA_AI_MASK_CENTER) ? (x - CAMERA_AI_MASK_CENTER) : (CAMERA_AI_MASK_CENTER - x);
             uint32_t dy = (y > CAMERA_AI_MASK_CENTER) ? (y - CAMERA_AI_MASK_CENTER) : (CAMERA_AI_MASK_CENTER - y);
             uint32_t idx = (y * 224U) + x;
+            uint32_t square_x = x + CAMERA_AI_CROP_START_X;
 
             if (((dx * dx) + (dy * dy)) > (CAMERA_AI_MASK_RADIUS * CAMERA_AI_MASK_RADIUS))
             {
                 g_ai_gray_buf[idx] = 0U;
             }
+            else if ((square_y < CAMERA_AI_PAD_TOP) ||
+                     (square_y >= (CAMERA_AI_PAD_TOP + CAMERA_HEIGHT)) ||
+                     (square_x < CAMERA_AI_PAD_LEFT) ||
+                     (square_x >= (CAMERA_AI_PAD_LEFT + CAMERA_WIDTH)))
+            {
+                g_ai_gray_buf[idx] = 0U;
+            }
             else
             {
+                uint32_t src_x = square_x - CAMERA_AI_PAD_LEFT;
+                uint32_t src_y = square_y - CAMERA_AI_PAD_TOP;
                 uint8_t gray = camera_app_clahe_apply_gray(src_rgb565, src_x, src_y);
                 g_ai_gray_buf[idx] = gray;
                 if (gray != 0U)
@@ -476,7 +543,7 @@ static void camera_app_preprocess_rgb565_to_ai(const uint16_t *src_rgb565, ai_i8
         }
     }
 
-    if (gray_count != 0U)
+    if ((CAMERA_AI_ENABLE_BRIGHTNESS_NORM != 0U) && (gray_count != 0U))
     {
         norm_den = gray_sum / gray_count;
         if (norm_den == 0U)
@@ -500,7 +567,12 @@ static void camera_app_preprocess_rgb565_to_ai(const uint16_t *src_rgb565, ai_i8
             }
             else
             {
-                uint32_t scaled = ((uint32_t)gray * norm_num + (norm_den / 2U)) / norm_den;
+                uint32_t scaled = gray;
+
+                if (CAMERA_AI_ENABLE_BRIGHTNESS_NORM != 0U)
+                {
+                    scaled = ((uint32_t)gray * norm_num + (norm_den / 2U)) / norm_den;
+                }
                 if (scaled > 255U)
                 {
                     scaled = 255U;
@@ -789,12 +861,14 @@ void CameraApp_Init(void)
     uint16_t mid = 0U;
     uint16_t pid = 0U;
 
-    camera_app_log("[APP] CameraApp_Init enter\r\n");
 #if (APP_MODE == APP_MODE_AI_INFER)
+    camera_app_log("[APP] CameraApp_Init enter\r\n");
     camera_app_log("[APP] mode=AI_INFER\r\n");
 #elif (APP_MODE == APP_MODE_AI_TEST_IMAGE)
+    camera_app_log("[APP] CameraApp_Init enter\r\n");
     camera_app_log("[APP] mode=AI_TEST_IMAGE\r\n");
 #else
+    camera_app_log("[APP] CameraApp_Init enter\r\n");
     camera_app_log("[APP] mode=XCAM_VIEW\r\n");
 #endif
 
@@ -891,11 +965,7 @@ void CameraApp_Init(void)
     if (APP_MODE != APP_MODE_AI_TEST_IMAGE)
     {
         JPEG_Stream_Init();
-#if (APP_MODE == APP_MODE_AI_INFER)
-        OV2640_AttachFrameBuffer(g_frame_buf, sizeof(g_frame_buf));
-#else
         OV2640_AttachFrameBuffer(JPEG_Stream_GetBuf(), JPEG_Stream_GetMaxSize());
-#endif
 
         HAL_NVIC_SetPriority(DCMI_IRQn, 5, 0);
         HAL_NVIC_EnableIRQ(DCMI_IRQn);
@@ -905,12 +975,12 @@ void CameraApp_Init(void)
 
 #if ((APP_MODE == APP_MODE_AI_INFER) || (APP_MODE == APP_MODE_AI_TEST_IMAGE))
 #if (APP_MODE == APP_MODE_AI_INFER)
-    if (OV2640_SetOutputFormatRGB565() != OV2640_OK)
+    if (OV2640_SetOutputFormatJPEG() != OV2640_OK)
     {
-        camera_app_log("[APP] rgb565 fmt fail\r\n");
+        camera_app_log("[APP] jpeg fmt fail\r\n");
         return;
     }
-    camera_app_log("[APP] rgb565 fmt ok\r\n");
+    camera_app_log("[APP] jpeg fmt ok\r\n");
 #endif
     if (camera_app_ai_init() != 0U)
     {
@@ -999,6 +1069,8 @@ void CameraApp_Run(void)
         uint32_t pipeline_start = HAL_GetTick();
         uint32_t infer_start;
         uint32_t infer_ms;
+        uint32_t jpeg_off = 0U;
+        uint32_t jpeg_len = 0U;
         uint8_t status;
         static uint8_t first_enter = 1U;
 
@@ -1009,7 +1081,7 @@ void CameraApp_Run(void)
         }
 
         camera_app_log("[AI] capture start\r\n");
-        status = camera_app_capture_snapshot(1000U);
+        status = camera_app_capture_jpeg_snapshot(3000U, &jpeg_off, &jpeg_len);
 
         if (status != 0U)
         {
@@ -1021,7 +1093,12 @@ void CameraApp_Run(void)
         }
 
         camera_app_log("[AI] capture ok\r\n");
-        camera_app_preprocess_rgb565_to_ai((const uint16_t *)g_frame_buf, g_ai_input_data);
+        if (jpeg_to_ai_input(JPEG_Stream_GetBuf() + jpeg_off, jpeg_len, (int8_t *)g_ai_input_data) != 0U)
+        {
+            camera_app_log("[AI] decode fail\r\n");
+            HAL_Delay(100U);
+            return;
+        }
         camera_app_log("[AI] prep ok\r\n");
 #if (CAMERA_AI_DUMP_INPUT_ONCE != 0U)
         camera_app_dump_ai_input_once(g_ai_input_data);
