@@ -1,26 +1,26 @@
 ST Edge AI Core v2.2.0-20266 2adc00962
-Created date          : 2026-06-28 20:51:09
-Parameters            : generate --target stm32h7 --name waterlevel -m D:/v3_w05_nose_PerChannel_quant_calib_200_npz_1.onnx --compression none --verbosity 1 -O time --workspace C:/Users/heshizhe/AppData/Local/Temp/mxAI_workspace223597930396006124795430042708048 --output D:/
+Created date          : 2026-07-04 15:11:53
+Parameters            : generate --target stm32h7 --name waterlevel -m D:/final74.onnx --compression none --verbosity 1 -O time --workspace C:/Users/heshizhe/AppData/Local/Temp/mxAI_workspace1567017056990015097310068491895108 --output D:/
 
 Exec/report summary (generate)
 ----------------------------------------------------------------------------------------------------------------------
-model file         :   D:\v3_w05_nose_PerChannel_quant_calib_200_npz_1.onnx                                           
+model file         :   D:\final74.onnx                                                                                
 type               :   onnx                                                                                           
 c_name             :   waterlevel                                                                                     
 compression        :   none                                                                                           
 options            :   allocate-inputs, allocate-outputs                                                              
 optimization       :   time                                                                                           
 target/series      :   stm32h7                                                                                        
-workspace dir      :   C:\Users\heshizhe\AppData\Local\Temp\mxAI_workspace223597930396006124795430042708048           
+workspace dir      :   C:\Users\heshizhe\AppData\Local\Temp\mxAI_workspace1567017056990015097310068491895108          
 output dir         :   D:\                                                                                            
 model_fmt          :   ss/sa per channel                                                                              
-model_name         :   v3_w05_nose_PerChannel_quant_calib_200_npz_1                                                   
-model_hash         :   0xf13f42964cb6efee16d2411a5a955566                                                             
+model_name         :   final74                                                                                        
+model_hash         :   0xd83a96cfc926ba3a31f4d507bbc87680                                                             
 params #           :   172,390 items (673.40 KiB)                                                                     
 ----------------------------------------------------------------------------------------------------------------------
 input 1/1          :   'input', int8(1x224x224x1), 49.00 KBytes, QLinear(0.003921569,-128,int8), activations          
-output 1/2         :   'logits_QuantizeLinear_Input', int8(1x5), 5 Bytes, QLinear(0.094021469,-8,int8), activations   
-output 2/2         :   '_Sigmoid_0', int8(1x1), 1 Bytes, QLinear(0.003912641,-128,int8), activations                  
+output 1/2         :   'logits_QuantizeLinear_Input', int8(1x5), 5 Bytes, QLinear(0.098395728,-9,int8), activations   
+output 2/2         :   '_Sigmoid_0', int8(1x1), 1 Bytes, QLinear(0.003897347,-128,int8), activations                  
 outputs (total)    :   6 Bytes                                                                                        
 macc               :   16,478,967                                                                                     
 weights (ro)       :   182,008 B (177.74 KiB) (1 segment) / -507,552(-73.6%) vs float model                           
@@ -29,7 +29,7 @@ ram (total)        :   167,280 B (163.36 KiB) = 167,280 + 0 + 0
 ----------------------------------------------------------------------------------------------------------------------
 (*) 'input'/'output' buffers are allocated in the activations buffer
 
-Model name - v3_w05_nose_PerChannel_quant_calib_200_npz_1
+Model name - final74
 ------ ---------------------------------------------------------------- ----------------------- ---------------- ----------- -------------------------------- --- ------------------- ------------------- ---------------------- 
 m_id   layer (type,original)                                            oshape                  param/size              macc                     connected to   | c_size              c_macc              c_type                 
 ------ ---------------------------------------------------------------- ----------------------- ---------------- ----------- -------------------------------- --- ------------------- ------------------- ---------------------- 
@@ -358,7 +358,7 @@ model/c-model: macc=19,780,896/16,478,967 -3,301,929(-16.7%) weights=689,560/182
 
 Generated C-graph summary
 ------------------------------------------------------------------------------------------------------------------------
-model name            : v3_w05_nose_PerChannel_quant_calib_200_npz_1
+model name            : final74
 c-name                : waterlevel
 c-node #              : 49
 c-array #             : 161

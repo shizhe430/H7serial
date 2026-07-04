@@ -1,0 +1,3 @@
+../Core/Src/jpeg_decode.c:167:21:tjpgd_input	4
+../Core/Src/jpeg_decode.c:202:12:tjpgd_output	9
+../Core/Src/jpeg_decode.c:244:9:jpeg_to_ai_input	20

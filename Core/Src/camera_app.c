@@ -43,14 +43,16 @@ static volatile uint8_t g_frame_error = 0U;
 #define CAMERA_AI_CROP_START_Y      ((CAMERA_AI_PAD_SIZE - 224U) / 2U)
 #define CAMERA_AI_ENABLE_BRIGHTNESS_NORM 0U
 #define CAMERA_AI_TARGET_MEAN_GRAY  91U
+#define CAMERA_AI_VERBOSE_LOG       0U
+#define CAMERA_PROBE_RETRY_COUNT    3U
 
 #define CAMERA_DMA_SETTLE_SPINS   8192U
 #define CAMERA_DMA_STABLE_SPINS   64U
 
 #define WATERLEVEL_IN_ZERO_POINT  (-128)
-#define WATERLEVEL_OUT0_SCALE     (0.094021469f)
-#define WATERLEVEL_OUT0_ZERO_POINT (-8)
-#define WATERLEVEL_OUT1_SCALE     (0.003912641f)
+#define WATERLEVEL_OUT0_SCALE     (0.098395728f)
+#define WATERLEVEL_OUT0_ZERO_POINT (-9)
+#define WATERLEVEL_OUT1_SCALE     (0.003897347f)
 #define WATERLEVEL_OUT1_ZERO_POINT (-128)
 
 typedef struct
@@ -69,17 +71,32 @@ typedef struct
     int8_t logits[AI_WATERLEVEL_OUT_1_SIZE];
 } camera_ai_result_t;
 
-#if ((APP_MODE == APP_MODE_AI_INFER) || (APP_MODE == APP_MODE_AI_TEST_IMAGE))
+typedef struct
+{
+    uint32_t frame_count;
+    uint8_t last_class_id;
+    float last_level_reg;
+    float last_confidence;
+    uint8_t stop_request;
+    uint8_t abnormal_latched;
+} camera_pump_ctrl_state_t;
+
+#if ((APP_MODE == APP_MODE_AI_INFER) || (APP_MODE == APP_MODE_AI_TEST_IMAGE) || (APP_MODE == APP_MODE_PUMP_CTRL))
 static AI_ALIGNED(32) uint8_t g_frame_buf[CAMERA_RGB565_FRAME_BYTES];
-static AI_ALIGNED(32) ai_u8 g_ai_activations[AI_WATERLEVEL_DATA_ACTIVATIONS_SIZE];
-static AI_ALIGNED(32) ai_i8 g_ai_input_data[AI_WATERLEVEL_IN_1_SIZE];
-static AI_ALIGNED(32) ai_i8 g_ai_output_logits[AI_WATERLEVEL_OUT_1_SIZE];
-static AI_ALIGNED(32) ai_i8 g_ai_output_reg[AI_WATERLEVEL_OUT_2_SIZE];
+static AI_ALIGNED(32) ai_u8 g_ai_activations[AI_WATERLEVEL_DATA_ACTIVATIONS_SIZE]
+    __attribute__((section(".ai_ram_d1")));
+static AI_ALIGNED(32) ai_i8 g_ai_input_data[AI_WATERLEVEL_IN_1_SIZE]
+    __attribute__((section(".ai_dtcm")));
+static AI_ALIGNED(32) ai_i8 g_ai_output_logits[AI_WATERLEVEL_OUT_1_SIZE]
+    __attribute__((section(".ai_dtcm")));
+static AI_ALIGNED(32) ai_i8 g_ai_output_reg[AI_WATERLEVEL_OUT_2_SIZE]
+    __attribute__((section(".ai_dtcm")));
 static uint8_t g_ai_clahe_lut[CAMERA_AI_CLAHE_GRID_Y][CAMERA_AI_CLAHE_GRID_X][256];
 static uint8_t g_ai_gray_buf[CAMERA_AI_INPUT_SIZE];
 static camera_ai_context_t g_ai_ctx;
 #endif
 static uint8_t g_camera_ready = 0U;
+static camera_pump_ctrl_state_t g_pump_ctrl;
 
 static void dbg_print(const char *s)
 {
@@ -334,7 +351,7 @@ static uint8_t camera_app_capture_jpeg_snapshot(uint32_t timeout_ms, uint32_t *j
     return 0U;
 }
 
-#if ((APP_MODE == APP_MODE_AI_INFER) || (APP_MODE == APP_MODE_AI_TEST_IMAGE))
+#if ((APP_MODE == APP_MODE_AI_INFER) || (APP_MODE == APP_MODE_AI_TEST_IMAGE) || (APP_MODE == APP_MODE_PUMP_CTRL))
 static const char *camera_ai_class_name(uint8_t class_id)
 {
     static const char *const k_names[5] = {
@@ -737,6 +754,37 @@ static void camera_app_ai_report(const camera_ai_result_t *result,
 }
 #endif
 
+#if (APP_MODE == APP_MODE_PUMP_CTRL)
+static void camera_app_pump_ctrl_reset(void)
+{
+    memset(&g_pump_ctrl, 0, sizeof(g_pump_ctrl));
+}
+
+static void camera_app_pump_ctrl_consume_result(const camera_ai_result_t *result)
+{
+    if (result == NULL)
+    {
+        return;
+    }
+
+    g_pump_ctrl.frame_count++;
+    g_pump_ctrl.last_class_id = result->class_id;
+    g_pump_ctrl.last_level_reg = result->level_reg;
+    g_pump_ctrl.last_confidence = result->confidence;
+    g_pump_ctrl.stop_request = ((result->class_id == 3U) || (result->class_id == 4U)) ? 1U : 0U;
+
+    if (result->class_id == 4U)
+    {
+        g_pump_ctrl.abnormal_latched = 1U;
+    }
+
+    /* Future pump-control integration point:
+       1. add debounce / multi-frame state machine
+       2. call user-provided pump start/stop interface
+       3. add timeout / fault interlock handling */
+}
+#endif
+
 #if (CAMERA_APP_DEBUG != 0U)
 static void dbg_dump_dcmi_status(void)
 {
@@ -867,6 +915,7 @@ void CameraApp_Init(void)
 #elif (APP_MODE == APP_MODE_AI_TEST_IMAGE)
     camera_app_log("[APP] CameraApp_Init enter\r\n");
     camera_app_log("[APP] mode=AI_TEST_IMAGE\r\n");
+#elif (APP_MODE == APP_MODE_PUMP_CTRL)
 #else
     camera_app_log("[APP] CameraApp_Init enter\r\n");
     camera_app_log("[APP] mode=XCAM_VIEW\r\n");
@@ -881,9 +930,27 @@ void CameraApp_Init(void)
 
     if (APP_MODE != APP_MODE_AI_TEST_IMAGE)
     {
-        if (OV2640_Probe(&mid, &pid) != OV2640_OK)
+        uint32_t probe_try;
+        uint8_t probe_ok = 0U;
+
+        for (probe_try = 0U; probe_try < CAMERA_PROBE_RETRY_COUNT; probe_try++)
         {
-            camera_app_log("[APP] probe fail\r\n");
+            if (OV2640_Probe(&mid, &pid) == OV2640_OK)
+            {
+                probe_ok = 1U;
+                break;
+            }
+
+            HAL_Delay(50U);
+        }
+
+        if (probe_ok == 0U)
+        {
+            char buf[80];
+            int len = snprintf(buf, sizeof(buf),
+                               "[APP] probe fail mid=0x%04X pid=0x%04X\r\n",
+                               mid, pid);
+            HAL_UART_Transmit(&huart1, (uint8_t *)buf, (uint16_t)len, HAL_MAX_DELAY);
 #if (CAMERA_JPEG_DIAG != 0U)
             {
                 static const char msg[] = "[JPEG] probe fail\r\n";
@@ -973,7 +1040,7 @@ void CameraApp_Init(void)
         HAL_Delay(1500U);
     }
 
-#if ((APP_MODE == APP_MODE_AI_INFER) || (APP_MODE == APP_MODE_AI_TEST_IMAGE))
+#if ((APP_MODE == APP_MODE_AI_INFER) || (APP_MODE == APP_MODE_AI_TEST_IMAGE) || (APP_MODE == APP_MODE_PUMP_CTRL))
 #if (APP_MODE == APP_MODE_AI_INFER)
     if (OV2640_SetOutputFormatJPEG() != OV2640_OK)
     {
@@ -984,14 +1051,22 @@ void CameraApp_Init(void)
 #endif
     if (camera_app_ai_init() != 0U)
     {
+#if (APP_MODE != APP_MODE_PUMP_CTRL)
         camera_app_log("[APP] ai init fail\r\n");
+#endif
         return;
     }
+#if (APP_MODE == APP_MODE_AI_INFER)
     camera_app_log("[APP] ai init ok\r\n");
+#elif (APP_MODE == APP_MODE_PUMP_CTRL)
+    camera_app_pump_ctrl_reset();
+#endif
 #endif
 
     g_camera_ready = 1U;
+#if (APP_MODE != APP_MODE_PUMP_CTRL)
     camera_app_log("[APP] CameraApp_Init done\r\n");
+#endif
 
 #if (CAMERA_APP_DEBUG != 0U)
     {
@@ -1080,7 +1155,9 @@ void CameraApp_Run(void)
             first_enter = 0U;
         }
 
+#if (CAMERA_AI_VERBOSE_LOG != 0U)
         camera_app_log("[AI] capture start\r\n");
+#endif
         status = camera_app_capture_jpeg_snapshot(3000U, &jpeg_off, &jpeg_len);
 
         if (status != 0U)
@@ -1092,14 +1169,18 @@ void CameraApp_Run(void)
             return;
         }
 
+#if (CAMERA_AI_VERBOSE_LOG != 0U)
         camera_app_log("[AI] capture ok\r\n");
+#endif
         if (jpeg_to_ai_input(JPEG_Stream_GetBuf() + jpeg_off, jpeg_len, (int8_t *)g_ai_input_data) != 0U)
         {
             camera_app_log("[AI] decode fail\r\n");
             HAL_Delay(100U);
             return;
         }
+#if (CAMERA_AI_VERBOSE_LOG != 0U)
         camera_app_log("[AI] prep ok\r\n");
+#endif
 #if (CAMERA_AI_DUMP_INPUT_ONCE != 0U)
         camera_app_dump_ai_input_once(g_ai_input_data);
 #if (CAMERA_AI_DUMP_ONLY != 0U)
@@ -1110,7 +1191,9 @@ void CameraApp_Run(void)
 #endif
 #endif
 
+#if (CAMERA_AI_VERBOSE_LOG != 0U)
         camera_app_log("[AI] infer start\r\n");
+#endif
         infer_start = HAL_GetTick();
         if (camera_app_ai_run(&result) != 0U)
         {
@@ -1121,9 +1204,10 @@ void CameraApp_Run(void)
         }
         infer_ms = HAL_GetTick() - infer_start;
 
+#if (CAMERA_AI_VERBOSE_LOG != 0U)
         camera_app_log("[AI] infer ok\r\n");
+#endif
         camera_app_ai_report(&result, HAL_GetTick() - pipeline_start, infer_ms);
-        HAL_Delay(20U);
     }
 #elif (APP_MODE == APP_MODE_AI_TEST_IMAGE)
     {
@@ -1153,6 +1237,31 @@ void CameraApp_Run(void)
         camera_app_log("[AI:TEST] infer ok\r\n");
         camera_app_ai_report(&result, infer_ms, infer_ms);
         g_camera_ready = 0U;
+    }
+#elif (APP_MODE == APP_MODE_PUMP_CTRL)
+    {
+        camera_ai_result_t result;
+        uint32_t jpeg_off = 0U;
+        uint32_t jpeg_len = 0U;
+        uint8_t status;
+
+        status = camera_app_capture_jpeg_snapshot(3000U, &jpeg_off, &jpeg_len);
+        if (status != 0U)
+        {
+            return;
+        }
+
+        if (jpeg_to_ai_input(JPEG_Stream_GetBuf() + jpeg_off, jpeg_len, (int8_t *)g_ai_input_data) != 0U)
+        {
+            return;
+        }
+
+        if (camera_app_ai_run(&result) != 0U)
+        {
+            return;
+        }
+
+        camera_app_pump_ctrl_consume_result(&result);
     }
 #endif
 }

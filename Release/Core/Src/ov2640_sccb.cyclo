@@ -1,7 +1,4 @@
-../Core/Src/ov2640_sccb.c:30:13:sccb_delay_us.constprop	5
-../Core/Src/ov2640_sccb.c:89:13:sccb_write_byte	3
-../Core/Src/ov2640_sccb.c:73:13:sccb_stop	1
-../Core/Src/ov2640_sccb.c:63:13:sccb_start	1
+../Core/Src/ov2640_sccb.c:89:13:sccb_write_byte	27
 ../Core/Src/ov2640_sccb.c:156:6:OV2640_SCCB_Init	1
-../Core/Src/ov2640_sccb.c:186:19:OV2640_SCCB_WriteReg	1
-../Core/Src/ov2640_sccb.c:196:19:OV2640_SCCB_ReadReg	3
+../Core/Src/ov2640_sccb.c:186:19:OV2640_SCCB_WriteReg	31
+../Core/Src/ov2640_sccb.c:196:19:OV2640_SCCB_ReadReg	100

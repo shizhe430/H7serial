@@ -1,11 +1,13 @@
-../X-CUBE-AI/App/waterlevel.c:4119:9:ai_waterlevel_get_info	4
-../X-CUBE-AI/App/waterlevel.c:4166:9:ai_waterlevel_get_report	4
+../X-CUBE-AI/App/waterlevel.c:3876:9:waterlevel_configure_weights	2
+../X-CUBE-AI/App/waterlevel.c:3683:9:waterlevel_configure_activations	2
+../X-CUBE-AI/App/waterlevel.c:4119:9:ai_waterlevel_get_info	3
+../X-CUBE-AI/App/waterlevel.c:4166:9:ai_waterlevel_get_report	3
 ../X-CUBE-AI/App/waterlevel.c:4213:10:ai_waterlevel_get_error	1
 ../X-CUBE-AI/App/waterlevel.c:4220:10:ai_waterlevel_create	1
+../X-CUBE-AI/App/waterlevel.c:4231:10:ai_waterlevel_create_and_init	12
 ../X-CUBE-AI/App/waterlevel.c:4266:12:ai_waterlevel_inputs_get	2
 ../X-CUBE-AI/App/waterlevel.c:4277:12:ai_waterlevel_outputs_get	2
 ../X-CUBE-AI/App/waterlevel.c:4288:11:ai_waterlevel_destroy	1
-../X-CUBE-AI/App/waterlevel.c:4295:9:ai_waterlevel_init	4
-../X-CUBE-AI/App/waterlevel.c:4231:10:ai_waterlevel_create_and_init	8
+../X-CUBE-AI/App/waterlevel.c:4295:9:ai_waterlevel_init	2
 ../X-CUBE-AI/App/waterlevel.c:4312:8:ai_waterlevel_run	1
 ../X-CUBE-AI/App/waterlevel.c:4320:8:ai_waterlevel_forward	1

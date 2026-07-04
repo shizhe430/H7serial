@@ -16,6 +16,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "camera_app.h"
+#include <stdio.h>
 #include <string.h>
 /* USER CODE END Includes */
 
@@ -45,6 +46,7 @@ void SystemClock_Config(void);
 static void MPU_Config(void);
 /* USER CODE BEGIN PFP */
 static void main_uart_print(const char *text);
+static void main_print_build_info(void);
 
 /* USER CODE END PFP */
 
@@ -55,6 +57,34 @@ static void main_uart_print(const char *text)
   if (text != NULL)
   {
     (void)HAL_UART_Transmit(&huart1, (uint8_t *)text, (uint16_t)strlen(text), HAL_MAX_DELAY);
+  }
+}
+
+static void main_print_build_info(void)
+{
+  char buf[96];
+  const char *cfg;
+  const char *opt;
+  int len;
+
+#ifdef DEBUG
+  cfg = "Debug";
+#else
+  cfg = "Release";
+#endif
+
+#if defined(__OPTIMIZE_SIZE__)
+  opt = "Os";
+#elif defined(__OPTIMIZE__)
+  opt = "Oopt";
+#else
+  opt = "O0";
+#endif
+
+  len = snprintf(buf, sizeof(buf), "[BUILD] %s %s %s %s\r\n", cfg, opt, __DATE__, __TIME__);
+  if (len > 0)
+  {
+    (void)HAL_UART_Transmit(&huart1, (uint8_t *)buf, (uint16_t)len, HAL_MAX_DELAY);
   }
 }
 
@@ -110,6 +140,7 @@ int main(void)
   MX_DCMI_Init();
   /* USER CODE BEGIN 2 */
   HAL_Delay(4000U);
+  main_print_build_info();
   main_uart_print("\r\n[BOOT] main enter\r\n");
   CameraApp_Init();
   main_uart_print("[BOOT] camera init return\r\n");
@@ -206,8 +237,8 @@ void MPU_Config(void)
   */
   MPU_InitStruct.Enable = MPU_REGION_ENABLE;
   MPU_InitStruct.Number = MPU_REGION_NUMBER0;
-  MPU_InitStruct.BaseAddress = 0x24000000;
-  MPU_InitStruct.Size = MPU_REGION_SIZE_512KB;
+  MPU_InitStruct.BaseAddress = 0x30000000;
+  MPU_InitStruct.Size = MPU_REGION_SIZE_64KB;
   MPU_InitStruct.SubRegionDisable = 0x00;
   MPU_InitStruct.TypeExtField = MPU_TEX_LEVEL1;
   MPU_InitStruct.AccessPermission = MPU_REGION_PRIV_RW;

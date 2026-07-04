@@ -1,3 +1,4 @@
-../Core/Src/main.c:138:6:SystemClock_Config	4
-../Core/Src/main.c:72:5:main	6
-../Core/Src/main.c:229:6:Error_Handler	1
+../Core/Src/main.c:55:13:main_uart_print.part.0	1
+../Core/Src/main.c:260:6:Error_Handler	1
+../Core/Src/main.c:169:6:SystemClock_Config	3
+../Core/Src/main.c:97:5:main	5

@@ -10,7 +10,7 @@
 ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_pwr_ex.c:1085:6:HAL_PWREx_ConfigD3Domain	1
 ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_pwr_ex.c:1216:6:HAL_PWREx_EnableFlashPowerDown	1
 ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_pwr_ex.c:1230:6:HAL_PWREx_DisableFlashPowerDown	1
-../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_pwr_ex.c:1306:6:HAL_PWREx_EnableWakeUpPin	1
+../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_pwr_ex.c:1306:6:HAL_PWREx_EnableWakeUpPin	5
 ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_pwr_ex.c:1348:6:HAL_PWREx_DisableWakeUpPin	1
 ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_pwr_ex.c:1373:10:HAL_PWREx_GetWakeupFlag	1
 ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_pwr_ex.c:1398:19:HAL_PWREx_ClearWakeupFlag	1

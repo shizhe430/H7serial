@@ -10,7 +10,7 @@
  * - DWT 微秒延时
  */
 
-#define OV2640_SCCB_DELAY_US_MIN   2U
+#define OV2640_SCCB_DELAY_US_MIN   5U
 
 static uint8_t s_dwt_ready = 0U;
 

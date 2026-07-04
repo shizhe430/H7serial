@@ -10,8 +10,9 @@ extern "C" {
 #define APP_MODE_XCAM_VIEW  0U
 #define APP_MODE_AI_INFER   1U
 #define APP_MODE_AI_TEST_IMAGE 2U
+#define APP_MODE_PUMP_CTRL  3U
 #ifndef APP_MODE
-#define APP_MODE        APP_MODE_XCAM_VIEW
+#define APP_MODE       APP_MODE_AI_INFER
 #endif
 
 void CameraApp_Init(void);

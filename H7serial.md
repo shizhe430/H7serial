@@ -120,6 +120,10 @@
     - `TJpgDec decode`
     - training-aligned preprocess
     - `X-CUBE-AI` inference
+  - Mode split is now intentional:
+    - `APP_MODE_AI_INFER`: debug mode with timing / classification UART output
+    - `APP_MODE_AI_TEST_IMAGE`: fixed test-vector validation mode
+    - `APP_MODE_PUMP_CTRL`: future no-print pump-control mode skeleton
   - The older direct `RGB565 -> infer` path is **not** the active baseline and must not be restored by accident.
 - Current purpose of the next step:
   - replace the model through `CubeMX / X-CUBE-AI`
@@ -259,6 +263,23 @@
 - Do not start investigating model accuracy until both are true:
   - `APP_MODE_XCAM_VIEW` image is normal
   - `APP_MODE_AI_TEST_IMAGE` matches PC-side inference on the same fixed test image
+
+### Pump control skeleton rule
+
+- `APP_MODE_PUMP_CTRL` is only a skeleton at this stage.
+- It currently:
+  - reuses `JPEG snapshot -> TJpgDec decode -> preprocess -> infer`
+  - keeps per-frame UART output disabled
+  - stores the latest AI decision in local state for later control integration
+- It does **not** yet contain:
+  - real pump GPIO / driver calls
+  - debounce / multi-frame stop logic
+  - timeout / safety interlock logic
+- After the user adds the pump driver interface, complete the control path in this order:
+  1. add driver hook layer
+  2. add debounce / hysteresis state machine
+  3. add abnormal-class fail-safe stop behavior
+  4. validate on real pump hardware
 
 ## 2026-06-27 AI Integration Update
 
@@ -666,6 +687,28 @@ These are mirrored in `Core/Src/camera_app.c` and must be re-checked after every
 
 If the new model is `float32` instead of `int8`, the current `int8` input/output parsing path is no longer valid and must be changed together with the model.
 
+### Release speed notes
+
+- Current `Release` build is forced to `-O3`; if CubeMX regenerates `.cproject` or `Release/*/subdir.mk`, re-check that it did not fall back to `-Os`.
+- Current speed-oriented RAM layout:
+  - `g_ai_input_data` / AI outputs stay in `.ai_dtcm`
+  - `g_ai_activations` lives in `.ai_ram_d2`
+  - `jpeg_decode.c` scratch grayscale / CLAHE LUT live in `.ai_ram_d2`
+- Do not move AI activations or JPEG preprocess scratch into `RAM_D1 (0x24000000)` in this project:
+  - `MPU_Config()` marks the full `RAM_D1` region as `shareable + non-cacheable`
+  - that setting is kept for camera / DMA safety
+  - when `g_ai_activations` was temporarily moved into `RAM_D1`, measured `Release` inference time regressed from about `160ms` to about `330ms`
+- If a future regeneration drops the custom linker sections, restore:
+  - `STM32H743IITX_FLASH.ld`
+  - `.ai_ram_d2 > RAM_D2`
+  - `.ai_dtcm > DTCMRAM`
+- The current speed baseline is still bounded by three major stages:
+  - JPEG snapshot capture
+  - TJpgDec + CLAHE preprocess
+  - `ai_waterlevel_run()`
+- A small no-risk speed cleanup already applied in `jpeg_decode.c`:
+  - removed the full-frame `memset()` before JPEG decode because the successful decode overwrites the entire `320x240` grayscale buffer.
+
 ### Generated-model selection check
 
 This project has already contained multiple generated model sets, for example:
@@ -701,6 +744,32 @@ After replacing the model, verify that `camera_app.c` is actually including and 
    - use this to re-adjust camera position if needed
 3. `APP_MODE_AI_INFER`
    - only after the first two pass, test real-time inference
+
+### Confirmed AI speed root cause
+
+- The large speed gap versus the ST Developer Cloud H743 benchmark was primarily caused by memory policy, not by the model architecture alone.
+- The bad layout was:
+  - full `RAM_D1 (0x24000000, 512KB)` marked non-cacheable in `MPU_Config()`
+  - AI activations and JPEG preprocess scratch living in that non-cacheable region
+- Under that layout:
+  - `APP_MODE_AI_TEST_IMAGE` measured about `160ms`
+- The validated fast layout is:
+  - `g_ai_activations` in `.ai_ram_d1 > RAM_D1`
+  - `jpeg_decode.c` scratch grayscale / CLAHE LUT in `.ai_ram_d1 > RAM_D1`
+  - JPEG DMA frame buffer isolated in `.dma_buffer > RAM_D2`
+  - MPU marks only `0x30000000`, `64KB` as non-cacheable
+- Under that layout:
+  - `APP_MODE_AI_TEST_IMAGE` measured about `76ms`
+- Current validated live AI pipeline baseline:
+  - `APP_MODE_AI_INFER`
+  - `nn ~= 76ms`
+  - `pipe ~= 199ms`
+  - `fps ~= 5.0`
+  - therefore camera capture + JPEG decode + preprocess currently costs about `123ms`
+- Therefore:
+  - keep camera DMA buffers isolated
+  - keep CPU-side AI buffers in cacheable SRAM
+  - never again protect the whole `RAM_D1` region as non-cacheable just to make the camera path easy
 
 If the fixed test image matches PC inference but the live camera result does not, the issue is much more likely to be:
 

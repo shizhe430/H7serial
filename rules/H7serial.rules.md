@@ -65,6 +65,7 @@ Before enabling or regenerating `X-CUBE-AI` from CubeMX:
 ## AI Mode Rule
 
 - `APP_MODE_XCAM_VIEW` and `APP_MODE_AI_INFER` must stay isolated.
+- `APP_MODE_PUMP_CTRL` must stay isolated from both preview and debug-infer behavior.
 - The current H7 AI baseline is `JPEG snapshot -> TJpgDec decode -> training-aligned preprocess -> infer`.
 - Preferred AI path on H7:
   - OV2640 JPEG snapshot capture
@@ -74,7 +75,15 @@ Before enabling or regenerating `X-CUBE-AI` from CubeMX:
 - Keep XCAM preview mode on the existing JPEG path so camera bring-up remains independently verifiable.
 - On H7 + X-CUBE-AI, do not enable alignment trapping for the CM7 core while running the generated AI runtime.
 - Keep AI activations, input, and output buffers as standalone aligned arrays; do not pack them back into a mixed metadata struct.
-- Keep the D1 AXI SRAM MPU region covering the full `0x24000000-0x2407FFFF` 512KB window once AI buffers are placed there.
+- Keep `RAM_D1` cacheable for AI buffers.
+- Keep only the dedicated DMA window non-cacheable:
+  - `0x30000000`
+  - `64KB`
+  - used for the JPEG frame buffer in `.dma_buffer`
+- Current performance baseline after fixing MPU / buffer placement:
+  - `APP_MODE_AI_TEST_IMAGE`: about `76ms`
+  - `APP_MODE_AI_INFER`: about `199ms pipe`, `76ms nn`, `5.0 fps`
+  - remaining optimization target is the front-end path: capture + JPEG decode + preprocess
 - After any CubeMX/X-CUBE-AI regeneration, re-check:
   - `camera_app.h` still has both mode macros
   - `camera_app.c` still uses:
@@ -82,7 +91,7 @@ Before enabling or regenerating `X-CUBE-AI` from CubeMX:
     - `jpeg_to_ai_input()` before inference
   - `jpeg_decode.c` still matches the training preprocess contract
   - `main.c` still clears `SCB_CCR_UNALIGN_TRP_Msk` before AI inference is used
-  - `main.c` still configures AXI SRAM MPU size as `MPU_REGION_SIZE_512KB`
+  - `main.c` still configures the MPU DMA window size as `MPU_REGION_SIZE_64KB`
 
 ## Model Replacement Rule
 
@@ -102,8 +111,17 @@ Before enabling or regenerating `X-CUBE-AI` from CubeMX:
   - `PD3/PB8/PB9 = D5/D6/D7`
   - `USART1 baud = 921600`
   - `SCB->CCR &= ~SCB_CCR_UNALIGN_TRP_Msk;`
-  - AXI SRAM MPU remains `0x24000000` / `512KB` / non-cacheable / `MPU_TEX_LEVEL1`
+  - MPU DMA window remains `0x30000000` / `64KB` / non-cacheable / `MPU_TEX_LEVEL1`
   - `DCMI_IRQHandler()` still calls `HAL_DCMI_IRQHandler(&hdcmi);`
+  - `Release` optimization stays at `-O3` instead of falling back to `-Os`
+  - `STM32H743IITX_FLASH.ld` still contains:
+    - `.ai_ram_d1 > RAM_D1`
+    - `.dma_buffer > RAM_D2`
+    - `.ai_dtcm > DTCMRAM`
+  - `Core/Src/camera_app.c` still places `g_ai_activations` in `.ai_ram_d1`
+  - `Core/Src/jpeg_decode.c` still places grayscale scratch / CLAHE LUT in `.ai_ram_d1`
+  - `Core/Src/jpeg_stream.c` still places the JPEG DMA frame buffer in `.dma_buffer`
+  - do not revert to a full-`RAM_D1` non-cacheable MPU policy; that pushes pure `AI_TEST_IMAGE` inference from about `76ms` back toward about `160ms`
 - These custom files must remain in the build:
   - `Core/Src/jpeg_decode.c`
   - `Core/Src/tjpgd.c`
@@ -126,6 +144,20 @@ Before enabling or regenerating `X-CUBE-AI` from CubeMX:
   5. JPEG decode / preprocess
   6. AI infer
 - If `APP_MODE_AI_TEST_IMAGE` matches PC but live AI is wrong, prioritize preprocess/image-quality/camera-position checks over model-runtime suspicion.
+
+## Pump Control Rule
+
+- `APP_MODE_PUMP_CTRL` is reserved for the final no-print working mode.
+- Until the user provides the pump driver interface, keep `APP_MODE_PUMP_CTRL` limited to:
+  - capture
+  - preprocess
+  - inference
+  - internal decision-state update
+- Do not mix debug UART spam into `APP_MODE_PUMP_CTRL`.
+- When the pump driver is added later, implement:
+  - a dedicated control hook layer
+  - debounce / hysteresis
+  - abnormal-class fail-safe stop behavior
 
 ## Rapid Recovery Checklist
 

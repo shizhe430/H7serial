@@ -1,4 +1,4 @@
-../X-CUBE-AI/App/water_detect_data.c:42:11:ai_water_detect_data_activations_buffer_get	16	static
-../X-CUBE-AI/App/water_detect_data.c:60:11:ai_water_detect_data_weights_buffer_get	16	static
+../X-CUBE-AI/App/water_detect_data.c:42:11:ai_water_detect_data_activations_buffer_get	24	static
+../X-CUBE-AI/App/water_detect_data.c:60:11:ai_water_detect_data_weights_buffer_get	24	static
 ../X-CUBE-AI/App/water_detect_data.c:78:11:ai_water_detect_data_weights_get	0	static
-../X-CUBE-AI/App/water_detect_data.c:91:9:ai_water_detect_data_params_get	32	static
+../X-CUBE-AI/App/water_detect_data.c:91:9:ai_water_detect_data_params_get	24	static

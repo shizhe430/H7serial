@@ -1,0 +1,3 @@
+../Core/Src/tjpgd.c:423:12:bitext	32	static
+../Core/Src/tjpgd.c:962:9:jd_prepare	88	static
+../Core/Src/tjpgd.c:1118:9:jd_decomp	128	static

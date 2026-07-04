@@ -3,7 +3,7 @@
 ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_dcmi.c:178:19:HAL_DCMI_Init	5
 ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_dcmi.c:323:13:HAL_DCMI_MspDeInit	1
 ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_dcmi.c:275:19:HAL_DCMI_DeInit	1
-../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_dcmi.c:362:19:HAL_DCMI_Start_DMA	6
+../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_dcmi.c:362:19:HAL_DCMI_Start_DMA	7
 ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_dcmi.c:467:19:HAL_DCMI_Stop	4
 ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_dcmi.c:521:19:HAL_DCMI_Suspend	5
 ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_dcmi.c:568:19:HAL_DCMI_Resume	3

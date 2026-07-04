@@ -28,8 +28,8 @@ typedef struct
 } jpg_stream_t;
 
 static uint8_t s_workbuf[JPEG_WORKBUF_SIZE];
-static uint8_t s_gray_320x240[SRC_W * SRC_H];
-static uint8_t s_clahe_lut[CLAHE_GRID_Y][CLAHE_GRID_X][256];
+static uint8_t s_gray_320x240[SRC_W * SRC_H] __attribute__((section(".ai_ram_d1")));
+static uint8_t s_clahe_lut[CLAHE_GRID_Y][CLAHE_GRID_X][256] __attribute__((section(".ai_ram_d1")));
 
 static uint8_t clamp_u8(int32_t v)
 {
@@ -252,8 +252,6 @@ uint8_t jpeg_to_ai_input(const uint8_t *jpg, uint32_t jpg_len, int8_t *dst_input
     {
         return 1U;
     }
-
-    memset(s_gray_320x240, 0, sizeof(s_gray_320x240));
 
     stream.jpg = jpg;
     stream.jpg_len = jpg_len;

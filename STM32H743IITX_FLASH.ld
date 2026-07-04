@@ -155,6 +155,38 @@ SECTIONS
     __bss_end__ = _ebss;
   } >RAM_D1
 
+  .ai_ram_d1 (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.ai_ram_d1)
+    *(.ai_ram_d1*)
+    . = ALIGN(32);
+  } >RAM_D1
+
+  .dma_buffer (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.dma_buffer)
+    *(.dma_buffer*)
+    . = ALIGN(32);
+  } >RAM_D2
+
+  .ai_ram_d2 (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.ai_ram_d2)
+    *(.ai_ram_d2*)
+    . = ALIGN(32);
+  } >RAM_D2
+
+  .ai_dtcm (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.ai_dtcm)
+    *(.ai_dtcm*)
+    . = ALIGN(32);
+  } >DTCMRAM
+
   /* User_heap_stack section, used to check that there is enough RAM left */
   ._user_heap_stack :
   {

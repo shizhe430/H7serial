@@ -7,7 +7,7 @@
  * - 应用层通过 JPEG_Stream_FindFrame() 搜索 SOI(0xFFD8) / EOI(0xFFD9)
  */
 
-static volatile uint8_t s_buf[JPEG_BUF_SIZE] __attribute__((aligned(32)));
+static volatile uint8_t s_buf[JPEG_BUF_SIZE] __attribute__((aligned(32), section(".dma_buffer")));
 
 void JPEG_Stream_Init(void)
 {
