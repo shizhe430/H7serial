@@ -804,3 +804,96 @@ If the fixed test image matches PC inference but the live camera result does not
   - preprocess
   - inference
 - If the project starts drifting in multiple places at once, stop and return to the last good git baseline instead of continuing to stack fixes.
+
+---
+
+## 2026-07-05 Camera Signal Integrity And Pump-Phase Reflection
+
+### What actually happened
+
+- The recent "software-looking" camera fault was ultimately a DVP signal contact / signal-integrity problem, not a logic bug.
+- The strongest evidence was that after re-seating / re-plugging the camera signal wires, valid JPEG frames returned immediately.
+- This means a multimeter continuity check was not sufficient. These lines can be electrically continuous at DC and still fail under real DCMI high-speed sampling.
+
+### Key diagnostic conclusion
+
+- If `APP_MODE_XCAM_VIEW` shows bad frames, `FrameSize=0`, `Width=0`, `Height=0`, or AI mode shows repeated:
+  - `decode fail prep=6 ...`
+  - `head=FF D8 ...` but invalid JPEG body
+- then first suspect the DVP wiring/contact path before suspecting the software.
+- The critical runtime lines are:
+  - `PA6 = PCLK`
+  - `PB7 = VSYNC`
+  - `PH8 = HREF`
+  - `PC6/PC7/PC8/PC9/PC11 = D0..D4`
+  - `PD3 = D5`
+  - `PB8 = D6`
+  - `PB9 = D7`
+
+### Why unplug / re-plug fixed it
+
+- The most likely explanation is marginal contact resistance, poor Dupont/header seating, or edge-rate degradation on one or more DVP lines.
+- Re-plugging changed the physical contact state enough for the camera bus to become readable again.
+- This is consistent with the observed behavior:
+  - SCCB probe could still succeed
+  - but captured JPEG data was corrupted or undecodable
+- In other words: control path alive, pixel path unstable.
+
+### Reflection: why the first camera was likely damaged during pump integration
+
+- The first camera was most likely not "damaged by code".
+- A more realistic cause is hardware stress introduced during the pump integration phase:
+  1. repeated hot-plugging / rewiring while the board or module was powered
+  2. mechanical stress on the camera header, socket, or small module pads
+  3. temporary misalignment / partial insertion while changing wires around the pump test setup
+  4. power or ground disturbance when adding pump-side hardware, especially if the wiring momentarily shared unstable return paths
+- Software can break capture logic, but it does not explain symptoms such as abnormal line voltage, persistent SCCB anomalies, or module behavior changing after physical rewiring.
+
+### Operational rule going forward
+
+- During pump or other peripheral integration, do not treat the camera wiring as static just because the code did not change.
+- If the camera fails after hardware work nearby:
+  1. power off first
+  2. re-seat the camera module
+  3. re-seat every DVP wire
+  4. verify `PCLK/HREF/VSYNC/D0..D7` one by one
+  5. only then return to software debugging
+- For future fault isolation:
+  - `probe fail` usually points to SCCB / power / module presence
+  - `probe ok` + bad JPEG / decode fail usually points to DVP data path quality
+
+### Pump integration hardware protection rules
+
+- A MOS-driven pump can still disturb the camera path without visibly damaging the STM32 main board.
+- The main board and the camera module do not have the same fragility margin. The camera module is usually the weaker side.
+
+#### Practical risk sources
+
+- inductive kick / current spike when the pump is switched
+- ground bounce caused by sharing return current with camera logic
+- supply droop on the `3.3V` / module rail during pump startup
+- hot-plugging wires while powered
+- mechanical stress while rearranging pump and camera wiring together
+
+#### Mandatory wiring rules for future pump tests
+
+- Always power off before changing any camera wire or pump wire.
+- Keep the pump power loop separate from the camera/module power loop as much as possible.
+- Use a proper flyback path for the pump.
+- Do not let the pump high-current return share a thin unstable path with camera ground.
+- Keep camera DVP wires short and firmly seated after pump wiring changes.
+- After every pump-side hardware change, re-check the camera module connector and all `PCLK/HREF/VSYNC/D0..D7` wires by hand.
+
+#### Recommended bring-up order after pump changes
+
+1. Power on with pump disabled.
+2. Verify camera `probe ok`.
+3. Verify `APP_MODE_XCAM_VIEW` image is normal.
+4. Verify AI capture / decode is normal.
+5. Only then enable pump switching.
+6. After enabling pump switching, re-check whether camera quality degrades under real pump operation.
+
+#### Design rule
+
+- If a future failure appears immediately after pump integration work, assume hardware coupling first, not software regression first.
+- A board that still boots normally does not prove the camera module was unharmed.

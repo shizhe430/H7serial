@@ -15,6 +15,12 @@
 #define OV2640_VIDEO_DVP_PCLK_DIV        0x02U
 #define OV2640_EXPECTED_MID              0x7FA2U
 #define OV2640_EXPECTED_PID              0x2642U
+#define OV2640_PWRDN_ASSERT_MS           20U
+#define OV2640_PWR_STABLE_MS             50U
+#define OV2640_RESET_ASSERT_MS           20U
+#define OV2640_RESET_RELEASE_MS          50U
+#define OV2640_POST_RESET_MS             100U
+#define OV2640_PROBE_ATTEMPTS            2U
 
 static uint8_t s_initialized = 0U;
 static uint8_t *s_frame_buf = NULL;
@@ -175,12 +181,35 @@ static const uint8_t ov2640_effect_normal_cfg[][2] = {
 
 /* ── 内部函数 ── */
 
+static void ov2640_assert_power_down(void)
+{
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, GPIO_PIN_SET);
+}
+
+static void ov2640_release_power_down(void)
+{
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, GPIO_PIN_RESET);
+}
+
 static void ov2640_hw_reset(void)
 {
-    GPIOA->BSRR = (uint32_t)GPIO_PIN_15 << 16U;
-    HAL_Delay(10U);
-    GPIOA->BSRR = GPIO_PIN_15;
-    HAL_Delay(10U);
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_RESET);
+    HAL_Delay(OV2640_RESET_ASSERT_MS);
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_SET);
+    HAL_Delay(OV2640_RESET_RELEASE_MS);
+}
+
+static void ov2640_power_cycle_and_reset(void)
+{
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_RESET);
+    ov2640_assert_power_down();
+    HAL_Delay(OV2640_PWRDN_ASSERT_MS);
+
+    ov2640_release_power_down();
+    HAL_Delay(OV2640_PWR_STABLE_MS);
+
+    ov2640_hw_reset();
+    HAL_Delay(OV2640_POST_RESET_MS);
 }
 
 static uint8_t ov2640_write_reg(uint8_t reg, uint8_t data)
@@ -346,39 +375,49 @@ void OV2640_AttachFrameBuffer(uint8_t *buf, uint32_t len) { s_frame_buf = buf; s
 
 uint8_t OV2640_Probe(uint16_t *mid, uint16_t *pid)
 {
+    uint32_t attempt;
+
     if ((mid == NULL) || (pid == NULL)) return OV2640_ERROR;
     /* 唯一一次断电→上电 (U5 hw_init + exit_power_down) */
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, GPIO_PIN_SET);
-    HAL_Delay(100U);
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, GPIO_PIN_RESET);
-    HAL_Delay(300U);
-    ov2640_hw_reset();
-    HAL_Delay(100U);
-    OV2640_SCCB_Init();
-    ov2640_sw_reset();
-    if (OV2640_ProbeID(mid, pid) != OV2640_OK)
+    for (attempt = 0U; attempt < OV2640_PROBE_ATTEMPTS; attempt++)
     {
-        return OV2640_ERROR;
+        *mid = 0U;
+        *pid = 0U;
+
+        ov2640_power_cycle_and_reset();
+        OV2640_SCCB_Init();
+        ov2640_sw_reset();
+
+        if (OV2640_ProbeID(mid, pid) != OV2640_OK)
+        {
+            HAL_Delay(OV2640_POST_RESET_MS);
+            continue;
+        }
+
+        if ((*mid == OV2640_EXPECTED_MID) && (*pid == OV2640_EXPECTED_PID))
+        {
+            return OV2640_OK;
+        }
+
+        HAL_Delay(OV2640_POST_RESET_MS);
     }
 
-    if ((*mid != OV2640_EXPECTED_MID) || (*pid != OV2640_EXPECTED_PID))
-    {
-        return OV2640_ERROR;
-    }
-
-    return OV2640_OK;
+    return OV2640_ERROR;
 }
 
 uint8_t OV2640_Init(void)
 {
     uint16_t mid = 0U, pid = 0U;
+    s_initialized = 0U;
     /* 摄像头已上电, 只做SW复位+写表 */
     ov2640_sw_reset();
+    HAL_Delay(OV2640_POST_RESET_MS);
     if (OV2640_ProbeID(&mid, &pid) != OV2640_OK) return OV2640_ERROR;
     if ((mid != OV2640_EXPECTED_MID) || (pid != OV2640_EXPECTED_PID)) return OV2640_ERROR;
     if (ov2640_write_table(ov2640_init_common_cfg, sizeof(ov2640_init_common_cfg) / sizeof(ov2640_init_common_cfg[0])) != OV2640_OK) return OV2640_ERROR;
     if (ov2640_write_table(ov2640_video_fast_cfg, sizeof(ov2640_video_fast_cfg) / sizeof(ov2640_video_fast_cfg[0])) != OV2640_OK) return OV2640_ERROR;
     if (OV2640_SetOutputFormatJPEG() != OV2640_OK) return OV2640_ERROR;
+    HAL_Delay(OV2640_POST_RESET_MS);
     if (OV2640_SetOutputSize(OV2640_VIDEO_WIDTH, OV2640_VIDEO_HEIGHT) != OV2640_OK) return OV2640_ERROR;
     s_initialized = 1U;
     return OV2640_OK;

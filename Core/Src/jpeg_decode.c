@@ -30,6 +30,10 @@ typedef struct
 static uint8_t s_workbuf[JPEG_WORKBUF_SIZE];
 static uint8_t s_gray_320x240[SRC_W * SRC_H] __attribute__((section(".ai_ram_d1")));
 static uint8_t s_clahe_lut[CLAHE_GRID_Y][CLAHE_GRID_X][256] __attribute__((section(".ai_ram_d1")));
+static uint8_t s_last_prepare_status = JDR_OK;
+static uint8_t s_last_decomp_status = JDR_OK;
+static uint16_t s_last_width = 0U;
+static uint16_t s_last_height = 0U;
 
 static uint8_t clamp_u8(int32_t v)
 {
@@ -253,17 +257,27 @@ uint8_t jpeg_to_ai_input(const uint8_t *jpg, uint32_t jpg_len, int8_t *dst_input
         return 1U;
     }
 
+    memset(s_gray_320x240, 0, sizeof(s_gray_320x240));
+    s_last_prepare_status = JDR_OK;
+    s_last_decomp_status = JDR_OK;
+    s_last_width = 0U;
+    s_last_height = 0U;
+
     stream.jpg = jpg;
     stream.jpg_len = jpg_len;
     stream.jpg_pos = 0U;
 
     jr = jd_prepare(&jd, tjpgd_input, s_workbuf, sizeof(s_workbuf), &stream);
+    s_last_prepare_status = (uint8_t)jr;
     if (jr != JDR_OK)
     {
         return 2U;
     }
 
+    s_last_width = (uint16_t)jd.width;
+    s_last_height = (uint16_t)jd.height;
     jr = jd_decomp(&jd, tjpgd_output, 0);
+    s_last_decomp_status = (uint8_t)jr;
     if (jr != JDR_OK)
     {
         return 3U;
@@ -298,4 +312,24 @@ uint8_t jpeg_to_ai_input(const uint8_t *jpg, uint32_t jpg_len, int8_t *dst_input
     }
 
     return 0U;
+}
+
+uint8_t jpeg_decode_last_prepare_status(void)
+{
+    return s_last_prepare_status;
+}
+
+uint8_t jpeg_decode_last_decomp_status(void)
+{
+    return s_last_decomp_status;
+}
+
+uint16_t jpeg_decode_last_width(void)
+{
+    return s_last_width;
+}
+
+uint16_t jpeg_decode_last_height(void)
+{
+    return s_last_height;
 }
