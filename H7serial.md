@@ -258,6 +258,200 @@
 7. Confirm generated model report matches `camera_app.c` input/output parsing
 8. Only then debug model accuracy
 
+---
+
+## 2026-07-05 Water Pump Control Framework Blueprint
+
+### Confirmed product logic
+
+- Cup-presence entry condition:
+  - enter working flow only when inference classification is stable for 3 consecutive frames
+  - stable means:
+    - `cls == 1` for 3 frames, or
+    - `cls == 2` for 3 frames, or
+    - `cls == 3` for 3 frames
+- If cup disappears during the decision window or during dispensing:
+  - immediately stop pump
+  - clear current workflow
+  - return directly to standby
+- Priority during the 5-second decision window:
+  - physical key input has higher priority than voice input
+- Manual key mode:
+  - cold key first press: start cold-water dispensing
+  - pressing the same cold key again: stop water immediately and enter `DONE`, then return to standby
+- Overflow / abnormal protection:
+  - if inference becomes `cls == 0` or `cls == 4`, this is abnormal for the dispenser workflow
+  - immediately stop pump
+  - state returns to standby after abnormal stop
+- Completion behavior:
+  - after normal stop, return directly to standby
+- Water temperature default:
+  - default startup water temperature is `COLD`
+- Current hardware assumption:
+  - one cold-water pump
+  - one hot-water pump
+  - hot pump enabled => hot water
+  - hot pump disabled => cold water
+
+### Phase-1 scope
+
+- Implement now:
+  - full-auto mode
+  - physical-key mechanical mode
+  - voice semi-automatic mode
+  - unified global state/value framework
+  - OLED state refresh framework hooks
+- Defer for next phase:
+  - hot-water actuation path
+  - ESP32-C6 bidirectional serial linkage
+
+### Unified global variables
+
+All modes must write into the same global control set instead of using separate logic trees.
+
+- `g_dispense_target`
+  - target water amount
+  - planned values:
+    - `TARGET_HALF`
+    - `TARGET_FULL`
+    - `TARGET_MANUAL_CONTINUOUS`
+- `g_water_temp`
+  - target temperature
+  - planned values:
+    - `TEMP_COLD`
+    - `TEMP_HOT`
+- `g_work_state`
+  - system state
+  - planned values:
+    - `STATE_STANDBY`
+    - `STATE_DECISION_WINDOW`
+    - `STATE_DISPENSING_AUTO`
+    - `STATE_DISPENSING_MANUAL_COLD`
+    - `STATE_DISPENSING_VOICE`
+    - `STATE_DONE`
+    - `STATE_FAULT`
+
+### Recommended event-driven state machine
+
+- `STATE_STANDBY`
+  - waiting for stable cup detection
+  - transition to `STATE_DECISION_WINDOW` only after 3 consecutive identical `1/2/3`
+- `STATE_DECISION_WINDOW`
+  - starts 5-second timer
+  - parallel monitoring:
+    - no input timeout
+    - cold key
+    - voice command
+    - abnormal `(0,4)` or cup loss
+  - entry prompt:
+    - speak `0x13 = 水杯已识别`
+- `STATE_DISPENSING_AUTO`
+  - default:
+    - target = full
+    - temp = cold
+  - stop condition:
+    - visual level reaches target threshold
+    - or abnormal `(0,4)`
+- `STATE_DISPENSING_MANUAL_COLD`
+  - temp = cold
+  - target = manual continuous
+  - stop condition:
+    - same key pressed again
+    - opposite key pressed
+    - abnormal `(0,4)`
+- `STATE_DISPENSING_VOICE`
+  - target = half or full
+  - temp = currently cold-active, hot reserved for later hardware phase
+  - stop condition:
+    - visual level reaches target threshold
+    - or abnormal `(0,4)`
+- `STATE_DONE`
+  - transient bookkeeping state only
+  - immediately returns to `STATE_STANDBY`
+- `STATE_FAULT`
+  - transient safety-stop state only
+  - immediately returns to `STATE_STANDBY`
+
+### Phase-1 detailed mode rules
+
+#### Mode A: full automatic
+
+- Trigger:
+  - stable cup detected
+  - no key input and no voice input during 5-second window
+- Actions:
+  - `g_dispense_target = TARGET_FULL`
+  - `g_water_temp = TEMP_COLD`
+  - `g_work_state = STATE_DISPENSING_AUTO`
+  - start pump
+- Stop:
+  - stop when visual threshold reaches full-cup target
+  - then go to `STATE_DONE`
+
+#### Mode B: traditional mechanical key mode
+
+- Trigger:
+  - cold key pressed directly, no cup prerequisite required
+- Cold key flow:
+  - `g_water_temp = TEMP_COLD`
+  - `g_dispense_target = TARGET_MANUAL_CONTINUOUS`
+  - `g_work_state = STATE_DISPENSING_MANUAL_COLD`
+  - start pump
+- Stop rules:
+  - press same key again => stop => `STATE_DONE`
+- Important:
+  - manual key mode is allowed to ignore cup-full threshold on purpose
+  - this is a product-defined exception for bucket / container use
+
+### Visual inference interpretation for workflow
+
+- `cls == 1/2/3`
+  - valid cup-present working region
+- `cls == 0`
+  - no cup / cup removed / invalid working region for current workflow
+  - treat as stop-and-reset event
+- `cls == 4`
+  - abnormal / shifted / blocked
+  - treat as immediate safety stop
+
+### Required software module split before final coding
+
+To avoid another large monolithic `camera_app.c`, the final implementation should be split conceptually into:
+
+- visual event layer
+  - converts inference results into:
+    - `EV_CUP_STABLE`
+    - `EV_LEVEL_REACHED`
+    - `EV_ABNORMAL`
+    - `EV_CUP_LOST`
+- input event layer
+  - converts hardware/voice inputs into:
+    - `EV_KEY_COLD`
+    - `EV_VOICE_CMD`
+- workflow state machine layer
+  - owns:
+    - state transition
+    - 5-second decision timer
+    - completion/fault reset
+- actuator layer
+  - unified interfaces only:
+    - `Pump_CommandStop()`
+    - `Pump_CommandCold()`
+    - `Pump_CommandHot()`
+- display layer
+  - `OLED_ShowState(...)`
+  - `OLED_ShowTarget(...)`
+  - `OLED_ShowTemp(...)`
+
+### Before coding phase-1
+
+Need user-provided hardware mapping for:
+
+- cold key GPIO
+- hot-water pump control GPIO / interface
+
+After these three are provided, phase-1 code implementation can begin directly on top of the current stable camera+pump baseline.
+
 ### Model swap acceptance rule
 
 - Do not start investigating model accuracy until both are true:
@@ -897,3 +1091,291 @@ If the fixed test image matches PC inference but the live camera result does not
 
 - If a future failure appears immediately after pump integration work, assume hardware coupling first, not software regression first.
 - A board that still boots normally does not prove the camera module was unharmed.
+
+---
+
+## 2026-07-05 Dispense Workflow Blueprint Update
+
+### Competition-oriented mode split
+
+For the embedded competition version of this project, the dispense workflow is explicitly split into three independent user-facing modes:
+
+- full automatic mode
+- voice semi-automatic mode
+- full mechanical mode
+
+The design target is not "one AI path with extra triggers", but "three modes sharing one pump-control backend".
+
+### Unified control variables
+
+All future control logic should converge onto the same small state set:
+
+- `state`
+- `target`
+- `temp`
+- `pump_cmd`
+
+Recommended value model:
+
+- `state = standby | wait_cmd | auto | voice | manual | done | fault`
+- `target = none | half | full | manual`
+- `temp = cold | hot`
+- `pump_cmd = stop | fast | slow`
+
+No matter whether the trigger comes from AI, voice, or button input, the mode logic should only assign these shared variables and then call the same pump backend.
+
+### Mode 1: full automatic
+
+Trigger:
+
+- continuous 3-frame visual classification is `1` or `2` or `3`
+- system enters the command-wait window
+- no voice input and no button input arrives within 5 seconds
+
+Behavior:
+
+- `target = full`
+- `temp = cold`
+- `state = auto`
+- pump starts dispensing
+- stop only after the visual result reaches the target condition with continuous 3-frame confirmation
+- after stop:
+  - `state = done`
+  - then return to `standby`
+
+### Mode 2: voice semi-automatic
+
+Trigger:
+
+- continuous 3-frame visual classification is `1` or `2` or `3`
+- system enters the command-wait window
+- a valid voice result arrives within 5 seconds
+
+Behavior:
+
+- voice layer directly assigns `target` and `temp`
+- typical combinations:
+  - half cold
+  - full cold
+  - half hot
+  - full hot
+- after command acceptance:
+  - enter a `1s` voice buffer delay
+  - wait for the module's local acknowledgment such as `收到`
+  - then start pump dispensing
+- `state = voice`
+- pump starts dispensing
+- stop only after the visual result reaches the requested target with continuous 3-frame confirmation
+- after stop:
+  - `state = done`
+  - then return to `standby`
+
+### Mode 3: full mechanical
+
+Trigger:
+
+- a physical key is pressed while the system is in standby
+- this mode does not require cup detection
+- this mode does not require entering the 5-second wait window
+
+Behavior:
+
+- pressing the cold-water key starts cold dispensing immediately
+- `target = manual`
+- `temp = cold`
+- `state = manual`
+- pump starts immediately
+- pressing the same key again stops dispensing immediately
+- after stop:
+  - `state = done`
+  - then return to `standby`
+
+### Critical rule for full mechanical mode
+
+The full mechanical mode is intentionally defined as completely free from visual constraints.
+
+That means:
+
+- no prerequisite cup detection is required
+- visual class `0` must not auto-stop the pump
+- visual class `4` must not auto-stop the pump
+- cup shift / hand occlusion / no-cup conditions do not interrupt manual dispensing
+- only the physical key controls start / stop
+
+This is a deliberate competition product choice to preserve a traditional dispenser usage path for special scenarios such as filling larger containers that the model cannot classify reliably.
+
+### Priority rule
+
+Priority order:
+
+- mechanical key input: highest
+- voice input: second
+- full automatic timeout fallback: lowest
+
+Detailed behavior:
+
+- inside the 5-second wait window, if both key and voice arrive, key wins
+- if no input arrives before timeout, enter full automatic mode
+- once full mechanical mode has started, it is no longer interrupted by visual logic
+
+### Visual decision rule
+
+Visual class meaning remains:
+
+- `0 = no cup`
+- `1 = low`
+- `2 = half`
+- `3 = full`
+- `4 = abnormal`
+
+Decision rule:
+
+- automatic mode and voice mode must use continuous 3-frame confirmation for all key decisions
+- full mechanical mode may still display the visual result, but must not use it for stop control
+
+### Recommended implementation rule
+
+The state machine should be written as three separated entry paths sharing one backend:
+
+1. AI path:
+   - detects stable cup
+   - opens `WAIT_CMD`
+   - waits `5s`
+   - falls into `AUTO` or `VOICE`
+2. key path:
+   - enters `MANUAL` directly from `STANDBY`
+   - bypasses visual gating entirely
+3. backend path:
+   - applies `pump_cmd`
+   - updates shared state variables
+   - later drives OLED / voice feedback / IoT reporting from the shared state
+
+### Competition answer framing
+
+For final defense, describe the design as:
+
+- an intelligent dispenser with three independent dispense modes
+- AI automatic mode for smart unattended filling
+- voice semi-automatic mode for natural human interaction
+- full mechanical mode as a traditional fallback path with maximal usability
+- one shared pump-control backend to keep the system architecture unified and extensible
+
+---
+
+## 2026-07-06 Voice I2C2 Integration Notes
+
+### Selected voice-module bus
+
+The voice interaction module is now placed on:
+
+- `I2C2_SCL = PB10`
+- `I2C2_SDA = PB11`
+
+Reason:
+
+- the original proposal `PB6/PB9` is not usable in this project
+- `PB9` is already occupied by camera `DCMI_D7`
+- `PB10/PB11` avoids conflict with:
+  - OV2640 DVP
+  - `USART1`
+  - `PF7` cold key
+  - `PH6` pump output
+
+### CubeMX generation rule for voice I2C
+
+It is acceptable to use CubeMX for the voice-module I2C configuration, but only under a tightly controlled regeneration scope.
+
+Allowed generation intent:
+
+- add `I2C2`
+- assign `PB10/PB11`
+- generate `i2c.c` / `i2c.h`
+- update GPIO labels for the voice bus
+
+Not allowed during the same regeneration:
+
+- changing camera polarity
+- changing UART baud rate
+- changing HSE / PLL clock assumptions
+- changing DMA IRQ priority
+- changing MPU cache policy
+
+### Valid post-generation retained changes
+
+The following new generated/manual files are intentionally retained after the 2026-07-06 voice-bus preparation:
+
+- `Core/Inc/i2c.h`
+- `Core/Src/i2c.c`
+- `Core/Inc/voice_asr.h`
+- `Core/Src/voice_asr.c`
+- `PB10/PB11` labels in `H7serial.ioc`
+- `VOICE_I2C_SCL` / `VOICE_I2C_SDA` pin macros in `Core/Inc/main.h`
+- `MX_I2C2_Init()` call in `main.c`
+
+### Current voice-driver integration status
+
+The low-level voice ASR driver is now added to the project, compiled against `I2C2`, and connected to the `APP_MODE_PUMP_CTRL` workflow.
+
+Current retained public usage:
+
+- `int Asr_Result(void);`
+- `void Asr_Speak(uint8_t cmd, uint8_t idNum);`
+- `void WriteOneByte(uint16_t addr, uint8_t data);`
+
+Current scope:
+
+- `WAIT_CMD` now polls `Asr_Result()`
+- priority is `key > voice > auto-timeout`
+- currently enabled command IDs:
+  - `0x01 = half cold`
+  - `0x02 = full cold`
+- reserved command IDs for later hot-water hardware phase:
+  - `0x03 = half hot`
+  - `0x04 = full hot`
+- announcer IDs:
+  - `0x10 = dispensing`
+  - `0x11 = aborted`
+  - `0x12 = done`
+  - `0x13 = cup detected`
+- voice commands assign the shared workflow variables:
+  - `target`
+  - `temp`
+  - `state`
+- current hardware-stage note:
+  - current active voice workflow only starts cold-water dispensing
+  - actual hot-water actuation still depends on the later hot-pump hardware path
+
+### Mandatory post-generation rollback items
+
+After this CubeMX generation, the following unintended changes had to be restored manually and must be checked again after any future regeneration:
+
+- `Core/Inc/stm32h7xx_hal_conf.h`
+  - `HSE_VALUE` restored to `25000000`
+- `Core/Src/dcmi.c`
+  - `PCKPolarity` restored to `RISING`
+- `Core/Src/dma.c`
+  - `DMA2_Stream3_IRQn` priority restored to `5`
+- `Core/Src/usart.c`
+  - `USART1` baud restored to `921600`
+- `Core/Src/gpio.c`
+  - `SYSCFG_SWITCH_PA0` restored to `OPEN`
+- `Core/Src/main.c`
+  - restored AI unaligned-access allowance
+  - restored HSE/PLL clock values
+  - restored MPU non-cacheable DMA window to `0x30000000 / 64KB`
+- `Core/Inc/stm32h7xx_it.h`
+  - restored `DCMI_IRQHandler()` declaration
+- `Core/Src/stm32h7xx_it.c`
+  - restored `#include "dcmi.h"`
+
+### Operational rule
+
+Whenever CubeMX is used again for voice-module changes:
+
+1. change only `I2C2` and its pins first
+2. generate once
+3. immediately re-check:
+   - camera probe
+   - XCAM preview
+   - AI inference
+4. only after the camera chain survives intact, continue with voice-module protocol code

@@ -15,7 +15,12 @@ extern "C" {
 #define APP_MODE_COLORBAR_VIEW 5U
 #ifndef APP_MODE
 #define APP_MODE      APP_MODE_PUMP_CTRL
+#endif
 
+#if ((APP_MODE == APP_MODE_XCAM_VIEW) || (APP_MODE == APP_MODE_COLORBAR_VIEW))
+#define APP_MODE_STREAM_SILENT 1U
+#else
+#define APP_MODE_STREAM_SILENT 0U
 #endif
 
 void CameraApp_Init(void);

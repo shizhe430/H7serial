@@ -21,6 +21,8 @@ void Pump_Start(void);
 void Pump_StartFast(void);
 void Pump_StartSlow(void);
 void Pump_ApplyCommand(uint8_t command);
+uint16_t Pump_GetLastDuty(void);
+uint32_t Pump_GetPinLevel(void);
 int AI_GetState(void);
 
 #ifdef __cplusplus

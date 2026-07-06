@@ -57,6 +57,14 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define COLD_KEY_Pin GPIO_PIN_7
+#define COLD_KEY_GPIO_Port GPIOF
+#define VOICE_I2C_SCL_Pin GPIO_PIN_10
+#define VOICE_I2C_SCL_GPIO_Port GPIOB
+#define VOICE_I2C_SDA_Pin GPIO_PIN_11
+#define VOICE_I2C_SDA_GPIO_Port GPIOB
+#define PUMP_PWM_Pin GPIO_PIN_6
+#define PUMP_PWM_GPIO_Port GPIOH
 
 /* USER CODE BEGIN Private defines */
 

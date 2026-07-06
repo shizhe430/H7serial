@@ -6,6 +6,7 @@
 #include "ov2640_sccb.h"
 #include "pump.h"
 #include "usart.h"
+#include "voice_asr.h"
 #include "waterlevel.h"
 #include "waterlevel_data_params.h"
 #include "test_image_input.h"
@@ -53,11 +54,19 @@ static volatile uint8_t g_frame_error = 0U;
 #define CAMERA_DMA_SETTLE_SPINS   8192U
 #define CAMERA_DMA_STABLE_SPINS   64U
 
-#define PUMP_PWM_MAX              999U
-#define PUMP_DUTY_FAST            950U
-#define PUMP_DUTY_SLOW            450U
 #define PUMP_AI_CONF_MIN          0.60f
-#define PUMP_GPIO_TEST_MODE       0U
+#define PUMP_DECISION_WINDOW_MS   5000U
+#define PUMP_VOICE_START_DELAY_MS 1000U
+#define PUMP_STABLE_FRAME_COUNT   3U
+#define PUMP_REG_WINDOW_SIZE      5U
+#define PUMP_REG_MIN_FRAMES       3U
+#define PUMP_REG_RISE_TOL         0.03f
+#define PUMP_HALF_STOP_REG        0.50f
+#define PUMP_FULL_STOP_REG        0.78f
+#define PUMP_FULL_NEAR_STOP_REG   0.72f
+
+#define WATERLEVEL_LOW_HALF_SPLIT  0.450f
+#define WATERLEVEL_HALF_FULL_SPLIT 0.750f
 
 #define WATERLEVEL_IN_ZERO_POINT  (-128)
 #define WATERLEVEL_OUT0_SCALE     (0.098395728f)
@@ -76,11 +85,13 @@ typedef struct
 typedef struct
 {
     uint8_t class_id;
+    uint8_t raw_class_id;
     float level_reg;
     float confidence;
     int8_t logits[AI_WATERLEVEL_OUT_1_SIZE];
 } camera_ai_result_t;
 
+#if (APP_MODE == APP_MODE_PUMP_CTRL)
 typedef struct
 {
     uint32_t frame_count;
@@ -92,7 +103,44 @@ typedef struct
     float last_confidence;
     uint8_t stop_request;
     uint8_t abnormal_latched;
+    uint8_t workflow_state;
+    uint8_t dispense_target;
+    uint8_t water_temp;
+    uint8_t stable_candidate_class;
+    uint8_t stable_candidate_count;
+    uint8_t target_reached_count;
+    uint8_t key_cold_prev_down;
+    uint32_t decision_deadline_ms;
+    float reg_hist[PUMP_REG_WINDOW_SIZE];
+    uint8_t reg_hist_count;
 } camera_pump_ctrl_state_t;
+
+typedef enum
+{
+    CAMERA_WORK_STATE_STANDBY = 0U,
+    CAMERA_WORK_STATE_DECISION_WINDOW,
+    CAMERA_WORK_STATE_DISPENSING_AUTO_COLD,
+    CAMERA_WORK_STATE_DISPENSING_VOICE_WAIT,
+    CAMERA_WORK_STATE_DISPENSING_VOICE,
+    CAMERA_WORK_STATE_DISPENSING_MANUAL_COLD,
+    CAMERA_WORK_STATE_DONE,
+    CAMERA_WORK_STATE_FAULT,
+} camera_work_state_t;
+
+typedef enum
+{
+    CAMERA_DISPENSE_TARGET_NONE = 0U,
+    CAMERA_DISPENSE_TARGET_HALF,
+    CAMERA_DISPENSE_TARGET_FULL,
+    CAMERA_DISPENSE_TARGET_MANUAL_CONTINUOUS,
+} camera_dispense_target_t;
+
+typedef enum
+{
+    CAMERA_WATER_TEMP_COLD = 0U,
+    CAMERA_WATER_TEMP_HOT,
+} camera_water_temp_t;
+#endif
 
 #if ((APP_MODE == APP_MODE_AI_INFER) || (APP_MODE == APP_MODE_AI_TEST_IMAGE) || (APP_MODE == APP_MODE_PUMP_CTRL))
 static AI_ALIGNED(32) uint8_t g_frame_buf[CAMERA_RGB565_FRAME_BYTES];
@@ -109,11 +157,11 @@ static uint8_t g_ai_gray_buf[CAMERA_AI_INPUT_SIZE];
 static camera_ai_context_t g_ai_ctx;
 #endif
 static uint8_t g_camera_ready = 0U;
+#if (APP_MODE == APP_MODE_PUMP_CTRL)
 static camera_pump_ctrl_state_t g_pump_ctrl;
-static uint8_t g_pump_initialized = 0U;
+#endif
 static uint32_t g_camera_bad_frame_count = 0U;
 static uint32_t g_camera_recover_warmup_frames = 0U;
-static uint16_t g_pump_last_duty = 0U;
 static uint32_t g_camera_dcmi_profile_idx = 0U;
 
 typedef struct
@@ -132,6 +180,7 @@ static const camera_dcmi_profile_t k_camera_dcmi_profiles[] = {
 
 static uint8_t camera_app_capture_jpeg_snapshot(uint32_t timeout_ms, uint32_t *jpeg_off, uint32_t *jpeg_len);
 static uint8_t camera_app_validate_jpeg_frame(uint32_t jpeg_off, uint32_t jpeg_len);
+static uint8_t camera_app_startup_validate(const char *reason);
 
 static void dbg_print(const char *s)
 {
@@ -145,11 +194,24 @@ static void dbg_print(const char *s)
 #endif
 }
 
+static void camera_app_text_tx(const void *buf, uint16_t len)
+{
+#if (APP_MODE_STREAM_SILENT == 0U)
+    if ((buf != NULL) && (len != 0U))
+    {
+        (void)HAL_UART_Transmit(&huart1, (uint8_t *)buf, len, HAL_MAX_DELAY);
+    }
+#else
+    (void)buf;
+    (void)len;
+#endif
+}
+
 static void camera_app_log(const char *s)
 {
     if (s != NULL)
     {
-        (void)HAL_UART_Transmit(&huart1, (uint8_t *)s, (uint16_t)strlen(s), HAL_MAX_DELAY);
+        camera_app_text_tx(s, (uint16_t)strlen(s));
     }
 }
 
@@ -275,7 +337,7 @@ static uint8_t camera_app_recover_camera(const char *reason)
     g_camera_bad_frame_count = 0U;
 
     len = snprintf(buf, sizeof(buf), "[APP] recover start reason=%s\r\n", (reason != NULL) ? reason : "unknown");
-    HAL_UART_Transmit(&huart1, (uint8_t *)buf, (uint16_t)len, HAL_MAX_DELAY);
+    camera_app_text_tx(buf, (uint16_t)len);
 
     for (profile_step = 0U; profile_step < profile_count; profile_step++)
     {
@@ -340,14 +402,14 @@ static uint8_t camera_app_recover_camera(const char *reason)
             len = snprintf(buf, sizeof(buf),
                            "[APP] recover ok mid=0x%04X pid=0x%04X try=%lu cfg=%s\r\n",
                            mid, pid, (unsigned long)(try_idx + 1U), k_camera_dcmi_profiles[profile_idx].tag);
-            HAL_UART_Transmit(&huart1, (uint8_t *)buf, (uint16_t)len, HAL_MAX_DELAY);
+            camera_app_text_tx(buf, (uint16_t)len);
             return 0U;
         }
     }
 
     len = snprintf(buf, sizeof(buf),
                    "[APP] recover fail mid=0x%04X pid=0x%04X\r\n", mid, pid);
-    HAL_UART_Transmit(&huart1, (uint8_t *)buf, (uint16_t)len, HAL_MAX_DELAY);
+    camera_app_text_tx(buf, (uint16_t)len);
     return 1U;
 }
 
@@ -475,6 +537,7 @@ static uint8_t camera_app_capture_snapshot(uint32_t timeout_ms)
 
     g_frame_done = 0U;
     g_frame_error = 0U;
+    memset(JPEG_Stream_GetBuf(), 0, JPEG_Stream_GetMaxSize());
 
     if (OV2640_StartSnapshot() != OV2640_OK)
     {
@@ -512,6 +575,7 @@ static uint8_t camera_app_capture_jpeg_snapshot(uint32_t timeout_ms, uint32_t *j
     *jpeg_len = 0U;
     g_frame_done = 0U;
     g_frame_error = 0U;
+    memset(JPEG_Stream_GetBuf(), 0, JPEG_Stream_GetMaxSize());
 
     if (OV2640_StartSnapshot() != OV2640_OK)
     {
@@ -568,6 +632,37 @@ static uint8_t camera_app_validate_jpeg_frame(uint32_t jpeg_off, uint32_t jpeg_l
     return camera_app_jpeg_header_is_plausible(JPEG_Stream_GetBuf() + jpeg_off, jpeg_len) ? 0U : 1U;
 }
 #endif
+
+static uint8_t camera_app_startup_validate(const char *reason)
+{
+    uint32_t jpeg_off = 0U;
+    uint32_t jpeg_len = 0U;
+    uint32_t attempt;
+    uint8_t *jpeg_buf = JPEG_Stream_GetBuf();
+
+    for (attempt = 0U; attempt < 3U; attempt++)
+    {
+        JPEG_Stream_Init();
+        OV2640_AttachFrameBuffer(JPEG_Stream_GetBuf(), JPEG_Stream_GetMaxSize());
+        HAL_Delay(120U);
+
+        if (camera_app_capture_jpeg_snapshot(1500U, &jpeg_off, &jpeg_len) != 0U)
+        {
+            HAL_Delay(120U);
+            continue;
+        }
+
+        if (camera_app_jpeg_header_is_plausible(jpeg_buf + jpeg_off, jpeg_len) != 0U)
+        {
+            g_camera_bad_frame_count = 0U;
+            return 0U;
+        }
+
+        HAL_Delay(120U);
+    }
+
+    return camera_app_recover_camera(reason);
+}
 
 static void camera_app_report_jpeg_diag(void)
 {
@@ -994,8 +1089,26 @@ static uint8_t camera_app_ai_run(camera_ai_result_t *result)
         }
     }
 
+    result->raw_class_id = best_idx;
     result->class_id = best_idx;
     result->confidence = (exp_sum > 0.0f) ? (best_prob / exp_sum) : 0.0f;
+
+    if ((result->raw_class_id == 1U) || (result->raw_class_id == 2U) || (result->raw_class_id == 3U))
+    {
+        if (result->level_reg >= WATERLEVEL_HALF_FULL_SPLIT)
+        {
+            result->class_id = 3U;
+        }
+        else if (result->level_reg >= WATERLEVEL_LOW_HALF_SPLIT)
+        {
+            result->class_id = 2U;
+        }
+        else
+        {
+            result->class_id = 1U;
+        }
+    }
+
     return 0U;
 }
 
@@ -1019,8 +1132,9 @@ static void camera_app_ai_report(const camera_ai_result_t *result,
     fps_x10 = (pipeline_ms > 0U) ? (10000U / pipeline_ms) : 0U;
 
     len = snprintf(buf, sizeof(buf),
-                   "[AI] cls=%lu name=%s conf=%lu.%lu%% reg=0.%03lu pipe=%lums nn=%lums fps=%lu.%lu raw=[%d,%d,%d,%d,%d]\r\n",
+                   "[AI] cls=%lu raw_cls=%lu name=%s conf=%lu.%lu%% reg=0.%03lu pipe=%lums nn=%lums fps=%lu.%lu raw=[%d,%d,%d,%d,%d]\r\n",
                    (unsigned long)result->class_id,
+                   (unsigned long)result->raw_class_id,
                    camera_ai_class_name(result->class_id),
                    (unsigned long)(conf_x10 / 10U),
                    (unsigned long)(conf_x10 % 10U),
@@ -1038,131 +1152,16 @@ static void camera_app_ai_report(const camera_ai_result_t *result,
 }
 #endif
 
-#if (APP_MODE == APP_MODE_PUMP_CTRL)
-void Pump_Init(void)
-{
-    if (g_pump_initialized != 0U)
-    {
-        return;
-    }
-
-    RCC->AHB4ENR |= RCC_AHB4ENR_GPIOHEN;
-
-#if (PUMP_GPIO_TEST_MODE == 0U)
-    RCC->APB1LENR |= RCC_APB1LENR_TIM12EN;
-
-    GPIOH->MODER &= ~GPIO_MODER_MODE6_Msk;
-    GPIOH->MODER |= GPIO_MODER_MODE6_1;
-    GPIOH->OTYPER &= ~GPIO_OTYPER_OT6;
-    GPIOH->OSPEEDR |= GPIO_OSPEEDR_OSPEED6_Msk;
-    GPIOH->PUPDR &= ~GPIO_PUPDR_PUPD6_Msk;
-    GPIOH->AFR[0] &= ~GPIO_AFRL_AFSEL6_Msk;
-    GPIOH->AFR[0] |= (2UL << GPIO_AFRL_AFSEL6_Pos);
-
-    TIM12->CR1 = 0U;
-    TIM12->PSC = 3U;
-    TIM12->ARR = PUMP_PWM_MAX;
-    TIM12->CCMR1 = 0U;
-    TIM12->CCMR1 |= (6UL << TIM_CCMR1_OC1M_Pos);
-    TIM12->CCMR1 |= TIM_CCMR1_OC1PE;
-    TIM12->CCR1 = 0U;
-    TIM12->CCER = TIM_CCER_CC1E;
-    TIM12->EGR = TIM_EGR_UG;
-    TIM12->CR1 |= TIM_CR1_ARPE;
-    TIM12->CR1 |= TIM_CR1_CEN;
-#else
-    GPIOH->MODER &= ~GPIO_MODER_MODE6_Msk;
-    GPIOH->MODER |= GPIO_MODER_MODE6_0;
-    GPIOH->OTYPER &= ~GPIO_OTYPER_OT6;
-    GPIOH->OSPEEDR |= GPIO_OSPEEDR_OSPEED6_Msk;
-    GPIOH->PUPDR &= ~GPIO_PUPDR_PUPD6_Msk;
-    GPIOH->BSRR = ((uint32_t)GPIO_PIN_6 << 16U);
-#endif
-
-    g_pump_initialized = 1U;
-}
-
-void Pump_SetSpeed(uint16_t duty)
-{
-#if (PUMP_GPIO_TEST_MODE == 0U)
-    if (duty > PUMP_PWM_MAX)
-    {
-        duty = PUMP_PWM_MAX;
-    }
-
-    TIM12->CCR1 = duty;
-#else
-    if (duty == 0U)
-    {
-        GPIOH->BSRR = ((uint32_t)GPIO_PIN_6 << 16U);
-    }
-    else
-    {
-        GPIOH->BSRR = GPIO_PIN_6;
-    }
-#endif
-
-    g_pump_last_duty = duty;
-}
-
-void Pump_Stop(void)
-{
-    Pump_SetSpeed(0U);
-}
-
-void Pump_Start(void)
-{
-}
-
-void Pump_StartFast(void)
-{
-    Pump_Start();
-    Pump_SetSpeed(PUMP_DUTY_FAST);
-}
-
-void Pump_StartSlow(void)
-{
-    Pump_Start();
-    Pump_SetSpeed(PUMP_DUTY_SLOW);
-}
-
-void Pump_ApplyCommand(uint8_t command)
-{
-    switch (command)
-    {
-        case PUMP_COMMAND_FAST:
-            Pump_StartFast();
-            break;
-
-        case PUMP_COMMAND_SLOW:
-            Pump_StartSlow();
-            break;
-
-        case PUMP_COMMAND_STOP:
-        default:
-            Pump_Stop();
-            break;
-    }
-}
-
 int AI_GetState(void)
 {
-    switch (g_pump_ctrl.last_class_id)
-    {
-        case 0U:
-        case 1U:
-            return (int)PUMP_COMMAND_FAST;
-
-        case 2U:
-            return (int)PUMP_COMMAND_SLOW;
-
-        case 3U:
-        case 4U:
-        default:
-            return (int)PUMP_COMMAND_STOP;
-    }
+#if (APP_MODE == APP_MODE_PUMP_CTRL)
+    return (int)g_pump_ctrl.applied_state;
+#else
+    return (int)PUMP_COMMAND_STOP;
+#endif
 }
 
+#if (APP_MODE == APP_MODE_PUMP_CTRL)
 static const char *camera_app_pump_cmd_name(uint8_t command)
 {
     switch (command)
@@ -1179,43 +1178,157 @@ static const char *camera_app_pump_cmd_name(uint8_t command)
     }
 }
 
-static uint32_t camera_app_pump_pin_level(void)
+static const char *camera_app_work_state_name(uint8_t state)
 {
-    return (GPIOH->IDR & GPIO_PIN_6) ? 1U : 0U;
+    switch ((camera_work_state_t)state)
+    {
+        case CAMERA_WORK_STATE_STANDBY:
+            return "standby";
+
+        case CAMERA_WORK_STATE_DECISION_WINDOW:
+            return "wait_cmd";
+
+        case CAMERA_WORK_STATE_DISPENSING_AUTO_COLD:
+            return "auto_cold";
+
+        case CAMERA_WORK_STATE_DISPENSING_VOICE_WAIT:
+            return "voice_wait";
+
+        case CAMERA_WORK_STATE_DISPENSING_VOICE:
+            return "voice";
+
+        case CAMERA_WORK_STATE_DISPENSING_MANUAL_COLD:
+            return "manual_cold";
+
+        case CAMERA_WORK_STATE_DONE:
+            return "done";
+
+        case CAMERA_WORK_STATE_FAULT:
+            return "fault";
+
+        default:
+            return "unknown";
+    }
+}
+
+static const char *camera_app_target_name(uint8_t target)
+{
+    switch ((camera_dispense_target_t)target)
+    {
+        case CAMERA_DISPENSE_TARGET_HALF:
+            return "half";
+
+        case CAMERA_DISPENSE_TARGET_FULL:
+            return "full";
+
+        case CAMERA_DISPENSE_TARGET_MANUAL_CONTINUOUS:
+            return "manual";
+
+        case CAMERA_DISPENSE_TARGET_NONE:
+        default:
+            return "none";
+    }
+}
+
+static const char *camera_app_temp_name(uint8_t temp)
+{
+    switch ((camera_water_temp_t)temp)
+    {
+        case CAMERA_WATER_TEMP_HOT:
+            return "hot";
+
+        case CAMERA_WATER_TEMP_COLD:
+        default:
+            return "cold";
+    }
+}
+
+static uint8_t camera_app_cold_key_is_down(void)
+{
+    return (HAL_GPIO_ReadPin(GPIOF, GPIO_PIN_7) == GPIO_PIN_RESET) ? 1U : 0U;
+}
+
+static void camera_app_oled_refresh_stub(void)
+{
+}
+
+static uint8_t camera_app_voice_result_read(void)
+{
+    int result = Asr_Result();
+
+    if (result < 0)
+    {
+        return 0U;
+    }
+
+    return (uint8_t)result;
+}
+
+static uint8_t camera_app_voice_result_is_supported(uint8_t result)
+{
+    switch (result)
+    {
+        case ASR_WORD_HALF_WATER:
+        case ASR_WORD_FULL_WATER:
+            return 1U;
+
+        default:
+            return 0U;
+    }
+}
+
+static void camera_app_voice_apply_request(uint8_t voice_result,
+                                           uint8_t *target_out,
+                                           uint8_t *temp_out)
+{
+    uint8_t target = CAMERA_DISPENSE_TARGET_NONE;
+    uint8_t temp = CAMERA_WATER_TEMP_COLD;
+
+    switch (voice_result)
+    {
+        case ASR_WORD_HALF_WATER:
+            target = CAMERA_DISPENSE_TARGET_HALF;
+            temp = CAMERA_WATER_TEMP_COLD;
+            break;
+
+        case ASR_WORD_FULL_WATER:
+            target = CAMERA_DISPENSE_TARGET_FULL;
+            temp = CAMERA_WATER_TEMP_COLD;
+            break;
+
+        case ASR_WORD_HALF_HOT_WATER:
+            target = CAMERA_DISPENSE_TARGET_HALF;
+            temp = CAMERA_WATER_TEMP_HOT;
+            break;
+
+        case ASR_WORD_FULL_HOT_WATER:
+            target = CAMERA_DISPENSE_TARGET_FULL;
+            temp = CAMERA_WATER_TEMP_HOT;
+            break;
+
+        default:
+            break;
+    }
+
+    if (target_out != NULL)
+    {
+        *target_out = target;
+    }
+
+    if (temp_out != NULL)
+    {
+        *temp_out = temp;
+    }
 }
 
 static void camera_app_pump_ctrl_reset(void)
 {
     memset(&g_pump_ctrl, 0, sizeof(g_pump_ctrl));
+    g_pump_ctrl.workflow_state = CAMERA_WORK_STATE_STANDBY;
+    g_pump_ctrl.water_temp = CAMERA_WATER_TEMP_COLD;
+    g_pump_ctrl.key_cold_prev_down = camera_app_cold_key_is_down();
     Pump_Stop();
-}
-
-static uint8_t camera_app_pump_ctrl_decide_state(const camera_ai_result_t *result)
-{
-    if (result == NULL)
-    {
-        return PUMP_COMMAND_STOP;
-    }
-
-    if (result->confidence < PUMP_AI_CONF_MIN)
-    {
-        return PUMP_COMMAND_STOP;
-    }
-
-    switch (result->class_id)
-    {
-        case 0U:
-        case 1U:
-            return PUMP_COMMAND_FAST;
-
-        case 2U:
-            return PUMP_COMMAND_SLOW;
-
-        case 3U:
-        case 4U:
-        default:
-            return PUMP_COMMAND_STOP;
-    }
+    camera_app_oled_refresh_stub();
 }
 
 static void camera_app_pump_ctrl_apply_state(uint8_t state)
@@ -1242,10 +1355,286 @@ static void camera_app_pump_ctrl_apply_state(uint8_t state)
                    "[PUMP] apply req=%s applied=%s duty=%u ph6=%lu actions=%lu\r\n",
                    camera_app_pump_cmd_name(g_pump_ctrl.requested_state),
                    camera_app_pump_cmd_name(g_pump_ctrl.applied_state),
-                   (unsigned)g_pump_last_duty,
-                   (unsigned long)camera_app_pump_pin_level(),
+                   (unsigned)Pump_GetLastDuty(),
+                   (unsigned long)Pump_GetPinLevel(),
                    (unsigned long)g_pump_ctrl.action_count);
     HAL_UART_Transmit(&huart1, (uint8_t *)buf, (uint16_t)len, HAL_MAX_DELAY);
+}
+
+static void camera_app_pump_ctrl_set_work_state(uint8_t next_state, const char *reason)
+{
+    char buf[160];
+    int len;
+
+    if (g_pump_ctrl.workflow_state == next_state)
+    {
+        return;
+    }
+
+    len = snprintf(buf, sizeof(buf),
+                   "[PUMP] wf %s -> %s reason=%s\r\n",
+                   camera_app_work_state_name(g_pump_ctrl.workflow_state),
+                   camera_app_work_state_name(next_state),
+                   (reason != NULL) ? reason : "none");
+    HAL_UART_Transmit(&huart1, (uint8_t *)buf, (uint16_t)len, HAL_MAX_DELAY);
+    g_pump_ctrl.workflow_state = next_state;
+    camera_app_oled_refresh_stub();
+}
+
+static void camera_app_pump_ctrl_clear_flow_context(void)
+{
+    g_pump_ctrl.dispense_target = CAMERA_DISPENSE_TARGET_NONE;
+    g_pump_ctrl.water_temp = CAMERA_WATER_TEMP_COLD;
+    g_pump_ctrl.stable_candidate_class = 0U;
+    g_pump_ctrl.stable_candidate_count = 0U;
+    g_pump_ctrl.target_reached_count = 0U;
+    g_pump_ctrl.decision_deadline_ms = 0U;
+    g_pump_ctrl.stop_request = 0U;
+    memset(g_pump_ctrl.reg_hist, 0, sizeof(g_pump_ctrl.reg_hist));
+    g_pump_ctrl.reg_hist_count = 0U;
+}
+
+static void camera_app_pump_ctrl_return_to_standby(const char *reason)
+{
+    g_pump_ctrl.requested_state = PUMP_COMMAND_STOP;
+    camera_app_pump_ctrl_apply_state(PUMP_COMMAND_STOP);
+    Asr_Speak(ASR_ANNOUNCER, ASR_SPEAK_DONE);
+    camera_app_pump_ctrl_set_work_state(CAMERA_WORK_STATE_DONE, reason);
+    camera_app_pump_ctrl_clear_flow_context();
+    camera_app_pump_ctrl_set_work_state(CAMERA_WORK_STATE_STANDBY, "ready");
+}
+
+static void camera_app_pump_ctrl_fault_to_standby(const char *reason)
+{
+    g_pump_ctrl.abnormal_latched = 1U;
+    g_pump_ctrl.requested_state = PUMP_COMMAND_STOP;
+    camera_app_pump_ctrl_apply_state(PUMP_COMMAND_STOP);
+    Asr_Speak(ASR_ANNOUNCER, ASR_SPEAK_ABORTED);
+    camera_app_pump_ctrl_set_work_state(CAMERA_WORK_STATE_FAULT, reason);
+    camera_app_pump_ctrl_clear_flow_context();
+    camera_app_pump_ctrl_set_work_state(CAMERA_WORK_STATE_STANDBY, "ready");
+}
+
+static void camera_app_pump_ctrl_enter_decision_window(uint32_t now_ms)
+{
+    g_pump_ctrl.dispense_target = CAMERA_DISPENSE_TARGET_NONE;
+    g_pump_ctrl.water_temp = CAMERA_WATER_TEMP_COLD;
+    g_pump_ctrl.decision_deadline_ms = now_ms + PUMP_DECISION_WINDOW_MS;
+    camera_app_pump_ctrl_set_work_state(CAMERA_WORK_STATE_DECISION_WINDOW, "cup_stable");
+    Asr_Speak(ASR_ANNOUNCER, ASR_SPEAK_CUP_DETECTED);
+}
+
+static void camera_app_pump_ctrl_start_manual_cold(const char *reason)
+{
+    g_pump_ctrl.dispense_target = CAMERA_DISPENSE_TARGET_MANUAL_CONTINUOUS;
+    g_pump_ctrl.water_temp = CAMERA_WATER_TEMP_COLD;
+    g_pump_ctrl.target_reached_count = 0U;
+    g_pump_ctrl.requested_state = PUMP_COMMAND_FAST;
+    camera_app_pump_ctrl_set_work_state(CAMERA_WORK_STATE_DISPENSING_MANUAL_COLD, reason);
+    camera_app_pump_ctrl_apply_state(PUMP_COMMAND_FAST);
+}
+
+static void camera_app_pump_ctrl_start_auto_cold(void)
+{
+    g_pump_ctrl.dispense_target = CAMERA_DISPENSE_TARGET_FULL;
+    g_pump_ctrl.water_temp = CAMERA_WATER_TEMP_COLD;
+    g_pump_ctrl.target_reached_count = 0U;
+    memset(g_pump_ctrl.reg_hist, 0, sizeof(g_pump_ctrl.reg_hist));
+    g_pump_ctrl.reg_hist_count = 0U;
+    g_pump_ctrl.requested_state = PUMP_COMMAND_FAST;
+    camera_app_pump_ctrl_set_work_state(CAMERA_WORK_STATE_DISPENSING_AUTO_COLD, "timeout_auto");
+    camera_app_pump_ctrl_apply_state(PUMP_COMMAND_FAST);
+    Asr_Speak(ASR_ANNOUNCER, ASR_SPEAK_DISPENSING);
+}
+
+static void camera_app_pump_ctrl_start_voice_dispense(uint8_t target,
+                                                      uint8_t temp,
+                                                      const char *reason)
+{
+    if ((target != CAMERA_DISPENSE_TARGET_HALF) &&
+        (target != CAMERA_DISPENSE_TARGET_FULL))
+    {
+        return;
+    }
+
+    g_pump_ctrl.dispense_target = target;
+    g_pump_ctrl.water_temp = temp;
+    g_pump_ctrl.target_reached_count = 0U;
+    memset(g_pump_ctrl.reg_hist, 0, sizeof(g_pump_ctrl.reg_hist));
+    g_pump_ctrl.reg_hist_count = 0U;
+    g_pump_ctrl.requested_state = PUMP_COMMAND_FAST;
+    camera_app_pump_ctrl_set_work_state(CAMERA_WORK_STATE_DISPENSING_VOICE, reason);
+    camera_app_pump_ctrl_apply_state(PUMP_COMMAND_FAST);
+    Asr_Speak(ASR_ANNOUNCER, ASR_SPEAK_DISPENSING);
+}
+
+static void camera_app_pump_ctrl_start_voice_wait(uint8_t target,
+                                                  uint8_t temp,
+                                                  uint32_t now_ms,
+                                                  const char *reason)
+{
+    if ((target != CAMERA_DISPENSE_TARGET_HALF) &&
+        (target != CAMERA_DISPENSE_TARGET_FULL))
+    {
+        return;
+    }
+
+    g_pump_ctrl.dispense_target = target;
+    g_pump_ctrl.water_temp = temp;
+    g_pump_ctrl.target_reached_count = 0U;
+    memset(g_pump_ctrl.reg_hist, 0, sizeof(g_pump_ctrl.reg_hist));
+    g_pump_ctrl.reg_hist_count = 0U;
+    g_pump_ctrl.decision_deadline_ms = now_ms + PUMP_VOICE_START_DELAY_MS;
+    g_pump_ctrl.requested_state = PUMP_COMMAND_STOP;
+    camera_app_pump_ctrl_set_work_state(CAMERA_WORK_STATE_DISPENSING_VOICE_WAIT, reason);
+    camera_app_pump_ctrl_apply_state(PUMP_COMMAND_STOP);
+}
+
+static void camera_app_pump_ctrl_push_reg(float reg)
+{
+    if (g_pump_ctrl.reg_hist_count < PUMP_REG_WINDOW_SIZE)
+    {
+        g_pump_ctrl.reg_hist[g_pump_ctrl.reg_hist_count] = reg;
+        g_pump_ctrl.reg_hist_count++;
+        return;
+    }
+
+    memmove(&g_pump_ctrl.reg_hist[0],
+            &g_pump_ctrl.reg_hist[1],
+            (PUMP_REG_WINDOW_SIZE - 1U) * sizeof(g_pump_ctrl.reg_hist[0]));
+    g_pump_ctrl.reg_hist[PUMP_REG_WINDOW_SIZE - 1U] = reg;
+}
+
+static uint8_t camera_app_pump_ctrl_reg_target_reached(float *avg_out)
+{
+    float sum = 0.0f;
+    float stop_reg = 0.0f;
+    float near_stop_reg = 0.0f;
+    uint8_t rising = 0U;
+    uint8_t over_count = 0U;
+    uint8_t near_count = 0U;
+    uint8_t i;
+    uint8_t n = g_pump_ctrl.reg_hist_count;
+    float avg;
+
+    if (avg_out != NULL)
+    {
+        *avg_out = 0.0f;
+    }
+
+    if (n < PUMP_REG_MIN_FRAMES)
+    {
+        return 0U;
+    }
+
+    switch ((camera_dispense_target_t)g_pump_ctrl.dispense_target)
+    {
+        case CAMERA_DISPENSE_TARGET_HALF:
+            stop_reg = PUMP_HALF_STOP_REG;
+            near_stop_reg = PUMP_HALF_STOP_REG;
+            break;
+
+        case CAMERA_DISPENSE_TARGET_FULL:
+            stop_reg = PUMP_FULL_STOP_REG;
+            near_stop_reg = PUMP_FULL_NEAR_STOP_REG;
+            break;
+
+        case CAMERA_DISPENSE_TARGET_NONE:
+        case CAMERA_DISPENSE_TARGET_MANUAL_CONTINUOUS:
+        default:
+            return 0U;
+    }
+
+    for (i = 0U; i < n; i++)
+    {
+        float sample = g_pump_ctrl.reg_hist[i];
+        sum += sample;
+        if (sample >= stop_reg)
+        {
+            over_count++;
+        }
+        if (sample >= near_stop_reg)
+        {
+            near_count++;
+        }
+        if ((i > 0U) && (sample + PUMP_REG_RISE_TOL >= g_pump_ctrl.reg_hist[i - 1U]))
+        {
+            rising++;
+        }
+    }
+
+    avg = sum / (float)n;
+    if (avg_out != NULL)
+    {
+        *avg_out = avg;
+    }
+
+    if (avg >= stop_reg)
+    {
+        return (rising >= (uint8_t)(n - 2U)) ? 1U : 0U;
+    }
+
+    if ((g_pump_ctrl.reg_hist[n - 1U] >= stop_reg) && (near_count >= 2U))
+    {
+        return 1U;
+    }
+
+    if ((stop_reg == PUMP_HALF_STOP_REG) && (over_count >= 3U))
+    {
+        return 1U;
+    }
+
+    return 0U;
+}
+
+static uint8_t camera_app_pump_ctrl_is_cup_class(uint8_t class_id)
+{
+    return ((class_id >= 1U) && (class_id <= 3U)) ? 1U : 0U;
+}
+
+static void camera_app_pump_ctrl_update_stable_class(uint8_t class_id)
+{
+    if (g_pump_ctrl.stable_candidate_class == class_id)
+    {
+        if (g_pump_ctrl.stable_candidate_count < 0xFFU)
+        {
+            g_pump_ctrl.stable_candidate_count++;
+        }
+    }
+    else
+    {
+        g_pump_ctrl.stable_candidate_class = class_id;
+        g_pump_ctrl.stable_candidate_count = 1U;
+    }
+}
+
+static uint8_t camera_app_pump_ctrl_has_stable_cup(void)
+{
+    if (camera_app_pump_ctrl_is_cup_class(g_pump_ctrl.stable_candidate_class) == 0U)
+    {
+        return 0U;
+    }
+
+    return (g_pump_ctrl.stable_candidate_count >= PUMP_STABLE_FRAME_COUNT) ? 1U : 0U;
+}
+
+static uint8_t camera_app_pump_ctrl_has_stable_class(uint8_t class_id)
+{
+    if (g_pump_ctrl.stable_candidate_class != class_id)
+    {
+        return 0U;
+    }
+
+    return (g_pump_ctrl.stable_candidate_count >= PUMP_STABLE_FRAME_COUNT) ? 1U : 0U;
+}
+
+static uint8_t camera_app_pump_ctrl_cold_key_pressed(void)
+{
+    uint8_t key_down = camera_app_cold_key_is_down();
+    uint8_t pressed = (key_down != 0U) && (g_pump_ctrl.key_cold_prev_down == 0U);
+
+    g_pump_ctrl.key_cold_prev_down = key_down;
+    return pressed;
 }
 
 static void camera_app_pump_ctrl_report(const camera_ai_result_t *result)
@@ -1264,15 +1653,19 @@ static void camera_app_pump_ctrl_report(const camera_ai_result_t *result)
     reg_x1000 = camera_app_float_to_permille(result->level_reg);
 
     len = snprintf(buf, sizeof(buf),
-                   "[PUMP] cls=%lu conf=%lu.%lu%% reg=0.%03lu req=%s applied=%s duty=%u ph6=%lu frames=%lu actions=%lu\r\n",
+                   "[PUMP] cls=%lu raw_cls=%lu conf=%lu.%lu%% reg=0.%03lu wf=%s target=%s temp=%s req=%s applied=%s duty=%u ph6=%lu frames=%lu actions=%lu\r\n",
                    (unsigned long)result->class_id,
+                   (unsigned long)result->raw_class_id,
                    (unsigned long)(conf_x10 / 10U),
                    (unsigned long)(conf_x10 % 10U),
                    (unsigned long)reg_x1000,
+                   camera_app_work_state_name(g_pump_ctrl.workflow_state),
+                   camera_app_target_name(g_pump_ctrl.dispense_target),
+                   camera_app_temp_name(g_pump_ctrl.water_temp),
                    camera_app_pump_cmd_name(g_pump_ctrl.requested_state),
                    camera_app_pump_cmd_name(g_pump_ctrl.applied_state),
-                   (unsigned)g_pump_last_duty,
-                   (unsigned long)camera_app_pump_pin_level(),
+                   (unsigned)Pump_GetLastDuty(),
+                   (unsigned long)Pump_GetPinLevel(),
                    (unsigned long)g_pump_ctrl.frame_count,
                    (unsigned long)g_pump_ctrl.action_count);
     HAL_UART_Transmit(&huart1, (uint8_t *)buf, (uint16_t)len, HAL_MAX_DELAY);
@@ -1283,6 +1676,7 @@ static void camera_app_pump_ctrl_fail(const char *tag, uint32_t code)
     char buf[64];
     int len = snprintf(buf, sizeof(buf), "[PUMP] %s=%lu\r\n", tag, (unsigned long)code);
 
+    g_pump_ctrl.requested_state = PUMP_COMMAND_STOP;
     camera_app_pump_ctrl_apply_state(PUMP_COMMAND_STOP);
     HAL_UART_Transmit(&huart1, (uint8_t *)buf, (uint16_t)len, HAL_MAX_DELAY);
 }
@@ -1293,6 +1687,7 @@ static void camera_app_pump_ctrl_decode_fail(uint32_t jpeg_off, uint32_t jpeg_le
     uint8_t *jpeg = JPEG_Stream_GetBuf();
     int len;
 
+    g_pump_ctrl.requested_state = PUMP_COMMAND_STOP;
     camera_app_pump_ctrl_apply_state(PUMP_COMMAND_STOP);
     len = snprintf(buf, sizeof(buf),
                    "[PUMP] decode_err prep=%u decomp=%u wh=%ux%u jpeg=%lu head=%02X %02X %02X %02X\r\n",
@@ -1310,9 +1705,11 @@ static void camera_app_pump_ctrl_decode_fail(uint32_t jpeg_off, uint32_t jpeg_le
 
 static void camera_app_pump_ctrl_consume_result(const camera_ai_result_t *result)
 {
-    uint8_t requested_state;
+    uint8_t key_cold_pressed;
+    uint8_t voice_result;
     char buf[96];
     int len;
+    uint32_t now_ms;
 
     if (result == NULL)
     {
@@ -1323,14 +1720,11 @@ static void camera_app_pump_ctrl_consume_result(const camera_ai_result_t *result
     g_pump_ctrl.last_class_id = result->class_id;
     g_pump_ctrl.last_level_reg = result->level_reg;
     g_pump_ctrl.last_confidence = result->confidence;
-    g_pump_ctrl.stop_request = ((result->class_id == 3U) || (result->class_id == 4U)) ? 1U : 0U;
-    requested_state = camera_app_pump_ctrl_decide_state(result);
-    g_pump_ctrl.requested_state = requested_state;
-
-    if (result->class_id == 4U)
-    {
-        g_pump_ctrl.abnormal_latched = 1U;
-    }
+    g_pump_ctrl.stop_request = ((result->class_id == 0U) || (result->class_id == 4U)) ? 1U : 0U;
+    key_cold_pressed = camera_app_pump_ctrl_cold_key_pressed();
+    voice_result = 0U;
+    now_ms = HAL_GetTick();
+    camera_app_pump_ctrl_update_stable_class(result->class_id);
 
     if (g_camera_recover_warmup_frames != 0U)
     {
@@ -1343,7 +1737,133 @@ static void camera_app_pump_ctrl_consume_result(const camera_ai_result_t *result
         return;
     }
 
-    camera_app_pump_ctrl_apply_state(requested_state);
+    switch ((camera_work_state_t)g_pump_ctrl.workflow_state)
+    {
+        case CAMERA_WORK_STATE_STANDBY:
+            g_pump_ctrl.requested_state = PUMP_COMMAND_STOP;
+            if (key_cold_pressed != 0U)
+            {
+                camera_app_pump_ctrl_start_manual_cold("manual_direct_start");
+                break;
+            }
+
+            if (camera_app_pump_ctrl_has_stable_cup() != 0U)
+            {
+                camera_app_pump_ctrl_enter_decision_window(now_ms);
+            }
+            break;
+
+        case CAMERA_WORK_STATE_DECISION_WINDOW:
+            g_pump_ctrl.requested_state = PUMP_COMMAND_STOP;
+            if (key_cold_pressed != 0U)
+            {
+                camera_app_pump_ctrl_start_manual_cold("manual_key_override");
+                break;
+            }
+
+            if (camera_app_pump_ctrl_has_stable_class(0U) != 0U)
+            {
+                camera_app_pump_ctrl_fault_to_standby("cup_lost");
+                break;
+            }
+            if (camera_app_pump_ctrl_has_stable_class(4U) != 0U)
+            {
+                g_pump_ctrl.abnormal_latched = 1U;
+                camera_app_pump_ctrl_fault_to_standby("abnormal");
+                break;
+            }
+
+            voice_result = camera_app_voice_result_read();
+            if (camera_app_voice_result_is_supported(voice_result) != 0U)
+            {
+                uint8_t voice_target = CAMERA_DISPENSE_TARGET_NONE;
+                uint8_t voice_temp = CAMERA_WATER_TEMP_COLD;
+
+                camera_app_voice_apply_request(voice_result, &voice_target, &voice_temp);
+                camera_app_pump_ctrl_start_voice_wait(voice_target, voice_temp, now_ms, "voice_cmd");
+                break;
+            }
+
+            if ((int32_t)(now_ms - g_pump_ctrl.decision_deadline_ms) >= 0)
+            {
+                camera_app_pump_ctrl_start_auto_cold();
+            }
+            break;
+
+        case CAMERA_WORK_STATE_DISPENSING_VOICE_WAIT:
+            g_pump_ctrl.requested_state = PUMP_COMMAND_STOP;
+            if (key_cold_pressed != 0U)
+            {
+                camera_app_pump_ctrl_start_manual_cold("manual_key_override");
+                break;
+            }
+            if (camera_app_pump_ctrl_has_stable_class(0U) != 0U)
+            {
+                camera_app_pump_ctrl_fault_to_standby("cup_lost");
+                break;
+            }
+            if (camera_app_pump_ctrl_has_stable_class(4U) != 0U)
+            {
+                g_pump_ctrl.abnormal_latched = 1U;
+                camera_app_pump_ctrl_fault_to_standby("abnormal");
+                break;
+            }
+            if ((int32_t)(now_ms - g_pump_ctrl.decision_deadline_ms) >= 0)
+            {
+                camera_app_pump_ctrl_start_voice_dispense(g_pump_ctrl.dispense_target,
+                                                          g_pump_ctrl.water_temp,
+                                                          "voice_delay_done");
+            }
+            break;
+
+        case CAMERA_WORK_STATE_DISPENSING_AUTO_COLD:
+        case CAMERA_WORK_STATE_DISPENSING_VOICE:
+        {
+            float reg_avg = 0.0f;
+            g_pump_ctrl.requested_state = PUMP_COMMAND_FAST;
+            if (camera_app_pump_ctrl_has_stable_class(0U) != 0U)
+            {
+                camera_app_pump_ctrl_fault_to_standby("cup_lost");
+                break;
+            }
+            if (camera_app_pump_ctrl_has_stable_class(4U) != 0U)
+            {
+                g_pump_ctrl.abnormal_latched = 1U;
+                camera_app_pump_ctrl_fault_to_standby("abnormal");
+                break;
+            }
+
+            camera_app_pump_ctrl_push_reg(result->level_reg);
+
+            if (camera_app_pump_ctrl_reg_target_reached(&reg_avg) != 0U)
+            {
+                camera_app_pump_ctrl_return_to_standby("target_reg");
+                break;
+            }
+
+            camera_app_pump_ctrl_apply_state(PUMP_COMMAND_FAST);
+            break;
+        }
+
+        case CAMERA_WORK_STATE_DISPENSING_MANUAL_COLD:
+            g_pump_ctrl.requested_state = PUMP_COMMAND_FAST;
+            if (key_cold_pressed != 0U)
+            {
+                camera_app_pump_ctrl_return_to_standby("cold_key_stop");
+                break;
+            }
+
+            camera_app_pump_ctrl_apply_state(PUMP_COMMAND_FAST);
+            break;
+
+        case CAMERA_WORK_STATE_DONE:
+        case CAMERA_WORK_STATE_FAULT:
+        default:
+            camera_app_pump_ctrl_set_work_state(CAMERA_WORK_STATE_STANDBY, "recover_state");
+            g_pump_ctrl.requested_state = PUMP_COMMAND_STOP;
+            break;
+    }
+
     camera_app_pump_ctrl_report(result);
 }
 #endif
@@ -1495,7 +2015,7 @@ void CameraApp_Init(void)
 #if (CAMERA_JPEG_DIAG != 0U)
     {
         static const char msg[] = "[JPEG] diag mode on\r\n";
-        HAL_UART_Transmit(&huart1, (uint8_t *)msg, (uint16_t)(sizeof(msg) - 1U), HAL_MAX_DELAY);
+        camera_app_text_tx(msg, (uint16_t)(sizeof(msg) - 1U));
     }
 #endif
 
@@ -1521,11 +2041,11 @@ void CameraApp_Init(void)
             int len = snprintf(buf, sizeof(buf),
                                "[APP] probe fail mid=0x%04X pid=0x%04X\r\n",
                                mid, pid);
-            HAL_UART_Transmit(&huart1, (uint8_t *)buf, (uint16_t)len, HAL_MAX_DELAY);
+            camera_app_text_tx(buf, (uint16_t)len);
 #if (CAMERA_JPEG_DIAG != 0U)
             {
                 static const char msg[] = "[JPEG] probe fail\r\n";
-                HAL_UART_Transmit(&huart1, (uint8_t *)msg, (uint16_t)(sizeof(msg) - 1U), HAL_MAX_DELAY);
+                camera_app_text_tx(msg, (uint16_t)(sizeof(msg) - 1U));
             }
 #endif
             dbg_print("[APP] Probe FAILED!\r\n");
@@ -1535,7 +2055,7 @@ void CameraApp_Init(void)
         {
             char buf[64];
             int len = snprintf(buf, sizeof(buf), "[APP] probe ok mid=0x%04X pid=0x%04X\r\n", mid, pid);
-            HAL_UART_Transmit(&huart1, (uint8_t *)buf, (uint16_t)len, HAL_MAX_DELAY);
+            camera_app_text_tx(buf, (uint16_t)len);
         }
     }
 
@@ -1545,7 +2065,7 @@ void CameraApp_Init(void)
         int len;
     len = snprintf(buf, sizeof(buf),
                    "[APP] Probe OK MID=0x%04X PID=0x%04X\r\n", mid, pid);
-    HAL_UART_Transmit(&huart1, (uint8_t *)buf, (uint16_t)len, HAL_MAX_DELAY);
+    camera_app_text_tx(buf, (uint16_t)len);
     }
 #endif
 
@@ -1557,7 +2077,7 @@ void CameraApp_Init(void)
 #if (CAMERA_JPEG_DIAG != 0U)
             {
                 static const char msg[] = "[JPEG] init fail\r\n";
-                HAL_UART_Transmit(&huart1, (uint8_t *)msg, (uint16_t)(sizeof(msg) - 1U), HAL_MAX_DELAY);
+                camera_app_text_tx(msg, (uint16_t)(sizeof(msg) - 1U));
             }
 #endif
             dbg_print("[APP] Init FAILED!\r\n");
@@ -1574,7 +2094,7 @@ void CameraApp_Init(void)
 #if (CAMERA_JPEG_DIAG != 0U)
             {
                 static const char msg[] = "[JPEG] fmt fail\r\n";
-                HAL_UART_Transmit(&huart1, (uint8_t *)msg, (uint16_t)(sizeof(msg) - 1U), HAL_MAX_DELAY);
+                camera_app_text_tx(msg, (uint16_t)(sizeof(msg) - 1U));
             }
 #endif
             dbg_print("[APP] JPEG format FAILED!\r\n");
@@ -1591,7 +2111,7 @@ void CameraApp_Init(void)
 #if (CAMERA_JPEG_DIAG != 0U)
             {
                 static const char msg[] = "[JPEG] size fail\r\n";
-                HAL_UART_Transmit(&huart1, (uint8_t *)msg, (uint16_t)(sizeof(msg) - 1U), HAL_MAX_DELAY);
+                camera_app_text_tx(msg, (uint16_t)(sizeof(msg) - 1U));
             }
 #endif
             dbg_print("[APP] Output size FAILED!\r\n");
@@ -1615,6 +2135,15 @@ void CameraApp_Init(void)
         HAL_NVIC_EnableIRQ(DCMI_IRQn);
 
         HAL_Delay(1500U);
+    }
+
+    if (APP_MODE != APP_MODE_AI_TEST_IMAGE)
+    {
+        if (camera_app_startup_validate("startup_boot") != 0U)
+        {
+            camera_app_log("[APP] startup check warn\r\n");
+            g_camera_bad_frame_count = CAMERA_BAD_FRAME_THRESHOLD;
+        }
     }
 
 #if (APP_MODE == APP_MODE_COLORBAR_VIEW)
@@ -1687,6 +2216,11 @@ void CameraApp_Run(void)
 
     if (camera_app_capture_snapshot(1000U) != 0U)
     {
+        g_camera_bad_frame_count++;
+        if (g_camera_bad_frame_count >= CAMERA_BAD_FRAME_THRESHOLD)
+        {
+            (void)camera_app_recover_camera("xcam_capture");
+        }
 #if (CAMERA_JPEG_DIAG != 0U)
         camera_app_dump_nojpeg_diag("start");
 #endif
@@ -1696,6 +2230,11 @@ void CameraApp_Run(void)
     jpeg_len = JPEG_Stream_FindFrame(&soi_off);
     if (jpeg_len == 0U)
     {
+        g_camera_bad_frame_count++;
+        if (g_camera_bad_frame_count >= CAMERA_BAD_FRAME_THRESHOLD)
+        {
+            (void)camera_app_recover_camera("xcam_noframe");
+        }
 #if (CAMERA_JPEG_DIAG != 0U)
         camera_app_dump_nojpeg_diag("noframe");
 #endif
@@ -1704,6 +2243,11 @@ void CameraApp_Run(void)
 
     if ((soi_off + jpeg_len) > JPEG_Stream_GetMaxSize())
     {
+        g_camera_bad_frame_count++;
+        if (g_camera_bad_frame_count >= CAMERA_BAD_FRAME_THRESHOLD)
+        {
+            (void)camera_app_recover_camera("xcam_range");
+        }
 #if (CAMERA_JPEG_DIAG != 0U)
         camera_app_dump_nojpeg_diag("range");
 #endif
@@ -1715,11 +2259,18 @@ void CameraApp_Run(void)
         (JPEG_Stream_GetBuf()[soi_off + jpeg_len - 2U] != 0xFFU) ||
         (JPEG_Stream_GetBuf()[soi_off + jpeg_len - 1U] != 0xD9U))
     {
+        g_camera_bad_frame_count++;
+        if (g_camera_bad_frame_count >= CAMERA_BAD_FRAME_THRESHOLD)
+        {
+            (void)camera_app_recover_camera("xcam_marker");
+        }
 #if (CAMERA_JPEG_DIAG != 0U)
         camera_app_dump_nojpeg_diag("marker");
 #endif
         return;
     }
+
+    g_camera_bad_frame_count = 0U;
 
 #if (CAMERA_JPEG_DIAG != 0U)
     camera_app_dump_jpeg_diag(soi_off, jpeg_len);

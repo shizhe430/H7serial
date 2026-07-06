@@ -10,6 +10,7 @@
 #include "main.h"
 #include "dcmi.h"
 #include "dma.h"
+#include "i2c.h"
 #include "usart.h"
 #include "gpio.h"
 
@@ -47,6 +48,8 @@ static void MPU_Config(void);
 /* USER CODE BEGIN PFP */
 static void main_uart_print(const char *text);
 static void main_print_build_info(void);
+static void main_boot_stage(const char *tag);
+static void main_boot_led(uint8_t on);
 
 /* USER CODE END PFP */
 
@@ -54,14 +57,19 @@ static void main_print_build_info(void);
 /* USER CODE BEGIN 0 */
 static void main_uart_print(const char *text)
 {
+#if (APP_MODE_STREAM_SILENT == 0U)
   if (text != NULL)
   {
     (void)HAL_UART_Transmit(&huart1, (uint8_t *)text, (uint16_t)strlen(text), HAL_MAX_DELAY);
   }
+#else
+  (void)text;
+#endif
 }
 
 static void main_print_build_info(void)
 {
+#if (APP_MODE_STREAM_SILENT == 0U)
   char buf[96];
   const char *cfg;
   const char *opt;
@@ -86,6 +94,33 @@ static void main_print_build_info(void)
   {
     (void)HAL_UART_Transmit(&huart1, (uint8_t *)buf, (uint16_t)len, HAL_MAX_DELAY);
   }
+#endif
+}
+
+static void main_boot_stage(const char *tag)
+{
+#if (APP_MODE_STREAM_SILENT == 0U)
+  char buf[64];
+  int len;
+
+  if (tag == NULL)
+  {
+    return;
+  }
+
+  len = snprintf(buf, sizeof(buf), "[BOOT] stage=%s\r\n", tag);
+  if (len > 0)
+  {
+    (void)HAL_UART_Transmit(&huart1, (uint8_t *)buf, (uint16_t)len, HAL_MAX_DELAY);
+  }
+#else
+  (void)tag;
+#endif
+}
+
+static void main_boot_led(uint8_t on)
+{
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, (on != 0U) ? GPIO_PIN_SET : GPIO_PIN_RESET);
 }
 
 /* USER CODE END 0 */
@@ -138,11 +173,15 @@ int main(void)
   MX_DMA_Init();
   MX_USART1_UART_Init();
   MX_DCMI_Init();
+  MX_I2C2_Init();
   /* USER CODE BEGIN 2 */
   HAL_Delay(4000U);
   main_print_build_info();
   main_uart_print("\r\n[BOOT] main enter\r\n");
+  main_boot_stage("camera_init_enter");
   CameraApp_Init();
+  main_boot_stage("camera_init_exit");
+  main_boot_led(1U);
   main_uart_print("[BOOT] camera init return\r\n");
 
   /* USER CODE END 2 */

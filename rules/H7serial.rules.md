@@ -147,17 +147,68 @@ Before enabling or regenerating `X-CUBE-AI` from CubeMX:
 
 ## Pump Control Rule
 
-- `APP_MODE_PUMP_CTRL` is reserved for the final no-print working mode.
-- Until the user provides the pump driver interface, keep `APP_MODE_PUMP_CTRL` limited to:
-  - capture
-  - preprocess
-  - inference
-  - internal decision-state update
-- Do not mix debug UART spam into `APP_MODE_PUMP_CTRL`.
-- When the pump driver is added later, implement:
-  - a dedicated control hook layer
-  - debounce / hysteresis
-  - abnormal-class fail-safe stop behavior
+- `APP_MODE_PUMP_CTRL` is the integrated dispense-control mode.
+- It must remain isolated from:
+  - `APP_MODE_XCAM_VIEW`
+  - `APP_MODE_AI_INFER`
+  - `APP_MODE_AI_TEST_IMAGE`
+- The pump architecture must now support three workflow paths sharing one backend:
+  - full automatic
+  - voice semi-automatic
+  - full mechanical
+- All three paths must converge onto the same shared control variables:
+  - `state`
+  - `target`
+  - `temp`
+  - `pump_cmd`
+- Full automatic mode:
+  - requires stable visual cup detection
+  - uses the 5-second command wait window
+  - defaults to `full + cold` after timeout
+- Voice semi-automatic mode:
+  - requires stable visual cup detection
+  - enters through the same 5-second command wait window
+  - voice layer only assigns shared target / temperature values
+  - after a valid voice command is accepted, delay pump start by `1s`
+  - this buffer is reserved for the module's local acknowledgment speech
+  - currently enabled protocol IDs:
+    - `0x01 = half cold`
+    - `0x02 = full cold`
+  - reserved for later hot-water hardware phase:
+    - `0x03 = half hot`
+    - `0x04 = full hot`
+- Full mechanical mode:
+  - must be independent of visual gating
+  - must be able to start directly from standby by key input
+  - must not require prior cup detection
+  - must not auto-stop on visual class `0`
+  - must not auto-stop on visual class `4`
+  - must stop only on the matching key action
+- Priority rule:
+  - key input > voice input > auto-timeout fallback
+- Visual decision rule:
+  - automatic and voice paths use continuous 3-frame confirmation
+  - full mechanical path may log/display visual classes but must not use them for stop control
+- Voice module integration rule:
+  - use `I2C2` on `PB10/PB11`
+  - do not use `PB6/PB9` because `PB9` is occupied by `DCMI_D7`
+  - retained announcer IDs:
+    - `0x10 = dispensing`
+    - `0x11 = aborted`
+    - `0x12 = done`
+    - `0x13 = cup detected`
+  - when entering `WAIT_CMD`, first播报 `0x13` to告诉用户当前处于命令输入窗口
+  - after every CubeMX generation for voice I2C, immediately re-check and restore if needed:
+    - `DCMI PCKPolarity = RISING`
+    - `USART1 baud = 921600`
+    - `DMA2_Stream3_IRQn priority = 5`
+    - `HSE_VALUE = 25000000`
+    - `SYSCFG_SWITCH_PA0 = OPEN`
+    - MPU DMA window remains `0x30000000 / 64KB / non-cacheable`
+    - `DCMI_IRQHandler()` declaration and implementation still exist
+- Keep pump hardware access inside the dedicated pump driver layer.
+- Keep workflow/state-machine logic outside the low-level driver layer.
+- Debug prints are allowed during bring-up, but the final competition version should be able to run with pump control logic decoupled from verbose UART output.
 
 ## Rapid Recovery Checklist
 

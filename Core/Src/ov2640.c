@@ -15,12 +15,12 @@
 #define OV2640_VIDEO_DVP_PCLK_DIV        0x02U
 #define OV2640_EXPECTED_MID              0x7FA2U
 #define OV2640_EXPECTED_PID              0x2642U
-#define OV2640_PWRDN_ASSERT_MS           20U
-#define OV2640_PWR_STABLE_MS             50U
-#define OV2640_RESET_ASSERT_MS           20U
-#define OV2640_RESET_RELEASE_MS          50U
-#define OV2640_POST_RESET_MS             100U
-#define OV2640_PROBE_ATTEMPTS            2U
+#define OV2640_PWRDN_ASSERT_MS           30U
+#define OV2640_PWR_STABLE_MS             80U
+#define OV2640_RESET_ASSERT_MS           30U
+#define OV2640_RESET_RELEASE_MS          80U
+#define OV2640_POST_RESET_MS             150U
+#define OV2640_PROBE_ATTEMPTS            3U
 
 static uint8_t s_initialized = 0U;
 static uint8_t *s_frame_buf = NULL;
@@ -208,6 +208,10 @@ static void ov2640_power_cycle_and_reset(void)
     ov2640_release_power_down();
     HAL_Delay(OV2640_PWR_STABLE_MS);
 
+    ov2640_hw_reset();
+    HAL_Delay(OV2640_POST_RESET_MS);
+
+    /* A second clean reset pulse helps after ST-LINK reflash/reset sequences. */
     ov2640_hw_reset();
     HAL_Delay(OV2640_POST_RESET_MS);
 }
@@ -412,8 +416,18 @@ uint8_t OV2640_Init(void)
     /* 摄像头已上电, 只做SW复位+写表 */
     ov2640_sw_reset();
     HAL_Delay(OV2640_POST_RESET_MS);
-    if (OV2640_ProbeID(&mid, &pid) != OV2640_OK) return OV2640_ERROR;
-    if ((mid != OV2640_EXPECTED_MID) || (pid != OV2640_EXPECTED_PID)) return OV2640_ERROR;
+    if ((OV2640_ProbeID(&mid, &pid) != OV2640_OK) ||
+        (mid != OV2640_EXPECTED_MID) ||
+        (pid != OV2640_EXPECTED_PID))
+    {
+        ov2640_power_cycle_and_reset();
+        OV2640_SCCB_Init();
+        ov2640_sw_reset();
+        HAL_Delay(OV2640_POST_RESET_MS);
+
+        if (OV2640_ProbeID(&mid, &pid) != OV2640_OK) return OV2640_ERROR;
+        if ((mid != OV2640_EXPECTED_MID) || (pid != OV2640_EXPECTED_PID)) return OV2640_ERROR;
+    }
     if (ov2640_write_table(ov2640_init_common_cfg, sizeof(ov2640_init_common_cfg) / sizeof(ov2640_init_common_cfg[0])) != OV2640_OK) return OV2640_ERROR;
     if (ov2640_write_table(ov2640_video_fast_cfg, sizeof(ov2640_video_fast_cfg) / sizeof(ov2640_video_fast_cfg[0])) != OV2640_OK) return OV2640_ERROR;
     if (OV2640_SetOutputFormatJPEG() != OV2640_OK) return OV2640_ERROR;
