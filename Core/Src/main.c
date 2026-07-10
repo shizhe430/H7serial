@@ -17,6 +17,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "camera_app.h"
+#include "oled_status.h"
 #include <stdio.h>
 #include <string.h>
 /* USER CODE END Includes */
@@ -173,8 +174,13 @@ int main(void)
   MX_DMA_Init();
   MX_USART1_UART_Init();
   MX_DCMI_Init();
-  MX_I2C2_Init();
+  MX_I2C4_Init();
+  MX_USART2_UART_Init();
+  MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
+#if (APP_MODE == APP_MODE_PUMP_CTRL)
+  OLED_Status_Init();
+#endif
   HAL_Delay(4000U);
   main_print_build_info();
   main_uart_print("\r\n[BOOT] main enter\r\n");

@@ -4,10 +4,6 @@
 #include "main.h"
 #include "gpio.h"
 
-/*
- * OV2640 底层驱动 (最简版)
- */
-
 #define OV2640_VIDEO_WIDTH               320U
 #define OV2640_VIDEO_HEIGHT              240U
 #define OV2640_VIDEO_JPEG_QUALITY        0x03U
@@ -179,8 +175,6 @@ static const uint8_t ov2640_effect_normal_cfg[][2] = {
     {0xFF, 0x00}, {0x7C, 0x00}, {0x7D, 0x00}, {0x7C, 0x05}, {0x7D, 0x80}, {0x7D, 0x80},
 };
 
-/* ── 内部函数 ── */
-
 static void ov2640_assert_power_down(void)
 {
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, GPIO_PIN_SET);
@@ -211,7 +205,6 @@ static void ov2640_power_cycle_and_reset(void)
     ov2640_hw_reset();
     HAL_Delay(OV2640_POST_RESET_MS);
 
-    /* A second clean reset pulse helps after ST-LINK reflash/reset sequences. */
     ov2640_hw_reset();
     HAL_Delay(OV2640_POST_RESET_MS);
 }
@@ -249,8 +242,6 @@ static uint8_t ov2640_apply_table(const uint8_t table[][2], uint32_t count)
     return ov2640_write_table(table, count);
 }
 
-/* ── 公开接口 ── */
-
 uint8_t OV2640_IsReady(void) { return s_initialized; }
 
 uint8_t OV2640_ProbeID(uint16_t *mid, uint16_t *pid)
@@ -266,7 +257,6 @@ uint8_t OV2640_ProbeID(uint16_t *mid, uint16_t *pid)
     *pid = ((uint16_t)h << 8) | l;
     return OV2640_OK;
 }
-
 
 uint8_t OV2640_SetOutputFormatJPEG(void)
 {
@@ -382,7 +372,7 @@ uint8_t OV2640_Probe(uint16_t *mid, uint16_t *pid)
     uint32_t attempt;
 
     if ((mid == NULL) || (pid == NULL)) return OV2640_ERROR;
-    /* 唯一一次断电→上电 (U5 hw_init + exit_power_down) */
+
     for (attempt = 0U; attempt < OV2640_PROBE_ATTEMPTS; attempt++)
     {
         *mid = 0U;
@@ -413,7 +403,7 @@ uint8_t OV2640_Init(void)
 {
     uint16_t mid = 0U, pid = 0U;
     s_initialized = 0U;
-    /* 摄像头已上电, 只做SW复位+写表 */
+
     ov2640_sw_reset();
     HAL_Delay(OV2640_POST_RESET_MS);
     if ((OV2640_ProbeID(&mid, &pid) != OV2640_OK) ||
@@ -436,3 +426,4 @@ uint8_t OV2640_Init(void)
     s_initialized = 1U;
     return OV2640_OK;
 }
+

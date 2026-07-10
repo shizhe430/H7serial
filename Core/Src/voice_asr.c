@@ -5,7 +5,7 @@ static HAL_StatusTypeDef asr_i2c_write_reg(uint8_t dev7_addr,
                                            const uint8_t *data,
                                            uint16_t len)
 {
-    return HAL_I2C_Mem_Write(&hi2c2,
+    return HAL_I2C_Mem_Write(&hi2c4,
                              (uint16_t)(dev7_addr << 1),
                              (uint16_t)reg_addr,
                              I2C_MEMADD_SIZE_8BIT,
@@ -19,7 +19,7 @@ static HAL_StatusTypeDef asr_i2c_read_reg(uint8_t dev7_addr,
                                           uint8_t *data,
                                           uint16_t len)
 {
-    return HAL_I2C_Mem_Read(&hi2c2,
+    return HAL_I2C_Mem_Read(&hi2c4,
                             (uint16_t)(dev7_addr << 1),
                             (uint16_t)reg_addr,
                             I2C_MEMADD_SIZE_8BIT,

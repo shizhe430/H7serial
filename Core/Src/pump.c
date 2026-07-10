@@ -92,18 +92,15 @@ void Pump_SetSpeed(uint16_t duty)
         return;
     }
 
-    if (s_pump_ph6_gpio_mode == 0U)
+    if (s_pump_ph6_gpio_mode != 0U)
     {
-        /* Keep AF mode for PWM slow path. */
-    }
-    else if (duty == 0U)
-    {
-        GPIOH->BSRR = ((uint32_t)GPIO_PIN_6 << 16U);
-        s_pump_last_duty = 0U;
-        return;
-    }
-    else
-    {
+        if (duty == 0U)
+        {
+            GPIOH->BSRR = ((uint32_t)GPIO_PIN_6 << 16U);
+            s_pump_last_duty = 0U;
+            return;
+        }
+
         pump_ph6_set_af_mode();
     }
 #endif

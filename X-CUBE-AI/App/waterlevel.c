@@ -2,7 +2,7 @@
   ******************************************************************************
   * @file    waterlevel.c
   * @author  AST Embedded Analytics Research Platform
-  * @date    2026-07-04T15:11:51+0800
+  * @date    2026-07-07T16:08:25+0800
   * @brief   AI Tool Automatic Code Generator for Embedded NN computing
   ******************************************************************************
   * @attention
@@ -42,7 +42,7 @@
 #endif
 
 #undef AI_TOOLS_DATE_TIME
-#define AI_TOOLS_DATE_TIME   "2026-07-04T15:11:51+0800"
+#define AI_TOOLS_DATE_TIME   "2026-07-07T16:08:25+0800"
 
 #undef AI_TOOLS_COMPILE_TIME
 #define AI_TOOLS_COMPILE_TIME    __DATE__ " " __TIME__
@@ -3652,7 +3652,7 @@ AI_NETWORK_OBJ_DECLARE(
     167280, NULL, NULL),
   AI_TENSOR_LIST_IO_OBJ_INIT(AI_FLAG_NONE, AI_WATERLEVEL_IN_NUM, &input_output),
   AI_TENSOR_LIST_IO_OBJ_INIT(AI_FLAG_NONE, AI_WATERLEVEL_OUT_NUM, &logits_QuantizeLinear_Input_output, &_Sigmoid_output_0_output),
-  &_feat_feat_0_feat_0_2_Clip_output_0_layer, 0x52ea3fff, NULL)
+  &_feat_feat_0_feat_0_2_Clip_output_0_layer, 0x011daf76, NULL)
 
 #else
 
@@ -3672,7 +3672,7 @@ AI_NETWORK_OBJ_DECLARE(
   ),
   AI_TENSOR_LIST_IO_OBJ_INIT(AI_FLAG_NONE, AI_WATERLEVEL_IN_NUM, &input_output),
   AI_TENSOR_LIST_IO_OBJ_INIT(AI_FLAG_NONE, AI_WATERLEVEL_OUT_NUM, &logits_QuantizeLinear_Input_output, &_Sigmoid_output_0_output),
-  &_feat_feat_0_feat_0_2_Clip_output_0_layer, 0x52ea3fff, NULL)
+  &_feat_feat_0_feat_0_2_Clip_output_0_layer, 0x011daf76, NULL)
 
 #endif	/*(AI_TOOLS_API_VERSION < AI_TOOLS_API_VERSION_1_5)*/
 
@@ -4149,7 +4149,7 @@ ai_bool ai_waterlevel_get_info(
       .params            = AI_STRUCT_INIT,
       .activations       = AI_STRUCT_INIT,
       .n_nodes           = 0,
-      .signature         = 0x52ea3fff,
+      .signature         = 0x011daf76,
     };
 
     if (!ai_platform_api_get_network_report(network, &r)) return false;
@@ -4197,7 +4197,7 @@ ai_bool ai_waterlevel_get_report(
       .map_weights       = AI_STRUCT_INIT,
       .map_activations   = AI_STRUCT_INIT,
       .n_nodes           = 0,
-      .signature         = 0x52ea3fff,
+      .signature         = 0x011daf76,
     };
 
     if (!ai_platform_api_get_network_report(network, &r)) return false;

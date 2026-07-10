@@ -1,6 +1,6 @@
 ST Edge AI Core v2.2.0-20266 2adc00962
-Created date          : 2026-07-04 15:11:53
-Parameters            : generate --target stm32h7 --name waterlevel -m D:/final74.onnx --compression none --verbosity 1 -O time --workspace C:/Users/heshizhe/AppData/Local/Temp/mxAI_workspace1567017056990015097310068491895108 --output D:/
+Created date          : 2026-07-07 16:08:30
+Parameters            : generate --target stm32h7 --name waterlevel -m D:/final74.onnx --compression none --verbosity 1 -O time --workspace C:/Users/heshizhe/AppData/Local/Temp/mxAI_workspace26788904754002351525268982663420 --output D:/
 
 Exec/report summary (generate)
 ----------------------------------------------------------------------------------------------------------------------
@@ -11,7 +11,7 @@ compression        :   none
 options            :   allocate-inputs, allocate-outputs                                                              
 optimization       :   time                                                                                           
 target/series      :   stm32h7                                                                                        
-workspace dir      :   C:\Users\heshizhe\AppData\Local\Temp\mxAI_workspace1567017056990015097310068491895108          
+workspace dir      :   C:\Users\heshizhe\AppData\Local\Temp\mxAI_workspace26788904754002351525268982663420            
 output dir         :   D:\                                                                                            
 model_fmt          :   ss/sa per channel                                                                              
 model_name         :   final74                                                                                        

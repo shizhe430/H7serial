@@ -8,7 +8,6 @@ extern "C" {
 #include "stm32h7xx_hal.h"
 #include <stdint.h>
 
-/* SCCB 软件模拟引脚：PB4=SCL, PB3=SDA */
 #define OV2640_SCCB_SCL_GPIO_PORT     GPIOB
 #define OV2640_SCCB_SCL_GPIO_PIN      GPIO_PIN_4
 #define OV2640_SCCB_SDA_GPIO_PORT     GPIOB
@@ -22,4 +21,4 @@ HAL_StatusTypeDef OV2640_SCCB_ReadReg(uint8_t dev, uint8_t reg, uint8_t *data);
 }
 #endif
 
-#endif /* __OV2640_SCCB_H */
+#endif

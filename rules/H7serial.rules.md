@@ -66,6 +66,7 @@ Before enabling or regenerating `X-CUBE-AI` from CubeMX:
 
 - `APP_MODE_XCAM_VIEW` and `APP_MODE_AI_INFER` must stay isolated.
 - `APP_MODE_PUMP_CTRL` must stay isolated from both preview and debug-infer behavior.
+- `APP_MODE_AI_VISUAL` must stay isolated from all working modes and serve only as a host-side demonstration mode.
 - The current H7 AI baseline is `JPEG snapshot -> TJpgDec decode -> training-aligned preprocess -> infer`.
 - Preferred AI path on H7:
   - OV2640 JPEG snapshot capture
@@ -209,6 +210,22 @@ Before enabling or regenerating `X-CUBE-AI` from CubeMX:
 - Keep pump hardware access inside the dedicated pump driver layer.
 - Keep workflow/state-machine logic outside the low-level driver layer.
 - Debug prints are allowed during bring-up, but the final competition version should be able to run with pump control logic decoupled from verbose UART output.
+
+## AI Visual Rule
+
+- `APP_MODE_AI_VISUAL` is for competition presentation only.
+- It must not alter the behavior of:
+  - `APP_MODE_PUMP_CTRL`
+  - `APP_MODE_XCAM_VIEW`
+  - `APP_MODE_AI_INFER`
+- This mode should send:
+  - JPEG image
+  - AI metadata
+  - no human-readable boot/debug text on the same UART stream
+- The current host packet magic is:
+  - `AIV1`
+- Host-side viewer script path:
+  - `tools/ai_visual_viewer.ps1`
 
 ## Rapid Recovery Checklist
 

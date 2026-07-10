@@ -59,14 +59,26 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define COLD_KEY_Pin GPIO_PIN_7
 #define COLD_KEY_GPIO_Port GPIOF
-#define VOICE_I2C_SCL_Pin GPIO_PIN_10
-#define VOICE_I2C_SCL_GPIO_Port GPIOB
-#define VOICE_I2C_SDA_Pin GPIO_PIN_11
-#define VOICE_I2C_SDA_GPIO_Port GPIOB
+#define OLED_CS_Pin GPIO_PIN_1
+#define OLED_CS_GPIO_Port GPIOC
+#define AMBIENT_LED2_Pin GPIO_PIN_2
+#define AMBIENT_LED2_GPIO_Port GPIOH
+#define AMBIENT_LED1_Pin GPIO_PIN_5
+#define AMBIENT_LED1_GPIO_Port GPIOH
+#define OLED_RES_Pin GPIO_PIN_4
+#define OLED_RES_GPIO_Port GPIOC
+#define OLED_DC_Pin GPIO_PIN_5
+#define OLED_DC_GPIO_Port GPIOC
 #define PUMP_PWM_Pin GPIO_PIN_6
 #define PUMP_PWM_GPIO_Port GPIOH
+#define OLED_SCL_Pin GPIO_PIN_13
+#define OLED_SCL_GPIO_Port GPIOB
+#define OLED_SDA_Pin GPIO_PIN_15
+#define OLED_SDA_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
+#define AS608_WAK_Pin GPIO_PIN_6
+#define AS608_WAK_GPIO_Port GPIOE
 
 /* USER CODE END Private defines */
 

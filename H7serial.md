@@ -1262,6 +1262,77 @@ For final defense, describe the design as:
 
 ---
 
+## 2026-07-06 AI Visual Mode
+
+### Purpose
+
+`APP_MODE_AI_VISUAL` is a dedicated demonstration mode for competition presentation.
+
+It is intentionally separated from:
+
+- `APP_MODE_PUMP_CTRL`
+- `APP_MODE_XCAM_VIEW`
+- `APP_MODE_AI_INFER`
+
+Its only purpose is to show:
+
+- live camera image on the PC host
+- AI classification result
+- confidence
+- regression value
+- inference timing
+
+### Design rule
+
+This mode must not be reused as the final working mode.
+
+- `APP_MODE_PUMP_CTRL` remains the real product workflow mode
+- `APP_MODE_AI_VISUAL` is presentation-only
+- failure of the visual mode must not affect the pump-control mode
+
+### Transport format
+
+The MCU sends one binary frame packet per inference result:
+
+- 32-byte fixed header
+- followed by one JPEG frame payload
+
+Current packet magic:
+
+- `AIV1`
+
+Current header carries:
+
+- `class_id`
+- `raw_class_id`
+- `confidence`
+- `regression`
+- `pipeline_ms`
+- `infer_ms`
+- `jpeg_len`
+- `frame_id`
+- raw logits
+
+### PC host viewer
+
+A dedicated Windows viewer script is provided:
+
+- `tools/ai_visual_viewer.ps1`
+
+Viewer purpose:
+
+- open a serial COM port
+- parse `AIV1` packets
+- decode JPEG frames
+- overlay a fixed ROI circle
+- show class / confidence / regression / timing on the host window
+
+Recommended startup example:
+
+- `powershell -ExecutionPolicy Bypass -File .\tools\ai_visual_viewer.ps1 -Port COM6`
+
+---
+
 ## 2026-07-06 Voice I2C2 Integration Notes
 
 ### Selected voice-module bus
