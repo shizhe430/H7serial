@@ -1,5 +1,6 @@
 #include "jpeg_decode.h"
 #include "tjpgd.h"
+#include "waterlevel.h"
 #include <string.h>
 
 #define JPEG_WORKBUF_SIZE   (4096U)
@@ -19,6 +20,13 @@
 #define PAD_LEFT            ((PAD_SIZE - SRC_W) / 2U)
 #define CROP_START_X        ((PAD_SIZE - DST_W) / 2U)
 #define CROP_START_Y        ((PAD_SIZE - DST_H) / 2U)
+#define AI_INPUT_PIXELS     (DST_W * DST_H)
+
+#if (AI_WATERLEVEL_IN_1_SIZE_BYTES == (AI_INPUT_PIXELS * 4U))
+#define JPEG_DECODE_AI_INPUT_FLOAT 1U
+#else
+#define JPEG_DECODE_AI_INPUT_FLOAT 0U
+#endif
 
 typedef struct
 {
@@ -245,12 +253,17 @@ static int tjpgd_output(JDEC *jd, void *bitmap, JRECT *rect)
     return 1U;
 }
 
-uint8_t jpeg_to_ai_input(const uint8_t *jpg, uint32_t jpg_len, int8_t *dst_input)
+uint8_t jpeg_to_ai_input(const uint8_t *jpg, uint32_t jpg_len, void *dst_input)
 {
     JDEC jd;
     JRESULT jr;
     jpg_stream_t stream;
     uint32_t y;
+#if (JPEG_DECODE_AI_INPUT_FLOAT != 0U)
+    ai_float *dst = (ai_float *)dst_input;
+#else
+    ai_i8 *dst = (ai_i8 *)dst_input;
+#endif
 
     if ((jpg == NULL) || (jpg_len == 0U) || (dst_input == NULL))
     {
@@ -307,7 +320,11 @@ uint8_t jpeg_to_ai_input(const uint8_t *jpg, uint32_t jpg_len, int8_t *dst_input
             }
 
             g = apply_circle_mask_u8(g, (int32_t)x, (int32_t)y);
-            dst_input[y * DST_W + x] = (int8_t)((int16_t)g - 128);
+#if (JPEG_DECODE_AI_INPUT_FLOAT != 0U)
+            dst[y * DST_W + x] = ((ai_float)g) / 255.0f;
+#else
+            dst[y * DST_W + x] = (ai_i8)((int16_t)g - 128);
+#endif
         }
     }
 

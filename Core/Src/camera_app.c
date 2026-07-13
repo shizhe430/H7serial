@@ -66,6 +66,7 @@ static volatile uint8_t g_frame_error = 0U;
 #define CAMERA_AI_VISUAL_TAIL2    0x45U
 #define CAMERA_AI_VISUAL_TAIL3    0x31U
 #define CAMERA_AI_VISUAL_HEADER_SIZE 32U
+#define CAMERA_AI_VISUAL_SEND_GRAY_ONLY 0U
 
 #define PUMP_AI_CONF_MIN          0.60f
 #define PUMP_DECISION_WINDOW_MS   5000U
@@ -108,6 +109,12 @@ static volatile uint8_t g_frame_error = 0U;
 #define WATERLEVEL_OUT1_SCALE     (0.003897347f)
 #define WATERLEVEL_OUT1_ZERO_POINT (-128)
 
+#if (AI_WATERLEVEL_IN_1_SIZE_BYTES == (CAMERA_AI_INPUT_SIZE * 4U))
+#define CAMERA_AI_MODEL_FP32      1U
+#else
+#define CAMERA_AI_MODEL_FP32      0U
+#endif
+
 typedef struct
 {
     uint8_t initialized;
@@ -122,7 +129,7 @@ typedef struct
     uint8_t raw_class_id;
     float level_reg;
     float confidence;
-    int8_t logits[AI_WATERLEVEL_OUT_1_SIZE];
+    float logits[AI_WATERLEVEL_OUT_1_SIZE];
 } camera_ai_result_t;
 
 #if (APP_MODE == APP_MODE_PUMP_CTRL)
@@ -190,12 +197,6 @@ typedef enum
 static AI_ALIGNED(32) uint8_t g_frame_buf[CAMERA_RGB565_FRAME_BYTES];
 static AI_ALIGNED(32) ai_u8 g_ai_activations[AI_WATERLEVEL_DATA_ACTIVATIONS_SIZE]
     __attribute__((section(".ai_ram_d1")));
-static AI_ALIGNED(32) ai_i8 g_ai_input_data[AI_WATERLEVEL_IN_1_SIZE]
-    __attribute__((section(".ai_dtcm")));
-static AI_ALIGNED(32) ai_i8 g_ai_output_logits[AI_WATERLEVEL_OUT_1_SIZE]
-    __attribute__((section(".ai_dtcm")));
-static AI_ALIGNED(32) ai_i8 g_ai_output_reg[AI_WATERLEVEL_OUT_2_SIZE]
-    __attribute__((section(".ai_dtcm")));
 static uint8_t g_ai_clahe_lut[CAMERA_AI_CLAHE_GRID_Y][CAMERA_AI_CLAHE_GRID_X][256];
 static uint8_t g_ai_gray_buf[CAMERA_AI_INPUT_SIZE];
 static camera_ai_context_t g_ai_ctx;
@@ -275,9 +276,95 @@ static uint32_t camera_app_float_to_permille(float value)
     return (uint32_t)((value * 1000.0f) + 0.5f);
 }
 
-static uint8_t camera_app_ai_input_gray(const ai_i8 *input, uint32_t idx)
+static void *camera_app_ai_input_data(void)
 {
-    return (uint8_t)((int16_t)input[idx] - WATERLEVEL_IN_ZERO_POINT);
+    if ((g_ai_ctx.input != NULL) && (g_ai_ctx.input[0].data != NULL))
+    {
+        return (void *)g_ai_ctx.input[0].data;
+    }
+
+    return g_ai_activations;
+}
+
+static uint8_t camera_app_ai_input_gray(const void *input, uint32_t idx)
+{
+#if (CAMERA_AI_MODEL_FP32 != 0U)
+    const ai_float *input_f32 = (const ai_float *)input;
+    float value;
+
+    if (input_f32 == NULL)
+    {
+        return 0U;
+    }
+
+    value = input_f32[idx];
+    if (value <= 0.0f)
+    {
+        return 0U;
+    }
+    if (value >= 1.0f)
+    {
+        return 255U;
+    }
+
+    return (uint8_t)((value * 255.0f) + 0.5f);
+#else
+    const ai_i8 *input_q7 = (const ai_i8 *)input;
+
+    if (input_q7 == NULL)
+    {
+        return 0U;
+    }
+
+    return (uint8_t)((int16_t)input_q7[idx] - WATERLEVEL_IN_ZERO_POINT);
+#endif
+}
+
+static int32_t camera_app_float_to_milli_signed(float value)
+{
+    if (value >= 0.0f)
+    {
+        return (int32_t)((value * 1000.0f) + 0.5f);
+    }
+
+    return (int32_t)((value * 1000.0f) - 0.5f);
+}
+
+static uint8_t camera_app_logit_to_visual_byte(float value)
+{
+    int32_t scaled = (int32_t)((value * 4.0f) + 128.0f);
+
+    if (scaled < 0)
+    {
+        return 0U;
+    }
+    if (scaled > 255)
+    {
+        return 255U;
+    }
+
+    return (uint8_t)scaled;
+}
+
+static void camera_app_load_test_image(void *dst_input)
+{
+    uint32_t i;
+
+    if (dst_input == NULL)
+    {
+        return;
+    }
+
+#if (CAMERA_AI_MODEL_FP32 != 0U)
+    for (i = 0U; i < CAMERA_AI_INPUT_SIZE; i++)
+    {
+        ((ai_float *)dst_input)[i] =
+            ((ai_float)((int16_t)g_test_image_input_q7[i] - WATERLEVEL_IN_ZERO_POINT)) / 255.0f;
+    }
+#else
+    (void)i;
+    memcpy(dst_input, g_test_image_input_q7, CAMERA_AI_INPUT_SIZE);
+#endif
 }
 
 static uint32_t camera_app_dma_get_ndtr(void)
@@ -669,7 +756,7 @@ static uint8_t camera_app_validate_jpeg_frame(uint32_t jpeg_off, uint32_t jpeg_l
         return 1U;
     }
 
-    return (jpeg_to_ai_input(JPEG_Stream_GetBuf() + jpeg_off, jpeg_len, (int8_t *)g_ai_input_data) == 0U) ? 0U : 2U;
+    return (jpeg_to_ai_input(JPEG_Stream_GetBuf() + jpeg_off, jpeg_len, camera_app_ai_input_data()) == 0U) ? 0U : 2U;
 }
 #else
 static uint8_t camera_app_validate_jpeg_frame(uint32_t jpeg_off, uint32_t jpeg_len)
@@ -817,9 +904,13 @@ static uint8_t camera_app_ai_init(void)
         return 2U;
     }
 
-    g_ai_ctx.input[0].data = AI_HANDLE_PTR(g_ai_input_data);
-    g_ai_ctx.output[0].data = AI_HANDLE_PTR(g_ai_output_logits);
-    g_ai_ctx.output[1].data = AI_HANDLE_PTR(g_ai_output_reg);
+    if ((g_ai_ctx.input[0].data == NULL) ||
+        (g_ai_ctx.output[0].data == NULL) ||
+        (g_ai_ctx.output[1].data == NULL))
+    {
+        return 3U;
+    }
+
     g_ai_ctx.initialized = 1U;
 
     return 0U;
@@ -936,13 +1027,18 @@ static uint8_t camera_app_clahe_apply_gray(const uint16_t *src_rgb565, uint32_t 
                      (CAMERA_AI_CLAHE_TILE_W * CAMERA_AI_CLAHE_TILE_H));
 }
 
-static void camera_app_preprocess_rgb565_to_ai(const uint16_t *src_rgb565, ai_i8 *dst_input)
+static void camera_app_preprocess_rgb565_to_ai(const uint16_t *src_rgb565, void *dst_input)
 {
     uint32_t y;
     uint32_t gray_sum = 0U;
     uint32_t gray_count = 0U;
     uint32_t norm_num = CAMERA_AI_TARGET_MEAN_GRAY;
     uint32_t norm_den = 1U;
+#if (CAMERA_AI_MODEL_FP32 != 0U)
+    ai_float *dst = (ai_float *)dst_input;
+#else
+    ai_i8 *dst = (ai_i8 *)dst_input;
+#endif
 
     camera_app_clahe_build_lut(src_rgb565);
 
@@ -1002,9 +1098,22 @@ static void camera_app_preprocess_rgb565_to_ai(const uint16_t *src_rgb565, ai_i8
             uint32_t idx = (y * 224U) + x;
             uint8_t gray = g_ai_gray_buf[idx];
 
+#if (CAMERA_AI_MODEL_FP32 != 0U)
+            uint32_t scaled = gray;
+
+            if (CAMERA_AI_ENABLE_BRIGHTNESS_NORM != 0U)
+            {
+                scaled = ((uint32_t)gray * norm_num + (norm_den / 2U)) / norm_den;
+            }
+            if (scaled > 255U)
+            {
+                scaled = 255U;
+            }
+            dst[idx] = ((ai_float)scaled) / 255.0f;
+#else
             if (gray == 0U)
             {
-                dst_input[idx] = (ai_i8)WATERLEVEL_IN_ZERO_POINT;
+                dst[idx] = (ai_i8)WATERLEVEL_IN_ZERO_POINT;
             }
             else
             {
@@ -1018,14 +1127,15 @@ static void camera_app_preprocess_rgb565_to_ai(const uint16_t *src_rgb565, ai_i8
                 {
                     scaled = 255U;
                 }
-                dst_input[idx] = (ai_i8)((int16_t)scaled + WATERLEVEL_IN_ZERO_POINT);
+                dst[idx] = (ai_i8)((int16_t)scaled + WATERLEVEL_IN_ZERO_POINT);
             }
+#endif
         }
     }
 }
 
 #if (CAMERA_AI_DUMP_INPUT_ONCE != 0U)
-static void camera_app_dump_ai_input_once(const ai_i8 *input)
+static void camera_app_dump_ai_input_once(const void *input)
 {
     static uint8_t s_dump_done = 0U;
     uint32_t min_v = 255U;
@@ -1103,7 +1213,7 @@ static uint8_t camera_app_demo_center_cup_present(void)
             uint32_t dx = (x > CAMERA_AI_MASK_CENTER) ? (x - CAMERA_AI_MASK_CENTER) : (CAMERA_AI_MASK_CENTER - x);
             uint32_t dy = (y > CAMERA_AI_MASK_CENTER) ? (y - CAMERA_AI_MASK_CENTER) : (CAMERA_AI_MASK_CENTER - y);
             uint32_t d2 = (dx * dx) + (dy * dy);
-            uint32_t gray = camera_app_ai_input_gray(g_ai_input_data, idx);
+            uint32_t gray = camera_app_ai_input_gray(camera_app_ai_input_data(), idx);
 
             if ((d2 >= (WATERLEVEL_DEMO_RING_INNER_R_MIN * WATERLEVEL_DEMO_RING_INNER_R_MIN)) &&
                 (d2 <= (WATERLEVEL_DEMO_RING_INNER_R_MAX * WATERLEVEL_DEMO_RING_INNER_R_MAX)))
@@ -1148,9 +1258,9 @@ static uint8_t camera_app_demo_center_cup_present(void)
     return 0U;
 }
 
-static float camera_app_ai_logit_with_bias(uint32_t class_idx)
+static float camera_app_ai_logit_with_bias(const camera_ai_result_t *result, uint32_t class_idx)
 {
-    float logit = ((float)((int32_t)g_ai_output_logits[class_idx] - WATERLEVEL_OUT0_ZERO_POINT)) * WATERLEVEL_OUT0_SCALE;
+    float logit = result->logits[class_idx];
 
     if (class_idx == 3U)
     {
@@ -1164,6 +1274,8 @@ static uint8_t camera_app_ai_run(camera_ai_result_t *result)
 {
     ai_i32 batches;
     uint32_t i;
+    const void *output_logits;
+    const void *output_reg;
     float best_logit = -1000.0f;
     float exp_sum = 0.0f;
     float best_prob = 0.0f;
@@ -1180,8 +1292,30 @@ static uint8_t camera_app_ai_run(camera_ai_result_t *result)
         return 2U;
     }
 
-    memcpy(result->logits, g_ai_output_logits, sizeof(result->logits));
-    result->level_reg = (((float)((int32_t)g_ai_output_reg[0] - WATERLEVEL_OUT1_ZERO_POINT)) * WATERLEVEL_OUT1_SCALE);
+    output_logits = (const void *)g_ai_ctx.output[0].data;
+    output_reg = (const void *)g_ai_ctx.output[1].data;
+    if ((output_logits == NULL) || (output_reg == NULL))
+    {
+        return 3U;
+    }
+
+#if (CAMERA_AI_MODEL_FP32 != 0U)
+    for (i = 0U; i < AI_WATERLEVEL_OUT_1_SIZE; i++)
+    {
+        result->logits[i] = ((const ai_float *)output_logits)[i];
+    }
+    result->level_reg = ((const ai_float *)output_reg)[0];
+#else
+    for (i = 0U; i < AI_WATERLEVEL_OUT_1_SIZE; i++)
+    {
+        result->logits[i] =
+            ((float)((int32_t)((const ai_i8 *)output_logits)[i] - WATERLEVEL_OUT0_ZERO_POINT)) *
+            WATERLEVEL_OUT0_SCALE;
+    }
+    result->level_reg =
+        ((float)((int32_t)((const ai_i8 *)output_reg)[0] - WATERLEVEL_OUT1_ZERO_POINT)) *
+        WATERLEVEL_OUT1_SCALE;
+#endif
     if (result->level_reg < 0.0f)
     {
         result->level_reg = 0.0f;
@@ -1193,7 +1327,7 @@ static uint8_t camera_app_ai_run(camera_ai_result_t *result)
 
     for (i = 0U; i < AI_WATERLEVEL_OUT_1_SIZE; i++)
     {
-        float logit = camera_app_ai_logit_with_bias(i);
+        float logit = camera_app_ai_logit_with_bias(result, i);
         if ((i == 0U) || (logit > best_logit))
         {
             best_logit = logit;
@@ -1203,7 +1337,7 @@ static uint8_t camera_app_ai_run(camera_ai_result_t *result)
 
     for (i = 0U; i < AI_WATERLEVEL_OUT_1_SIZE; i++)
     {
-        float logit = camera_app_ai_logit_with_bias(i);
+        float logit = camera_app_ai_logit_with_bias(result, i);
         float e = expf(logit - best_logit);
         exp_sum += e;
         if (i == best_idx)
@@ -1272,6 +1406,11 @@ static void camera_app_ai_report(const camera_ai_result_t *result,
     uint32_t conf_x10;
     uint32_t reg_x1000;
     uint32_t fps_x10;
+    int32_t logit0;
+    int32_t logit1;
+    int32_t logit2;
+    int32_t logit3;
+    int32_t logit4;
 
     if (result == NULL)
     {
@@ -1281,9 +1420,14 @@ static void camera_app_ai_report(const camera_ai_result_t *result,
     conf_x10 = camera_app_float_to_permille(result->confidence);
     reg_x1000 = camera_app_float_to_permille(result->level_reg);
     fps_x10 = (pipeline_ms > 0U) ? (10000U / pipeline_ms) : 0U;
+    logit0 = camera_app_float_to_milli_signed(result->logits[0]);
+    logit1 = camera_app_float_to_milli_signed(result->logits[1]);
+    logit2 = camera_app_float_to_milli_signed(result->logits[2]);
+    logit3 = camera_app_float_to_milli_signed(result->logits[3]);
+    logit4 = camera_app_float_to_milli_signed(result->logits[4]);
 
     len = snprintf(buf, sizeof(buf),
-                   "[AI] cls=%lu raw_cls=%lu name=%s conf=%lu.%lu%% reg=0.%03lu pipe=%lums nn=%lums fps=%lu.%lu raw=[%d,%d,%d,%d,%d]\r\n",
+                   "[AI] cls=%lu raw_cls=%lu name=%s conf=%lu.%lu%% reg=0.%03lu pipe=%lums nn=%lums fps=%lu.%lu raw_x1000=[%ld,%ld,%ld,%ld,%ld]\r\n",
                    (unsigned long)result->class_id,
                    (unsigned long)result->raw_class_id,
                    camera_ai_class_name(result->class_id),
@@ -1294,11 +1438,11 @@ static void camera_app_ai_report(const camera_ai_result_t *result,
                    (unsigned long)infer_ms,
                    (unsigned long)(fps_x10 / 10U),
                    (unsigned long)(fps_x10 % 10U),
-                   (int)result->logits[0],
-                   (int)result->logits[1],
-                   (int)result->logits[2],
-                   (int)result->logits[3],
-                   (int)result->logits[4]);
+                   (long)logit0,
+                   (long)logit1,
+                   (long)logit2,
+                   (long)logit3,
+                   (long)logit4);
     HAL_UART_Transmit(&huart1, (uint8_t *)buf, (uint16_t)len, HAL_MAX_DELAY);
 }
 
@@ -1355,11 +1499,11 @@ static void camera_app_ai_visual_send_frame(const camera_ai_result_t *result,
     camera_app_store_u16le(&header[14], infer_ms16);
     camera_app_store_u32le(&header[16], jpeg_len);
     camera_app_store_u32le(&header[20], ++s_frame_id);
-    header[24] = (uint8_t)result->logits[0];
-    header[25] = (uint8_t)result->logits[1];
-    header[26] = (uint8_t)result->logits[2];
-    header[27] = (uint8_t)result->logits[3];
-    header[28] = (uint8_t)result->logits[4];
+    header[24] = camera_app_logit_to_visual_byte(result->logits[0]);
+    header[25] = camera_app_logit_to_visual_byte(result->logits[1]);
+    header[26] = camera_app_logit_to_visual_byte(result->logits[2]);
+    header[27] = camera_app_logit_to_visual_byte(result->logits[3]);
+    header[28] = camera_app_logit_to_visual_byte(result->logits[4]);
 
     tail[0] = CAMERA_AI_VISUAL_TAIL0;
     tail[1] = CAMERA_AI_VISUAL_TAIL1;
@@ -1368,6 +1512,69 @@ static void camera_app_ai_visual_send_frame(const camera_ai_result_t *result,
 
     HAL_UART_Transmit(&huart1, header, (uint16_t)sizeof(header), HAL_MAX_DELAY);
     HAL_UART_Transmit(&huart1, (uint8_t *)jpeg, (uint16_t)jpeg_len, HAL_MAX_DELAY);
+    HAL_UART_Transmit(&huart1, tail, (uint16_t)sizeof(tail), HAL_MAX_DELAY);
+}
+
+static void camera_app_ai_visual_send_gray_frame(const camera_ai_result_t *result,
+                                                 uint32_t pipeline_ms,
+                                                 uint32_t infer_ms,
+                                                 const void *input)
+{
+    static uint32_t s_frame_id = 0U;
+    uint8_t header[CAMERA_AI_VISUAL_HEADER_SIZE];
+    uint8_t tail[4];
+    uint16_t conf_permille;
+    uint16_t reg_permille;
+    uint16_t pipeline_ms16;
+    uint16_t infer_ms16;
+    uint32_t i;
+
+    if ((result == NULL) || (input == NULL))
+    {
+        return;
+    }
+
+    conf_permille = (uint16_t)camera_app_float_to_permille(result->confidence);
+    reg_permille = (uint16_t)camera_app_float_to_permille(result->level_reg);
+    pipeline_ms16 = (pipeline_ms > 0xFFFFU) ? 0xFFFFU : (uint16_t)pipeline_ms;
+    infer_ms16 = (infer_ms > 0xFFFFU) ? 0xFFFFU : (uint16_t)infer_ms;
+
+    memset(header, 0, sizeof(header));
+    header[0] = CAMERA_AI_VISUAL_MAGIC0;
+    header[1] = CAMERA_AI_VISUAL_MAGIC1;
+    header[2] = CAMERA_AI_VISUAL_MAGIC2;
+    header[3] = CAMERA_AI_VISUAL_MAGIC3;
+    header[4] = 0x02U;
+    header[5] = result->class_id;
+    header[6] = result->raw_class_id;
+    header[7] = 0x02U;
+    camera_app_store_u16le(&header[8], 224U);
+    camera_app_store_u16le(&header[10], 224U);
+    camera_app_store_u16le(&header[12], conf_permille);
+    camera_app_store_u16le(&header[14], reg_permille);
+    camera_app_store_u32le(&header[16], CAMERA_AI_INPUT_SIZE);
+    camera_app_store_u32le(&header[20], ++s_frame_id);
+    header[24] = camera_app_logit_to_visual_byte(result->logits[0]);
+    header[25] = camera_app_logit_to_visual_byte(result->logits[1]);
+    header[26] = camera_app_logit_to_visual_byte(result->logits[2]);
+    header[27] = camera_app_logit_to_visual_byte(result->logits[3]);
+    header[28] = camera_app_logit_to_visual_byte(result->logits[4]);
+    header[29] = (uint8_t)pipeline_ms16;
+    header[30] = (uint8_t)infer_ms16;
+    header[31] = 0U;
+
+    tail[0] = CAMERA_AI_VISUAL_TAIL0;
+    tail[1] = CAMERA_AI_VISUAL_TAIL1;
+    tail[2] = CAMERA_AI_VISUAL_TAIL2;
+    tail[3] = CAMERA_AI_VISUAL_TAIL3;
+
+    for (i = 0U; i < CAMERA_AI_INPUT_SIZE; i++)
+    {
+        g_ai_gray_buf[i] = camera_app_ai_input_gray(input, i);
+    }
+
+    HAL_UART_Transmit(&huart1, header, (uint16_t)sizeof(header), HAL_MAX_DELAY);
+    HAL_UART_Transmit(&huart1, g_ai_gray_buf, (uint16_t)CAMERA_AI_INPUT_SIZE, HAL_MAX_DELAY);
     HAL_UART_Transmit(&huart1, tail, (uint16_t)sizeof(tail), HAL_MAX_DELAY);
 }
 #endif
@@ -2897,7 +3104,7 @@ void CameraApp_Run(void)
 #if (CAMERA_AI_VERBOSE_LOG != 0U)
         camera_app_log("[AI] capture ok\r\n");
 #endif
-        if (jpeg_to_ai_input(JPEG_Stream_GetBuf() + jpeg_off, jpeg_len, (int8_t *)g_ai_input_data) != 0U)
+        if (jpeg_to_ai_input(JPEG_Stream_GetBuf() + jpeg_off, jpeg_len, camera_app_ai_input_data()) != 0U)
         {
             char buf[160];
             int len = snprintf(buf, sizeof(buf),
@@ -2925,7 +3132,7 @@ void CameraApp_Run(void)
         camera_app_log("[AI] prep ok\r\n");
 #endif
 #if (CAMERA_AI_DUMP_INPUT_ONCE != 0U)
-        camera_app_dump_ai_input_once(g_ai_input_data);
+        camera_app_dump_ai_input_once(camera_app_ai_input_data());
 #if (CAMERA_AI_DUMP_ONLY != 0U)
         camera_app_log("[AI:DUMP] hold\r\n");
         g_camera_ready = 0U;
@@ -2985,7 +3192,7 @@ void CameraApp_Run(void)
             return;
         }
 
-        if (jpeg_to_ai_input(JPEG_Stream_GetBuf() + jpeg_off, jpeg_len, (int8_t *)g_ai_input_data) != 0U)
+        if (jpeg_to_ai_input(JPEG_Stream_GetBuf() + jpeg_off, jpeg_len, camera_app_ai_input_data()) != 0U)
         {
             g_camera_bad_frame_count++;
             if (g_camera_bad_frame_count >= CAMERA_BAD_FRAME_THRESHOLD)
@@ -3006,11 +3213,18 @@ void CameraApp_Run(void)
         }
         infer_ms = HAL_GetTick() - infer_start;
 
+        #if (CAMERA_AI_VISUAL_SEND_GRAY_ONLY != 0U)
+        camera_app_ai_visual_send_gray_frame(&result,
+                                             HAL_GetTick() - pipeline_start,
+                                             infer_ms,
+                                             camera_app_ai_input_data());
+        #else
         camera_app_ai_visual_send_frame(&result,
                                         HAL_GetTick() - pipeline_start,
                                         infer_ms,
                                         JPEG_Stream_GetBuf() + jpeg_off,
                                         jpeg_len);
+        #endif
     }
 #elif (APP_MODE == APP_MODE_AI_TEST_IMAGE)
     {
@@ -3027,7 +3241,7 @@ void CameraApp_Run(void)
         ran_once = 1U;
 
         camera_app_log("[AI:TEST] feed fixed input\r\n");
-        memcpy(g_ai_input_data, g_test_image_input_q7, sizeof(g_ai_input_data));
+        camera_app_load_test_image(camera_app_ai_input_data());
         camera_app_log("[AI:TEST] infer start\r\n");
         infer_start = HAL_GetTick();
         if (camera_app_ai_run(&result) != 0U)
@@ -3073,7 +3287,7 @@ void CameraApp_Run(void)
             return;
         }
 
-        if (jpeg_to_ai_input(JPEG_Stream_GetBuf() + jpeg_off, jpeg_len, (int8_t *)g_ai_input_data) != 0U)
+        if (jpeg_to_ai_input(JPEG_Stream_GetBuf() + jpeg_off, jpeg_len, camera_app_ai_input_data()) != 0U)
         {
             camera_app_pump_ctrl_decode_fail(jpeg_off, jpeg_len);
             g_camera_bad_frame_count++;
