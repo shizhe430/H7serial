@@ -166,6 +166,8 @@ typedef struct
     uint8_t oled_status_state;
     uint8_t fingerprint_ready;
     uint8_t fingerprint_session_locked;
+    uint8_t esp32_fp_reported;
+    uint8_t esp32_done_reported;
     uint32_t decision_deadline_ms;
     uint32_t oled_status_hold_until_ms;
     uint32_t fingerprint_last_poll_ms;
@@ -1913,7 +1915,7 @@ static void camera_app_pump_ctrl_report_session_to_esp32(void)
     uint32_t fill_time_ms;
 
     fill_time_ms = camera_app_pump_ctrl_get_fill_time_ms();
-    if (fill_time_ms == 0U)
+    if ((fill_time_ms == 0U) || (g_pump_ctrl.esp32_done_reported != 0U))
     {
         return;
     }
@@ -1921,8 +1923,13 @@ static void camera_app_pump_ctrl_report_session_to_esp32(void)
     volume_ml = camera_app_pump_ctrl_calc_volume_ml(fill_time_ms);
     g_pump_ctrl.last_volume_ml = volume_ml;
 
-    camera_app_esp32_send_fp_event(g_pump_ctrl.session_user_id);
+    if (g_pump_ctrl.esp32_fp_reported == 0U)
+    {
+        camera_app_esp32_send_fp_event(g_pump_ctrl.session_user_id);
+        g_pump_ctrl.esp32_fp_reported = 1U;
+    }
     camera_app_esp32_send_done_event(volume_ml);
+    g_pump_ctrl.esp32_done_reported = 1U;
 
     len = snprintf(buf, sizeof(buf),
                    "[ESP32] fp=%u volume_ml=%u fill_ms=%lu\r\n",
@@ -1941,6 +1948,8 @@ static void camera_app_pump_ctrl_reset_fingerprint_session(void)
     g_pump_ctrl.fingerprint_last_poll_ms = 0U;
     g_pump_ctrl.session_user_id = 0U;
     g_pump_ctrl.fingerprint_match_score = 0U;
+    g_pump_ctrl.esp32_fp_reported = 0U;
+    g_pump_ctrl.esp32_done_reported = 0U;
 }
 
 static uint8_t camera_app_finger_try_connect(void)
@@ -2070,6 +2079,7 @@ static void camera_app_finger_poll(uint32_t now_ms)
     g_pump_ctrl.session_user_id = result.page_id;
     g_pump_ctrl.fingerprint_match_score = result.match_score;
     camera_app_esp32_send_fp_event(result.page_id);
+    g_pump_ctrl.esp32_fp_reported = 1U;
     camera_app_finger_log("[FINGER] match id=%u score=%u wak=%lu\r\n",
                           (unsigned int)result.page_id,
                           (unsigned int)result.match_score,

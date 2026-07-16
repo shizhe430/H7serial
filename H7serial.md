@@ -303,7 +303,15 @@
   - OLED state refresh framework hooks
 - Defer for next phase:
   - hot-water actuation path
-  - ESP32-C6 bidirectional serial linkage
+  - ESP32-C6 command reception and remote control validation
+
+### ESP32-C6 session reporting
+
+- Interface: `USART3`, PB10 TX / PB11 RX, 115200 baud, 8N1.
+- The first successful fingerprint match in a session is latched and sent once as `STM_FP:<id>\r\n`.
+- Fingerprint recognition does not block dispensing. If no fingerprint is matched, the completed session sends `STM_FP:0\r\n`.
+- When dispensing stops, elapsed pump-on time is converted using 400 ml / 18.058 s and sent once as `STM_DONE:<ml>\r\n`.
+- Normal completion, manual stop, and fault stop use the same reporting path.
 
 ### Unified global variables
 
