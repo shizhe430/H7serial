@@ -9,4 +9,5 @@
 ../Core/Src/stm32h7xx_it.c:198:6:PendSV_Handler	0	static
 ../Core/Src/stm32h7xx_it.c:211:6:SysTick_Handler	0	static
 ../Core/Src/stm32h7xx_it.c:232:6:DMA2_Stream3_IRQHandler	0	static
-../Core/Src/stm32h7xx_it.c:248:6:DCMI_IRQHandler	0	static
+../Core/Src/stm32h7xx_it.c:246:6:USART3_IRQHandler	0	static
+../Core/Src/stm32h7xx_it.c:262:6:DCMI_IRQHandler	0	static

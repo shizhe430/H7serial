@@ -57,6 +57,8 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define AS608_WAK_Pin GPIO_PIN_6
+#define AS608_WAK_GPIO_Port GPIOE
 #define COLD_KEY_Pin GPIO_PIN_7
 #define COLD_KEY_GPIO_Port GPIOF
 #define OLED_CS_Pin GPIO_PIN_1

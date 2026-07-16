@@ -1,3 +1,7 @@
-../Core/Src/jpeg_decode.c:167:21:tjpgd_input	4
-../Core/Src/jpeg_decode.c:202:12:tjpgd_output	9
-../Core/Src/jpeg_decode.c:244:9:jpeg_to_ai_input	20
+../Core/Src/jpeg_decode.c:243:21:tjpgd_input	4
+../Core/Src/jpeg_decode.c:278:12:tjpgd_output	9
+../Core/Src/jpeg_decode.c:320:9:jpeg_to_ai_input	27
+../Core/Src/jpeg_decode.c:399:9:jpeg_decode_last_prepare_status	1
+../Core/Src/jpeg_decode.c:404:9:jpeg_decode_last_decomp_status	1
+../Core/Src/jpeg_decode.c:409:10:jpeg_decode_last_width	1
+../Core/Src/jpeg_decode.c:414:10:jpeg_decode_last_height	1

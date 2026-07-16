@@ -38,6 +38,13 @@ typedef struct
 static uint8_t s_workbuf[JPEG_WORKBUF_SIZE];
 static uint8_t s_gray_320x240[SRC_W * SRC_H] __attribute__((section(".ai_ram_d1")));
 static uint8_t s_clahe_lut[CLAHE_GRID_Y][CLAHE_GRID_X][256] __attribute__((section(".ai_ram_d1")));
+static uint8_t s_clahe_x0[SRC_W];
+static uint8_t s_clahe_x1[SRC_W];
+static uint8_t s_clahe_fx[SRC_W];
+static uint8_t s_clahe_y0[SRC_H];
+static uint8_t s_clahe_y1[SRC_H];
+static uint8_t s_clahe_fy[SRC_H];
+static uint8_t s_clahe_maps_ready = 0U;
 static uint8_t s_last_prepare_status = JDR_OK;
 static uint8_t s_last_decomp_status = JDR_OK;
 static uint16_t s_last_width = 0U;
@@ -117,9 +124,20 @@ static void clahe_build_lut_u8(const uint8_t *img)
                         hist[i] = (uint16_t)(hist[i] + redist);
                     }
 
-                    for (i = 0U; i < residual; i++)
+                    if (residual > 0U)
                     {
-                        hist[i]++;
+                        uint32_t residual_step = 256U / residual;
+
+                        if (residual_step == 0U)
+                        {
+                            residual_step = 1U;
+                        }
+
+                        for (i = 0U; (i < 256U) && (residual > 0U); i += residual_step)
+                        {
+                            hist[i]++;
+                            residual--;
+                        }
                     }
                 }
 
@@ -134,26 +152,72 @@ static void clahe_build_lut_u8(const uint8_t *img)
     }
 }
 
+static void clahe_init_interp_maps(void)
+{
+    uint32_t pos;
+
+    if (s_clahe_maps_ready != 0U)
+    {
+        return;
+    }
+
+    for (pos = 0U; pos < SRC_W; pos++)
+    {
+        if (pos < (CLAHE_TILE_W / 2U))
+        {
+            s_clahe_x0[pos] = 0U;
+            s_clahe_x1[pos] = 0U;
+            s_clahe_fx[pos] = 0U;
+        }
+        else
+        {
+            uint32_t shifted = pos - (CLAHE_TILE_W / 2U);
+            uint32_t tile = shifted / CLAHE_TILE_W;
+
+            s_clahe_x0[pos] = (uint8_t)tile;
+            s_clahe_x1[pos] = (uint8_t)((tile + 1U < CLAHE_GRID_X) ? (tile + 1U) : tile);
+            s_clahe_fx[pos] = (uint8_t)(shifted % CLAHE_TILE_W);
+        }
+    }
+
+    for (pos = 0U; pos < SRC_H; pos++)
+    {
+        if (pos < (CLAHE_TILE_H / 2U))
+        {
+            s_clahe_y0[pos] = 0U;
+            s_clahe_y1[pos] = 0U;
+            s_clahe_fy[pos] = 0U;
+        }
+        else
+        {
+            uint32_t shifted = pos - (CLAHE_TILE_H / 2U);
+            uint32_t tile = shifted / CLAHE_TILE_H;
+
+            s_clahe_y0[pos] = (uint8_t)tile;
+            s_clahe_y1[pos] = (uint8_t)((tile + 1U < CLAHE_GRID_Y) ? (tile + 1U) : tile);
+            s_clahe_fy[pos] = (uint8_t)(shifted % CLAHE_TILE_H);
+        }
+    }
+
+    s_clahe_maps_ready = 1U;
+}
+
 static uint8_t clahe_apply_u8(const uint8_t *img, uint32_t src_x, uint32_t src_y)
 {
     uint8_t gray = img[(src_y * SRC_W) + src_x];
-    uint32_t tx0 = src_x / CLAHE_TILE_W;
-    uint32_t ty0 = src_y / CLAHE_TILE_H;
-    uint32_t tx1 = (tx0 + 1U < CLAHE_GRID_X) ? (tx0 + 1U) : tx0;
-    uint32_t ty1 = (ty0 + 1U < CLAHE_GRID_Y) ? (ty0 + 1U) : ty0;
-    uint32_t fx = src_x % CLAHE_TILE_W;
-    uint32_t fy = src_y % CLAHE_TILE_H;
+    uint32_t tx0 = s_clahe_x0[src_x];
+    uint32_t tx1 = s_clahe_x1[src_x];
+    uint32_t ty0 = s_clahe_y0[src_y];
+    uint32_t ty1 = s_clahe_y1[src_y];
+    uint32_t fx = s_clahe_fx[src_x];
+    uint32_t fy = s_clahe_fy[src_y];
     uint32_t wx0 = CLAHE_TILE_W - fx;
-    uint32_t wx1 = fx;
     uint32_t wy0 = CLAHE_TILE_H - fy;
-    uint32_t wy1 = fy;
-    uint32_t v00 = s_clahe_lut[ty0][tx0][gray];
-    uint32_t v01 = s_clahe_lut[ty0][tx1][gray];
-    uint32_t v10 = s_clahe_lut[ty1][tx0][gray];
-    uint32_t v11 = s_clahe_lut[ty1][tx1][gray];
-    uint32_t top = (v00 * wx0) + (v01 * wx1);
-    uint32_t bottom = (v10 * wx0) + (v11 * wx1);
-    uint32_t value = (top * wy0) + (bottom * wy1);
+    uint32_t top = (s_clahe_lut[ty0][tx0][gray] * wx0) +
+                   (s_clahe_lut[ty0][tx1][gray] * fx);
+    uint32_t bottom = (s_clahe_lut[ty1][tx0][gray] * wx0) +
+                      (s_clahe_lut[ty1][tx1][gray] * fx);
+    uint32_t value = (top * wy0) + (bottom * fy);
 
     return (uint8_t)((value + ((CLAHE_TILE_W * CLAHE_TILE_H) / 2U)) /
                      (CLAHE_TILE_W * CLAHE_TILE_H));
@@ -208,7 +272,7 @@ static unsigned int tjpgd_input(JDEC *jd, uint8_t *buff, unsigned int nbyte)
 
 static int32_t rgb_to_gray(uint8_t r, uint8_t g, uint8_t b)
 {
-    return ((int32_t)r * 30 + (int32_t)g * 59 + (int32_t)b * 11) / 100;
+    return ((int32_t)r * 4899 + (int32_t)g * 9617 + (int32_t)b * 1868 + 8192) >> 14;
 }
 
 static int tjpgd_output(JDEC *jd, void *bitmap, JRECT *rect)
@@ -297,6 +361,7 @@ uint8_t jpeg_to_ai_input(const uint8_t *jpg, uint32_t jpg_len, void *dst_input)
     }
 
     /* Match training preprocess_v3.py: CLAHE on 320x240, then pad->crop->circle mask. */
+    clahe_init_interp_maps();
     clahe_build_lut_u8(s_gray_320x240);
 
     for (y = 0U; y < DST_H; y++)

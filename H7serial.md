@@ -769,6 +769,83 @@ CubeMX 重新生成后需要手动恢复：
   - `circular mask radius=100`
   - then convert to the model input format
 
+### Fixed recovery order after every model replacement
+
+Model replacement in this project is never just an `X-CUBE-AI/App` refresh.
+
+Every replacement must first restore the full fixed integration set below, and only then begin model-effect testing.
+
+1. `H7serial.ioc`
+   - keep `HSE` in external crystal mode, not bypass
+   - keep `HSE_VALUE = 25000000`
+   - keep PLL1 at:
+     - `M = 5`
+     - `N = 192`
+     - `P = 2`
+     - `Q = 2`
+   - keep MPU DMA region at:
+     - `0x30000000`
+     - `64KB`
+     - non-cacheable
+     - `MPU_TEX_LEVEL1`
+2. `Core/Src/main.c`
+   - keep `SCB->CCR &= ~SCB_CCR_UNALIGN_TRP_Msk;`
+   - keep PB1 as active-low boot LED
+   - keep `Error_Handler()` in busy-wait blink form, not `HAL_Delay()` after `__disable_irq()`
+3. `Core/Src/usart.c`
+   - keep `USART1 = 921600`
+   - `USART1` is the camera / AI visual host port
+   - keep `USART2 = 115200` for fingerprint
+   - keep `USART3 = 115200` for ESP32-C6
+4. `Core/Inc/camera_app.h`
+   - re-check the active `APP_MODE`
+   - re-check `APP_MODE_STREAM_SILENT` for:
+     - `APP_MODE_XCAM_VIEW`
+     - `APP_MODE_COLORBAR_VIEW`
+     - `APP_MODE_AI_VISUAL`
+5. `Core/Src/camera_app.c`
+   - sync all model I/O type / scale / zero-point constants from the latest generated report
+   - re-check the `APP_MODE_AI_VISUAL` send path still goes through `huart1`
+   - re-check the `APP_MODE_PUMP_CTRL` branch still compiles against the new generated model API
+6. `Core/Src/stm32h7xx_it.c`
+   - keep `DCMI_IRQHandler()`
+   - keep `HAL_DCMI_IRQHandler(&hdcmi);`
+7. linker / build state
+   - keep `Release = -O3`
+   - keep `.dma_buffer > RAM_D2`
+   - keep custom AI / JPEG objects in the build
+
+Do not switch to symptom-driven debugging before these 7 groups are restored.
+
+### Minimum acceptance after every model replacement
+
+The recovery is not finished until all three checks below pass.
+
+1. `APP_MODE_PUMP_CTRL`
+   - must print normal boot logs
+   - must still enter the formal working workflow
+   - this remains the main competition mode
+2. `APP_MODE_AI_VISUAL`
+   - must be opened with `tools/ai_visual_viewer.ps1`
+   - viewer baud must match `USART1 = 921600`
+   - no normal text log is expected in this mode because it sends binary frames
+3. `APP_MODE_XCAM_VIEW`
+   - must still output a valid camera stream
+   - if this fails, fix camera / JPEG first instead of blaming the model
+
+### Fast fault mapping
+
+- red LED dead + no boot text
+  - check clock / HSE / PLL first
+- `APP_MODE_PUMP_CTRL` has text logs but `APP_MODE_AI_VISUAL` has no image
+  - check `USART1 = 921600` first
+- `APP_MODE_AI_VISUAL` viewer connects but no valid frame
+  - check camera capture / JPEG path first
+- `APP_MODE_XCAM_VIEW` is normal but AI classes are chaotic
+  - check preprocess contract and model I/O constants first
+- only `APP_MODE_PUMP_CTRL` breaks after model replacement
+  - check whether `camera_app.c` pump branch still matches the new generated model interface
+
 ### Before replacing the model
 
 1. Commit the current working state to git first.

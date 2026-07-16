@@ -29,7 +29,6 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -121,7 +120,7 @@ static void main_boot_stage(const char *tag)
 
 static void main_boot_led(uint8_t on)
 {
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, (on != 0U) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, (on != 0U) ? GPIO_PIN_RESET : GPIO_PIN_SET);
 }
 
 /* USER CODE END 0 */
@@ -148,7 +147,7 @@ int main(void)
   /* Enable D-Cache---------------------------------------------------------*/
   SCB_EnableDCache();
 
-  /* X-CUBE-AI runtime may access packed internal buffers with unaligned reads. */
+  /* X-CUBE-AI uses packed internal buffers that may require unaligned reads. */
   SCB->CCR &= ~SCB_CCR_UNALIGN_TRP_Msk;
   __DSB();
   __ISB();
@@ -171,6 +170,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  main_boot_led(1U);
   MX_DMA_Init();
   MX_USART1_UART_Init();
   MX_DCMI_Init();
@@ -187,7 +187,6 @@ int main(void)
   main_boot_stage("camera_init_enter");
   CameraApp_Init();
   main_boot_stage("camera_init_exit");
-  main_boot_led(1U);
   main_uart_print("[BOOT] camera init return\r\n");
 
   /* USER CODE END 2 */
@@ -305,12 +304,22 @@ void MPU_Config(void)
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+
   __disable_irq();
-  main_uart_print("[FAULT] Error_Handler\r\n");
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+  GPIO_InitStruct.Pin = GPIO_PIN_1;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
   while (1)
   {
     HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_1);
-    HAL_Delay(200);
+    for (volatile uint32_t i = 0U; i < 6000000U; i++)
+    {
+    }
   }
   /* USER CODE END Error_Handler_Debug */
 }

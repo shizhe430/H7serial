@@ -99,6 +99,7 @@ Before enabling or regenerating `X-CUBE-AI` from CubeMX:
 - Before replacing the model with CubeMX / X-CUBE-AI, commit the current working state first.
 - The current H7 AI baseline is `JPEG snapshot -> TJpgDec decode -> training-aligned preprocess -> infer`.
 - Do not accidentally revert to the older `RGB565 direct -> infer` branch during regeneration.
+- Do not treat model replacement as an AI-only change. In this project it is a full recovery event touching clock, MPU, UART, camera, and generated model glue.
 - After regeneration, re-check these files immediately:
   - `Core/Inc/camera_app.h`
   - `Core/Src/camera_app.c`
@@ -108,6 +109,9 @@ Before enabling or regenerating `X-CUBE-AI` from CubeMX:
   - `Core/Src/stm32h7xx_it.c`
   - `Core/Src/ov2640.c`
 - After regeneration, verify these invariants:
+  - `HSE = external crystal`
+  - `HSE_VALUE = 25000000`
+  - PLL1 remains `M=5 / N=192 / P=2 / Q=2`
   - `PCKPolarity = DCMI_PCKPOLARITY_RISING`
   - `PD3/PB8/PB9 = D5/D6/D7`
   - `USART1 baud = 921600`
@@ -123,6 +127,11 @@ Before enabling or regenerating `X-CUBE-AI` from CubeMX:
   - `Core/Src/jpeg_decode.c` still places grayscale scratch / CLAHE LUT in `.ai_ram_d1`
   - `Core/Src/jpeg_stream.c` still places the JPEG DMA frame buffer in `.dma_buffer`
   - do not revert to a full-`RAM_D1` non-cacheable MPU policy; that pushes pure `AI_TEST_IMAGE` inference from about `76ms` back toward about `160ms`
+- After regeneration, verify these mode-specific behaviors:
+  - `APP_MODE_PUMP_CTRL` still prints normal boot logs
+  - `APP_MODE_AI_VISUAL` stays binary-stream only
+  - `APP_MODE_AI_VISUAL` viewer must use `USART1 = 921600`
+  - `APP_MODE_XCAM_VIEW` still produces a valid camera stream
 - These custom files must remain in the build:
   - `Core/Src/jpeg_decode.c`
   - `Core/Src/tjpgd.c`
@@ -138,12 +147,13 @@ Before enabling or regenerating `X-CUBE-AI` from CubeMX:
   - `test.c`
   - any source that includes missing headers like `../Common/camera.h` or `reg51.h`
 - Recommended recovery order after model replacement:
-  1. boot log
-  2. UART
-  3. camera probe
-  4. JPEG capture
-  5. JPEG decode / preprocess
-  6. AI infer
+  1. restore fixed invariants
+  2. boot log
+  3. UART
+  4. camera probe
+  5. JPEG capture
+  6. JPEG decode / preprocess
+  7. AI infer
 - If `APP_MODE_AI_TEST_IMAGE` matches PC but live AI is wrong, prioritize preprocess/image-quality/camera-position checks over model-runtime suspicion.
 
 ## Pump Control Rule

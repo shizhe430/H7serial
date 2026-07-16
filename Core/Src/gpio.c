@@ -58,20 +58,17 @@ void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0|GPIO_PIN_8|GPIO_PIN_15, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOH, PUMP_PWM_Pin, GPIO_PIN_RESET);
-
-  /* Keep ambient LEDs always on. */
-  HAL_GPIO_WritePin(GPIOH, AMBIENT_LED2_Pin|AMBIENT_LED1_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOH, AMBIENT_LED2_Pin|AMBIENT_LED1_Pin|PUMP_PWM_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1|OLED_SCL_Pin|OLED_SDA_Pin|GPIO_PIN_3
                           |GPIO_PIN_4, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : PE6 */
-  GPIO_InitStruct.Pin = GPIO_PIN_6;
+  /*Configure GPIO pin : AS608_WAK_Pin */
+  GPIO_InitStruct.Pin = AS608_WAK_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+  HAL_GPIO_Init(AS608_WAK_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : COLD_KEY_Pin */
   GPIO_InitStruct.Pin = COLD_KEY_Pin;
@@ -129,7 +126,7 @@ void MX_GPIO_Init(void)
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*AnalogSwitch Config */
-  HAL_SYSCFG_AnalogSwitchConfig(SYSCFG_SWITCH_PA0, SYSCFG_SWITCH_PA0_OPEN);
+  HAL_SYSCFG_AnalogSwitchConfig(SYSCFG_SWITCH_PA0, SYSCFG_SWITCH_PA0_CLOSE);
 
 }
 
