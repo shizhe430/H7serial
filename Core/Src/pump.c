@@ -24,6 +24,7 @@ static void pump_ph6_set_af_mode(void)
     s_pump_ph6_gpio_mode = 0U;
 }
 
+#if ((PUMP_GPIO_TEST_MODE != 0U) || (PUMP_FAST_DC_TEST_MODE != 0U))
 static void pump_ph6_set_gpio_mode(void)
 {
     GPIOH->MODER &= ~GPIO_MODER_MODE6_Msk;
@@ -33,6 +34,7 @@ static void pump_ph6_set_gpio_mode(void)
     GPIOH->PUPDR &= ~GPIO_PUPDR_PUPD6_Msk;
     s_pump_ph6_gpio_mode = 1U;
 }
+#endif
 
 void Pump_Init(void)
 {
