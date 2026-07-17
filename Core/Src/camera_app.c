@@ -93,6 +93,9 @@ static volatile uint8_t g_frame_error = 0U;
 #define PUMP_OLED_HOT_TEMP_C      85U
 #define PUMP_FLOW_CAL_TIME_MS     17301U
 #define PUMP_FLOW_CAL_VOLUME_ML   400U
+#define PUMP_TIMED_DEMO_HALF_MS   ((PUMP_FLOW_CAL_TIME_MS + 1U) / 2U)
+#define PUMP_TIMED_DEMO_STEP_MS   20U
+#define PUMP_TIMED_DEMO_KEY_MS    80U
 #define ESP32_CMD_BUF_SIZE        128U
 #define ESP32_SPEAK_TEXT_SIZE     96U
 #define ESP32_LINK_SELFTEST_ON_BOOT 0U
@@ -232,6 +235,11 @@ static volatile uint8_t g_esp32_start_pending = 0U;
 static volatile uint8_t g_esp32_stop_pending = 0U;
 static char g_esp32_speak_text[ESP32_SPEAK_TEXT_SIZE];
 static volatile uint8_t g_esp32_speak_pending = 0U;
+#if (PUMP_TIMED_DEMO_MODE != 0U)
+static uint8_t g_timed_demo_cup_present = 0U;
+static uint8_t g_timed_demo_key_prev_down = 0U;
+static uint32_t g_timed_demo_key_last_ms = 0U;
+#endif
 #endif
 static uint32_t g_camera_bad_frame_count = 0U;
 static uint32_t g_camera_recover_warmup_frames = 0U;
@@ -3161,6 +3169,161 @@ static void camera_app_pump_ctrl_consume_result(const camera_ai_result_t *result
       camera_app_oled_refresh_stub();
       camera_app_pump_ctrl_report(result);
   }
+
+#if (PUMP_TIMED_DEMO_MODE != 0U)
+static uint8_t camera_app_timed_demo_key_is_down(void)
+{
+    return (HAL_GPIO_ReadPin(GPIOF, GPIO_PIN_6) == GPIO_PIN_RESET) ? 1U : 0U;
+}
+
+static uint8_t camera_app_timed_demo_key_pressed(uint32_t now_ms)
+{
+    uint8_t key_down = camera_app_timed_demo_key_is_down();
+    uint8_t pressed = 0U;
+
+    if ((key_down != 0U) && (g_timed_demo_key_prev_down == 0U) &&
+        ((now_ms - g_timed_demo_key_last_ms) >= PUMP_TIMED_DEMO_KEY_MS))
+    {
+        pressed = 1U;
+        g_timed_demo_key_last_ms = now_ms;
+    }
+
+    g_timed_demo_key_prev_down = key_down;
+    return pressed;
+}
+
+static void camera_app_timed_demo_init(void)
+{
+    GPIO_InitTypeDef gpio_init = {0};
+
+    __HAL_RCC_GPIOF_CLK_ENABLE();
+    gpio_init.Pin = GPIO_PIN_6;
+    gpio_init.Mode = GPIO_MODE_INPUT;
+    gpio_init.Pull = GPIO_PULLUP;
+    gpio_init.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOF, &gpio_init);
+
+    g_timed_demo_cup_present = 0U;
+    g_timed_demo_key_prev_down = camera_app_timed_demo_key_is_down();
+    g_timed_demo_key_last_ms = HAL_GetTick();
+}
+
+static void camera_app_timed_demo_make_result(camera_ai_result_t *result)
+{
+    uint32_t fill_ms;
+    uint32_t target_ms;
+    float progress;
+
+    memset(result, 0, sizeof(*result));
+    result->confidence = 0.92f;
+
+    if (g_timed_demo_cup_present == 0U)
+    {
+        result->class_id = 0U;
+        result->raw_class_id = 0U;
+        result->confidence = 0.99f;
+        result->level_reg = 0.01f;
+        return;
+    }
+
+    if (g_pump_ctrl.pump_run_active == 0U)
+    {
+        result->class_id = 1U;
+        result->raw_class_id = 1U;
+        result->level_reg = 0.20f;
+        return;
+    }
+
+    fill_ms = camera_app_pump_ctrl_get_fill_time_ms();
+    target_ms = (g_pump_ctrl.dispense_target == CAMERA_DISPENSE_TARGET_HALF) ?
+                PUMP_TIMED_DEMO_HALF_MS : PUMP_FLOW_CAL_TIME_MS;
+    progress = (target_ms == 0U) ? 0.0f : ((float)fill_ms / (float)target_ms);
+    if (progress > 1.0f)
+    {
+        progress = 1.0f;
+    }
+
+    if (g_pump_ctrl.dispense_target == CAMERA_DISPENSE_TARGET_HALF)
+    {
+        result->class_id = (progress < 0.45f) ? 1U : 2U;
+        result->level_reg = 0.22f + (progress * 0.16f);
+    }
+    else
+    {
+        if (progress < 0.35f)
+        {
+            result->class_id = 1U;
+        }
+        else if (progress < 0.85f)
+        {
+            result->class_id = 2U;
+        }
+        else
+        {
+            result->class_id = 3U;
+        }
+        result->level_reg = 0.22f + (progress * 0.42f);
+    }
+
+    result->raw_class_id = result->class_id;
+    result->confidence = 0.86f + (progress * 0.10f);
+}
+
+static void camera_app_timed_demo_run(void)
+{
+    camera_ai_result_t result;
+    camera_work_state_t state;
+    uint32_t now_ms = HAL_GetTick();
+    uint32_t fill_ms;
+    uint32_t target_ms;
+
+    state = (camera_work_state_t)g_pump_ctrl.workflow_state;
+    if (camera_app_timed_demo_key_pressed(now_ms) != 0U)
+    {
+        if ((state == CAMERA_WORK_STATE_DISPENSING_AUTO_COLD) ||
+            (state == CAMERA_WORK_STATE_DISPENSING_VOICE))
+        {
+            camera_app_log("[DEMO] abnormal trigger=PF6\r\n");
+            camera_app_pump_ctrl_fault_to_standby("timed_demo_abnormal");
+        }
+        else
+        {
+            g_timed_demo_cup_present ^= 1U;
+            camera_app_log((g_timed_demo_cup_present != 0U) ?
+                           "[DEMO] cup=present trigger=PF6\r\n" :
+                           "[DEMO] cup=removed trigger=PF6\r\n");
+        }
+    }
+
+    state = (camera_work_state_t)g_pump_ctrl.workflow_state;
+    if ((state == CAMERA_WORK_STATE_DISPENSING_AUTO_COLD) ||
+        (state == CAMERA_WORK_STATE_DISPENSING_VOICE) ||
+        (state == CAMERA_WORK_STATE_DISPENSING_MANUAL_COLD))
+    {
+        fill_ms = camera_app_pump_ctrl_get_fill_time_ms();
+        target_ms = (g_pump_ctrl.dispense_target == CAMERA_DISPENSE_TARGET_HALF) ?
+                    PUMP_TIMED_DEMO_HALF_MS : PUMP_FLOW_CAL_TIME_MS;
+        if (fill_ms >= target_ms)
+        {
+            camera_app_timed_demo_make_result(&result);
+            result.class_id = (g_pump_ctrl.dispense_target == CAMERA_DISPENSE_TARGET_HALF) ? 2U : 3U;
+            result.raw_class_id = result.class_id;
+            result.level_reg = (result.class_id == 2U) ? 0.50f : 0.80f;
+            result.confidence = 0.96f;
+            g_pump_ctrl.last_class_id = result.class_id;
+            g_pump_ctrl.last_level_reg = result.level_reg;
+            g_pump_ctrl.last_confidence = result.confidence;
+            camera_app_pump_ctrl_return_to_standby("timed_demo_target");
+            camera_app_oled_refresh_stub();
+            camera_app_pump_ctrl_report(&result);
+            return;
+        }
+    }
+
+    camera_app_timed_demo_make_result(&result);
+    camera_app_pump_ctrl_consume_result(&result);
+}
+#endif
 #endif
 
 #if (ESP32_LINK_SELFTEST_ON_BOOT != 0U)
@@ -3363,6 +3526,14 @@ void CameraApp_Init(void)
     camera_app_pump_ctrl_reset();
     camera_app_finger_init();
     camera_app_esp32_init();
+#if (PUMP_TIMED_DEMO_MODE != 0U)
+    camera_app_timed_demo_init();
+    g_camera_ready = 1U;
+    camera_app_log("[APP] mode=TIMED_DEMO camera_ai=bypassed\r\n");
+    camera_app_log("[APP] PF6=cup/abnormal PF7=manual half_ms=8651 full_ms=17301\r\n");
+    camera_app_log("[APP] CameraApp_Init done\r\n");
+    return;
+#endif
 #endif
 
     if (APP_MODE != APP_MODE_AI_TEST_IMAGE)
@@ -3552,6 +3723,11 @@ void CameraApp_Run(void)
     camera_app_esp32_link_selftest_poll();
 
 #if (APP_MODE == APP_MODE_PUMP_CTRL)
+#if (PUMP_TIMED_DEMO_MODE != 0U)
+    camera_app_timed_demo_run();
+    HAL_Delay(PUMP_TIMED_DEMO_STEP_MS);
+    return;
+#endif
     if (camera_app_pump_ctrl_service_manual_fastpath(g_camera_ready) != 0U)
     {
         HAL_Delay(20U);

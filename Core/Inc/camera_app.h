@@ -17,6 +17,12 @@ extern "C" {
 #ifndef APP_MODE
 #define APP_MODE  APP_MODE_PUMP_CTRL
 #endif
+
+/* Camera-independent fallback used only by the timed demonstration branch. */
+#ifndef PUMP_TIMED_DEMO_MODE
+#define PUMP_TIMED_DEMO_MODE 1U
+#endif
+
 #if ((APP_MODE == APP_MODE_XCAM_VIEW) || (APP_MODE == APP_MODE_COLORBAR_VIEW) || (APP_MODE == APP_MODE_AI_VISUAL))
 #define APP_MODE_STREAM_SILENT 1U
 #else
