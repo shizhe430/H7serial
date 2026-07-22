@@ -61,6 +61,8 @@ void Error_Handler(void);
 #define AS608_WAK_GPIO_Port GPIOE
 #define COLD_KEY_Pin GPIO_PIN_7
 #define COLD_KEY_GPIO_Port GPIOF
+#define TANK_LEVEL_Pin GPIO_PIN_5
+#define TANK_LEVEL_GPIO_Port GPIOB
 #define OLED_CS_Pin GPIO_PIN_1
 #define OLED_CS_GPIO_Port GPIOC
 #define AMBIENT_LED2_Pin GPIO_PIN_2

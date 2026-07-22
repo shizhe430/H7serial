@@ -20,7 +20,12 @@ extern "C" {
 
 /* Camera-independent fallback used only by the timed demonstration branch. */
 #ifndef PUMP_TIMED_DEMO_MODE
-#define PUMP_TIMED_DEMO_MODE 1U
+#define PUMP_TIMED_DEMO_MODE 0U
+#endif
+
+/* Temporary pump-only hardware test. Keep 0U for normal operation. */
+#ifndef PUMP_FORCE_ON_TEST_MODE
+#define PUMP_FORCE_ON_TEST_MODE 0U
 #endif
 
 #if ((APP_MODE == APP_MODE_XCAM_VIEW) || (APP_MODE == APP_MODE_COLORBAR_VIEW) || (APP_MODE == APP_MODE_AI_VISUAL))

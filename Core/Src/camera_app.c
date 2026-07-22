@@ -88,11 +88,13 @@ static volatile uint8_t g_frame_error = 0U;
 #define PUMP_TARGET_CLASS_STOP_FRAMES 3U
 #define FINGER_RECOG_POLL_MS      250U
 #define FINGER_RECONNECT_MS       3000U
+#define TANK_LEVEL_DEBOUNCE_MS    300U
 #define PUMP_OLED_STATUS_HOLD_MS  1200U
 #define PUMP_OLED_COLD_TEMP_C     25U
 #define PUMP_OLED_HOT_TEMP_C      85U
-#define PUMP_FLOW_CAL_TIME_MS     17301U
+#define PUMP_FLOW_CAL_TIME_MS     22700U
 #define PUMP_FLOW_CAL_VOLUME_ML   400U
+#define PUMP_HALF_TIMEOUT_MS      ((PUMP_FLOW_CAL_TIME_MS + 1U) / 2U)
 #define PUMP_TIMED_DEMO_HALF_MS   ((PUMP_FLOW_CAL_TIME_MS + 1U) / 2U)
 #define PUMP_TIMED_DEMO_STEP_MS   20U
 #define PUMP_TIMED_DEMO_KEY_MS    80U
@@ -169,6 +171,8 @@ typedef struct
     uint8_t auto_rearm_wait_no_cup;
     uint8_t key_cold_prev_down;
     uint8_t oled_status_state;
+    uint8_t tank_low_candidate;
+    uint8_t tank_low_active;
     uint8_t fingerprint_ready;
     uint8_t fingerprint_session_locked;
     uint8_t esp32_fp_reported;
@@ -177,6 +181,7 @@ typedef struct
     uint32_t decision_deadline_ms;
     uint32_t voice_accept_after_ms;
     uint32_t oled_status_hold_until_ms;
+    uint32_t tank_low_since_ms;
     uint32_t fingerprint_last_poll_ms;
     uint32_t fingerprint_last_connect_ms;
     uint16_t session_user_id;
@@ -269,6 +274,7 @@ static void camera_app_pump_ctrl_set_work_state(uint8_t next_state, const char *
 static void camera_app_pump_ctrl_return_to_standby(const char *reason);
 static void camera_app_pump_ctrl_start_manual_cold(const char *reason);
 static uint8_t camera_app_pump_ctrl_session_active(void);
+static void camera_app_esp32_log(const char *fmt, ...);
 static void camera_app_esp32_init(void);
 static void camera_app_esp32_rx_start(void);
 static void camera_app_esp32_process_rx_line(const char *line);
@@ -322,6 +328,7 @@ static uint32_t camera_app_float_to_permille(float value)
     return (uint32_t)((value * 1000.0f) + 0.5f);
 }
 
+#if ((APP_MODE == APP_MODE_AI_INFER) || (APP_MODE == APP_MODE_AI_TEST_IMAGE) || (APP_MODE == APP_MODE_PUMP_CTRL) || (APP_MODE == APP_MODE_AI_VISUAL))
 static void *camera_app_ai_input_data(void)
 {
     if ((g_ai_ctx.input != NULL) && (g_ai_ctx.input[0].data != NULL))
@@ -365,6 +372,7 @@ static uint8_t camera_app_ai_input_gray(const void *input, uint32_t idx)
     return (uint8_t)((int16_t)input_q7[idx] - WATERLEVEL_IN_ZERO_POINT);
 #endif
 }
+#endif
 
 static int32_t camera_app_float_to_milli_signed(float value)
 {
@@ -1729,14 +1737,7 @@ static void camera_app_oled_refresh_stub(void)
     uint16_t dev_id;
     uint32_t now_ms;
 
-    if ((g_pump_ctrl.last_class_id >= 1U) && (g_pump_ctrl.last_class_id <= 3U))
-    {
-        water_level = (g_pump_ctrl.last_class_id >= 2U) ? 1U : 0U;
-    }
-    else
-    {
-        water_level = 0U;
-    }
+    water_level = (g_pump_ctrl.tank_low_active != 0U) ? 0U : 1U;
 
     now_ms = HAL_GetTick();
     if ((g_pump_ctrl.oled_status_hold_until_ms != 0U) &&
@@ -1770,12 +1771,6 @@ static void camera_app_oled_refresh_stub(void)
 
     temp_val = (g_pump_ctrl.water_temp == CAMERA_WATER_TEMP_HOT) ? PUMP_OLED_HOT_TEMP_C : PUMP_OLED_COLD_TEMP_C;
     dev_id = g_pump_ctrl.session_user_id;
-    if (((camera_work_state_t)g_pump_ctrl.workflow_state == CAMERA_WORK_STATE_STANDBY) &&
-        ((g_pump_ctrl.oled_status_hold_until_ms == 0U) ||
-         ((int32_t)(now_ms - g_pump_ctrl.oled_status_hold_until_ms) >= 0)))
-    {
-        dev_id = 0U;
-    }
 
     OLED_Status_Show(water_level,
                      water_out_state,
@@ -1863,22 +1858,37 @@ static uint32_t camera_app_pump_ctrl_get_fill_time_ms(void)
     return fill_time_ms;
 }
 
-static void camera_app_esp32_send_text(const char *text)
+static uint8_t camera_app_esp32_send_text(const char *text)
 {
+    HAL_StatusTypeDef status = HAL_ERROR;
     size_t len;
+    uint8_t attempt;
 
     if (text == NULL)
     {
-        return;
+        return 1U;
     }
 
     len = strlen(text);
     if (len == 0U)
     {
-        return;
+        return 1U;
     }
 
-    (void)HAL_UART_Transmit(&huart3, (uint8_t *)text, (uint16_t)len, 100U);
+    for (attempt = 0U; attempt < 3U; attempt++)
+    {
+        status = HAL_UART_Transmit(&huart3, (uint8_t *)text, (uint16_t)len, 100U);
+        if (status == HAL_OK)
+        {
+            return 0U;
+        }
+        HAL_Delay(2U);
+    }
+
+    camera_app_esp32_log("[ESP32_TX] fail status=%u error=0x%08lX\r\n",
+                         (unsigned int)status,
+                         (unsigned long)HAL_UART_GetError(&huart3));
+    return 1U;
 }
 
 static void camera_app_esp32_log(const char *fmt, ...)
@@ -1897,26 +1907,32 @@ static void camera_app_esp32_log(const char *fmt, ...)
     }
 }
 
-static void camera_app_esp32_send_fp_event(uint16_t user_id)
+static uint8_t camera_app_esp32_send_fp_event(uint16_t user_id)
 {
     char buf[32];
     int len = snprintf(buf, sizeof(buf), "STM_FP:%u\r\n", (unsigned int)user_id);
 
-    if (len > 0)
+    if ((len > 0) && (camera_app_esp32_send_text(buf) == 0U))
     {
-        camera_app_esp32_send_text(buf);
+        camera_app_esp32_log("[ESP32_TX] STM_FP:%u ok\r\n", (unsigned int)user_id);
+        return 0U;
     }
+
+    return 1U;
 }
 
-static void camera_app_esp32_send_done_event(uint16_t volume_ml)
+static uint8_t camera_app_esp32_send_done_event(uint16_t volume_ml)
 {
     char buf[32];
     int len = snprintf(buf, sizeof(buf), "STM_DONE:%u\r\n", (unsigned int)volume_ml);
 
-    if (len > 0)
+    if ((len > 0) && (camera_app_esp32_send_text(buf) == 0U))
     {
-        camera_app_esp32_send_text(buf);
+        camera_app_esp32_log("[ESP32_TX] STM_DONE:%u ok\r\n", (unsigned int)volume_ml);
+        return 0U;
     }
+
+    return 1U;
 }
 
 static void camera_app_pump_ctrl_report_session_to_esp32(void)
@@ -1937,17 +1953,23 @@ static void camera_app_pump_ctrl_report_session_to_esp32(void)
 
     if (g_pump_ctrl.esp32_fp_reported == 0U)
     {
-        camera_app_esp32_send_fp_event(g_pump_ctrl.session_user_id);
-        g_pump_ctrl.esp32_fp_reported = 1U;
+        if (camera_app_esp32_send_fp_event(g_pump_ctrl.session_user_id) == 0U)
+        {
+            g_pump_ctrl.esp32_fp_reported = 1U;
+            HAL_Delay(10U);
+        }
     }
-    camera_app_esp32_send_done_event(volume_ml);
-    g_pump_ctrl.esp32_done_reported = 1U;
+    if (camera_app_esp32_send_done_event(volume_ml) == 0U)
+    {
+        g_pump_ctrl.esp32_done_reported = 1U;
+    }
 
     len = snprintf(buf, sizeof(buf),
-                   "[ESP32] fp=%u volume_ml=%u fill_ms=%lu\r\n",
+                   "[ESP32] fp=%u volume_ml=%u fill_ms=%lu tx_done=%u\r\n",
                    (unsigned int)g_pump_ctrl.session_user_id,
                    (unsigned int)volume_ml,
-                   (unsigned long)fill_time_ms);
+                   (unsigned long)fill_time_ms,
+                   (unsigned int)g_pump_ctrl.esp32_done_reported);
     if (len > 0)
     {
         HAL_UART_Transmit(&huart1, (uint8_t *)buf, (uint16_t)len, HAL_MAX_DELAY);
@@ -2017,14 +2039,21 @@ static void camera_app_finger_poll(uint32_t now_ms)
 {
     AS608_SearchResult result = {0};
     uint8_t confirm;
+    uint8_t standby_refresh;
 
-    if (g_pump_ctrl.fingerprint_session_locked != 0U)
+    standby_refresh = ((camera_work_state_t)g_pump_ctrl.workflow_state == CAMERA_WORK_STATE_STANDBY) ? 1U : 0U;
+    if ((g_pump_ctrl.fingerprint_session_locked != 0U) && (standby_refresh == 0U))
     {
         return;
     }
 
     if (g_pump_ctrl.fingerprint_ready == 0U)
     {
+        if (HAL_GPIO_ReadPin(AS608_WAK_GPIO_Port, AS608_WAK_Pin) == GPIO_PIN_RESET)
+        {
+            return;
+        }
+
         if ((g_pump_ctrl.fingerprint_last_connect_ms == 0U) ||
             ((int32_t)(now_ms - g_pump_ctrl.fingerprint_last_connect_ms) >= (int32_t)FINGER_RECONNECT_MS))
         {
@@ -2043,6 +2072,11 @@ static void camera_app_finger_poll(uint32_t now_ms)
     confirm = AS608_GetImage(&g_finger_sensor);
     if (confirm == 0x02U)
     {
+        if (standby_refresh != 0U)
+        {
+            g_pump_ctrl.fingerprint_session_locked = 0U;
+            g_pump_ctrl.fingerprint_match_score = 0U;
+        }
         return;
     }
     if (confirm == 0xFFU)
@@ -2053,6 +2087,11 @@ static void camera_app_finger_poll(uint32_t now_ms)
         return;
     }
     if (confirm != 0x00U)
+    {
+        return;
+    }
+
+    if (g_pump_ctrl.fingerprint_session_locked != 0U)
     {
         return;
     }
@@ -2090,13 +2129,51 @@ static void camera_app_finger_poll(uint32_t now_ms)
     g_pump_ctrl.fingerprint_session_locked = 1U;
     g_pump_ctrl.session_user_id = result.page_id;
     g_pump_ctrl.fingerprint_match_score = result.match_score;
-    camera_app_esp32_send_fp_event(result.page_id);
-    g_pump_ctrl.esp32_fp_reported = 1U;
+    if (camera_app_esp32_send_fp_event(result.page_id) == 0U)
+    {
+        g_pump_ctrl.esp32_fp_reported = 1U;
+    }
     camera_app_finger_log("[FINGER] match id=%u score=%u wak=%lu\r\n",
                           (unsigned int)result.page_id,
                           (unsigned int)result.match_score,
                           (unsigned long)HAL_GPIO_ReadPin(AS608_WAK_GPIO_Port, AS608_WAK_Pin));
     camera_app_oled_refresh_stub();
+}
+
+static void camera_app_tank_level_poll(uint32_t now_ms)
+{
+    (void)now_ms;
+
+    if (g_pump_ctrl.tank_low_active != 0U)
+    {
+        g_pump_ctrl.tank_low_active = 0U;
+        camera_app_oled_refresh_stub();
+    }
+
+    g_pump_ctrl.tank_low_candidate = 0U;
+    g_pump_ctrl.tank_low_active = 0U;
+    g_pump_ctrl.tank_low_since_ms = 0U;
+}
+
+static void camera_app_finger_poll_standby(uint32_t now_ms)
+{
+    if ((camera_work_state_t)g_pump_ctrl.workflow_state != CAMERA_WORK_STATE_STANDBY)
+    {
+        return;
+    }
+
+    if (g_pump_ctrl.oled_status_hold_until_ms != 0U)
+    {
+        if ((int32_t)(now_ms - g_pump_ctrl.oled_status_hold_until_ms) < 0)
+        {
+            return;
+        }
+
+        g_pump_ctrl.oled_status_hold_until_ms = 0U;
+        camera_app_pump_ctrl_reset_fingerprint_session();
+    }
+
+    camera_app_finger_poll(now_ms);
 }
 
 static void camera_app_esp32_rx_start(void)
@@ -2451,6 +2528,19 @@ static void camera_app_pump_ctrl_fault_to_standby(const char *reason)
     camera_app_pump_ctrl_set_work_state(CAMERA_WORK_STATE_STANDBY, "ready");
 }
 
+static uint8_t camera_app_pump_ctrl_service_half_timeout(void)
+{
+    if (((camera_work_state_t)g_pump_ctrl.workflow_state != CAMERA_WORK_STATE_DISPENSING_VOICE) ||
+        (g_pump_ctrl.dispense_target != CAMERA_DISPENSE_TARGET_HALF) ||
+        (camera_app_pump_ctrl_get_fill_time_ms() < PUMP_HALF_TIMEOUT_MS))
+    {
+        return 0U;
+    }
+
+    camera_app_pump_ctrl_return_to_standby("half_timeout");
+    return 1U;
+}
+
 static void camera_app_pump_ctrl_enter_decision_window(uint32_t now_ms)
 {
     uint8_t stale_voice_result;
@@ -2458,7 +2548,6 @@ static void camera_app_pump_ctrl_enter_decision_window(uint32_t now_ms)
     int len;
 
     stale_voice_result = camera_app_voice_result_read();
-    camera_app_pump_ctrl_reset_fingerprint_session();
     g_pump_ctrl.dispense_target = CAMERA_DISPENSE_TARGET_NONE;
     g_pump_ctrl.water_temp = CAMERA_WATER_TEMP_COLD;
     g_pump_ctrl.voice_command_armed = 0U;
@@ -2481,11 +2570,6 @@ static void camera_app_pump_ctrl_enter_decision_window(uint32_t now_ms)
 
 static void camera_app_pump_ctrl_start_manual_cold(const char *reason)
 {
-    if ((camera_work_state_t)g_pump_ctrl.workflow_state == CAMERA_WORK_STATE_STANDBY)
-    {
-        camera_app_pump_ctrl_reset_fingerprint_session();
-    }
-
     g_pump_ctrl.dispense_target = CAMERA_DISPENSE_TARGET_MANUAL_CONTINUOUS;
     g_pump_ctrl.water_temp = CAMERA_WATER_TEMP_COLD;
     g_pump_ctrl.target_reached_count = 0U;
@@ -3346,6 +3430,7 @@ static void camera_app_esp32_link_selftest_poll(void)
         return;
     }
     s_last_ms = now_ms;
+
     s_count++;
 
     (void)HAL_UART_Transmit(&huart3, (uint8_t *)hello_msg,
@@ -3524,6 +3609,12 @@ void CameraApp_Init(void)
     Pump_Init();
     camera_app_log("[APP] pump init ok\r\n");
     camera_app_pump_ctrl_reset();
+#if (PUMP_FORCE_ON_TEST_MODE != 0U)
+    Pump_StartFast();
+    camera_app_log("[PUMP_TEST] force on PH6=1 duty=999\r\n");
+    camera_app_log("[APP] CameraApp_Init done\r\n");
+    return;
+#endif
     camera_app_finger_init();
     camera_app_esp32_init();
 #if (PUMP_TIMED_DEMO_MODE != 0U)
@@ -3692,7 +3783,6 @@ void CameraApp_Init(void)
 #if ((APP_MODE == APP_MODE_AI_INFER) || (APP_MODE == APP_MODE_AI_VISUAL))
     camera_app_log("[APP] ai init ok\r\n");
 #elif (APP_MODE == APP_MODE_PUMP_CTRL)
-    camera_app_pump_ctrl_reset();
     camera_app_log("[APP] ai init ok\r\n");
 #endif
 #endif
@@ -3723,11 +3813,23 @@ void CameraApp_Run(void)
     camera_app_esp32_link_selftest_poll();
 
 #if (APP_MODE == APP_MODE_PUMP_CTRL)
+#if (PUMP_FORCE_ON_TEST_MODE != 0U)
+    Pump_StartFast();
+    HAL_Delay(100U);
+    return;
+#endif
 #if (PUMP_TIMED_DEMO_MODE != 0U)
     camera_app_timed_demo_run();
     HAL_Delay(PUMP_TIMED_DEMO_STEP_MS);
     return;
 #endif
+    camera_app_tank_level_poll(HAL_GetTick());
+    if (camera_app_pump_ctrl_service_half_timeout() != 0U)
+    {
+        HAL_Delay(20U);
+        return;
+    }
+    camera_app_finger_poll_standby(HAL_GetTick());
     if (camera_app_pump_ctrl_service_manual_fastpath(g_camera_ready) != 0U)
     {
         HAL_Delay(20U);
