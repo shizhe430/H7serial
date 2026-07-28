@@ -17,8 +17,12 @@
 #define OV2640_RESET_RELEASE_MS          80U
 #define OV2640_POST_RESET_MS             150U
 #define OV2640_PROBE_ATTEMPTS            3U
+#define OV2640_COM8_REG                  0x13U
+#define OV2640_COM8_AEC_EN               0x01U
+#define OV2640_COM8_AGC_EN               0x04U
 
 static uint8_t s_initialized = 0U;
+static uint8_t s_selected_camera = OV2640_CAMERA_WATER;
 static uint8_t *s_frame_buf = NULL;
 static uint32_t s_frame_buf_len = 0U;
 
@@ -178,11 +182,37 @@ static const uint8_t ov2640_effect_normal_cfg[][2] = {
 static void ov2640_assert_power_down(void)
 {
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET);
 }
 
 static void ov2640_release_power_down(void)
 {
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOA,
+                      (s_selected_camera == OV2640_CAMERA_FACE) ? GPIO_PIN_8 : GPIO_PIN_0,
+                      GPIO_PIN_RESET);
+}
+
+uint8_t OV2640_SelectCamera(uint8_t camera_id)
+{
+    if ((camera_id != OV2640_CAMERA_WATER) && (camera_id != OV2640_CAMERA_FACE))
+    {
+        return OV2640_ERROR;
+    }
+
+    s_initialized = 0U;
+    s_selected_camera = camera_id;
+
+    /* DVP, SCCB and RESETB are shared; PWDN provides break-before-make selection. */
+    ov2640_assert_power_down();
+    HAL_Delay(OV2640_PWRDN_ASSERT_MS);
+    ov2640_release_power_down();
+    HAL_Delay(OV2640_PWR_STABLE_MS);
+    return OV2640_OK;
+}
+
+uint8_t OV2640_GetSelectedCamera(void)
+{
+    return s_selected_camera;
 }
 
 static void ov2640_hw_reset(void)
@@ -336,6 +366,18 @@ uint8_t OV2640_SetSpecialEffect(ov2640_special_effect_t effect)
     }
 }
 
+uint8_t OV2640_LockAutoExposureGain(void)
+{
+    uint8_t com8;
+
+    if (ov2640_write_reg(0xFF, 0x01U) != OV2640_OK) return OV2640_ERROR;
+    if (ov2640_read_reg(OV2640_COM8_REG, &com8) != OV2640_OK) return OV2640_ERROR;
+
+    com8 &= (uint8_t)~(OV2640_COM8_AEC_EN | OV2640_COM8_AGC_EN);
+    if (ov2640_write_reg(OV2640_COM8_REG, com8) != OV2640_OK) return OV2640_ERROR;
+    return OV2640_OK;
+}
+
 uint8_t OV2640_SetOutputSize(uint16_t width, uint16_t height)
 {
     uint16_t ow, oh;
@@ -397,6 +439,16 @@ uint8_t OV2640_Probe(uint16_t *mid, uint16_t *pid)
     }
 
     return OV2640_ERROR;
+}
+
+uint8_t OV2640_ProbeCamera(uint8_t camera_id, uint16_t *mid, uint16_t *pid)
+{
+    if (OV2640_SelectCamera(camera_id) != OV2640_OK)
+    {
+        return OV2640_ERROR;
+    }
+
+    return OV2640_Probe(mid, pid);
 }
 
 uint8_t OV2640_Init(void)

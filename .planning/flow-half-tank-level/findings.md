@@ -1,0 +1,24 @@
+# Findings
+
+- Current firmware still uses `17301 ms = 400 ml` for ESP32 volume calculation and timed-demo durations.
+- PB5 is not currently assigned in `H7serial.ioc`, `main.h`, or `gpio.c`.
+- The supplied log contains extensive standby history, so calibration must use only the new automatic session's pump-active interval.
+- New automatic session starts at 18:43:32.870 and reports completion at accumulated `fill_ms=22700`; old calibration incorrectly reports 525 ml. Treating this full cup as 400 ml gives 17.62 ml/s and an exact half-time of 11350 ms.
+- Reference project uses a digital input with no pull resistor. `GPIO_PIN_SET` means water detected; reset means water not detected / tank low.
+- PB5 is free in the target `.ioc`; GPIOB clock is already enabled.
+- Half fallback will use 11350 ms, exactly half of the requested linear 22700 ms / 400 ml calibration, while existing visual target checks remain unchanged and primary.
+- Tank low will be debounced for 300 ms, block all new starts, and stop any active automatic, voice, or manual dispensing to prevent dry running.
+- No dedicated tank-low speech ID exists; active dispensing will reuse the existing fault OLED state and aborted announcement, while pre-start blocking remains silent except for a serial log.
+- Release ELF links successfully and contains `tank_low`, `half_timeout`, tank transition logs, `STM_DONE`, and formal `PUMP_CTRL` mode.
+- Integer volume conversion verifies as 11350 ms -> 200 ml and 22700 ms -> 400 ml.
+- Formal macros remain `APP_MODE_PUMP_CTRL`, timed demo off, and pump force-on test off.
+- Requirement correction: PB5 is display-only. All tank-low control, fault, speech, and ESP32 side effects must be removed.
+- OLED API explicitly defines `water_level: 0=过低, 1=正常`; PB5 high/low can map directly to this field. The current firmware incorrectly derives it from camera cup classes and also converts tank-low into output state 2.
+- USART3 configuration is correct: PB10 TX, PB11 RX, 115200 8N1, initialized before `CameraApp_Init`.
+- Latest full-session log proves the STM32 completion reporter ran, but only the debug UART1 message is confirmed. USART3 transmission status is discarded and the event is marked reported unconditionally.
+- The same unchecked-send behavior existed in commit `104c380`; no later regression was found in the message format or UART selection.
+- No ESP32-C6 source project was found at the Desktop root, so this task can prove and harden STM32 transmission but cannot inspect RainMaker update logic locally.
+- PB5 now maps directly to OLED `water_level` (`high -> normal`, debounced low -> too low) and has no remaining control, fault, speech, ESP32, or serial-log references.
+- USART3 sends now retry three times, log HAL failure/error state, log each successful protocol command, and set report flags only on success.
+- The final ELF contains `STM_FP`, `STM_DONE`, `[ESP32_TX]`, and `tx_done`, while `[TANK]`, `tank_low`, and manual-block strings are absent.
+- `HAL_OK` proves STM32 transferred bytes into USART3 successfully, but does not acknowledge ESP32 parsing or RainMaker cloud update; hardware logs are required to locate any remaining fault beyond PB10.

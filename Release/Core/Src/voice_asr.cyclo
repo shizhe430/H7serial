@@ -1,0 +1,3 @@
+../Core/Src/voice_asr.c:31:6:WriteOneByte	1
+../Core/Src/voice_asr.c:39:6:Asr_Speak	2
+../Core/Src/voice_asr.c:54:5:Asr_Result	2

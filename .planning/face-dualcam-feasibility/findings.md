@@ -1,0 +1,23 @@
+# Findings
+
+- Current branch: codex/timed-demo-backup; remote branch is at commit 40723a4.
+- Working firmware changes include ESP32 TX retries/logging, standby fingerprint polling, half-cup timeout fallback, updated 400 ml flow calibration, and PB5 tank-level input configuration.
+- The current macro had been left in APP_MODE_XCAM_VIEW after diagnostics; the formal snapshot must use APP_MODE_PUMP_CTRL.
+- Referenced CSDN article uses two OV7670 modules sharing one DCMI bus and GPIO-controlled PWDN selection. It is a topology reference, not an OV2640-qualified design.
+- Official OV2640 datasheet: PWDN is active high; RESETB is active low. The datasheet does not explicitly guarantee that all DVP outputs become high impedance in hardware power-down, so directly tying two output buses is not production-safe without validation or a bus mux.
+- STM32H743 has one DCMI instance. Two parallel cameras can only be selected in time; simultaneous capture is unavailable.
+- Current map: .ai_ram_d1 is 0x3f980 bytes (water AI plus JPEG decode), DCMI JPEG DMA buffer is 0x10000 bytes, and no FMC/SDRAM peripheral is enabled in the current .ioc.
+- Removing AS608 frees PA2/PA3 and PE6, enough for a second camera reset/power-down and a mux-select signal, subject to board routing.
+- The safest workflow is state-based switching inside the existing five-second command window: water camera detects stable cup, face camera captures a short burst and latches an ID, water camera is restored and cup presence is revalidated before pumping.
+- Face recognition remains optional identity enrichment. Unknown/failed recognition must stay id=0 and must never disable dispensing.
+- A scalable implementation needs face detection/alignment plus an embedding model and similarity database; a fixed-user classifier is simpler but requires retraining for every added user.
+- Selected video topology: three 4-channel 2:1 3.3 V high-speed multiplexers cover D0-D7, PCLK, VSYNC, and HREF. Only the selected camera reaches the existing H743 DCMI pins.
+- Selected controls: camera 1 SCCB PB4/PB3, camera 2 SCCB PA2/PA3, mux select PE6, camera 1 PWDN PA0, camera 2 PWDN PA8, shared RESETB PA15.
+- Both sensors remain initialized and streaming. Firmware stops DCMI/DMA, switches the mux, discards transient frames, then resumes capture. PWDN is for startup/recovery, not normal frame-by-frame switching.
+- Face inference belongs before dispensing. Automatic/voice use the existing five-second window; mechanical starts after a bounded pre-dispense identity attempt, falling back to id=0.
+- Water and face networks must execute sequentially and share an activation arena sized to max(water, face), not the sum.
+- A public MobileFaceNet ONNX (1x3x112x112 to 128-D embedding) was accepted by X-CUBE-AI 10.2 with all operators supported.
+- Its FP32 footprint is not deployable on H743: 3.78 MiB weights, 1.59 MiB activations, 239.7 MMACC. It needs INT8 quantization and possibly a narrower model.
+- Open-source embedding avoids identity-model retraining, but each user still needs several enrollment frames to create an averaged feature template. Public face images can supply PTQ calibration data.
+- ST Model Zoo YuNet 320x320 is not an H743 candidate as published because its documented internal RAM footprint is about 1.1 MiB.
+- Temporary direct-parallel control allocation: camera 1 PWDN PA0, camera 2 PWDN PA8, camera 1 SCCB PB4/PB3, camera 2 SCCB PA2/PA3, camera 2 RESETB PE6. DVP buses are shared only during the prototype.

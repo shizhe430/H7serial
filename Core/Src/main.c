@@ -178,6 +178,7 @@ int main(void)
   MX_USART2_UART_Init();
   MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET);
 #if (APP_MODE == APP_MODE_PUMP_CTRL)
   OLED_Status_Init();
 #endif

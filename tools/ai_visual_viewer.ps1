@@ -15,6 +15,8 @@ $script:SerialPort = $null
 $script:LastFrameTick = $null
 $script:LastFrameId = $null
 $script:DisplayFps = 0.0
+$script:TotalBytesReceived = 0L
+$script:LastTextLog = ""
 $script:LastDiag = ""
 $script:LastFailedJpegPath = Join-Path $env:TEMP "h7_ai_visual_last_fail.jpg"
 $script:CurrentFrame = $null
@@ -58,6 +60,25 @@ function Get-VisualLogit {
 function Format-HexBytes {
     param([byte[]]$Bytes)
     return (($Bytes | ForEach-Object { $_.ToString("X2") }) -join ' ')
+}
+
+function Append-TextDiagnostic {
+    param([byte[]]$Bytes)
+
+    if (($null -eq $Bytes) -or ($Bytes.Length -eq 0)) {
+        return
+    }
+
+    $text = [System.Text.Encoding]::ASCII.GetString($Bytes)
+    $text = [System.Text.RegularExpressions.Regex]::Replace(
+        $text,
+        '[^\x09\x0A\x0D\x20-\x7E]',
+        '.'
+    )
+    $script:LastTextLog += $text
+    if ($script:LastTextLog.Length -gt 4000) {
+        $script:LastTextLog = $script:LastTextLog.Substring($script:LastTextLog.Length - 4000)
+    }
 }
 
 function To-SafeText {
@@ -215,6 +236,9 @@ function Save-FrameArtifacts {
             infer_ms     = $Frame.InferMs
             frame_id     = $Frame.FrameId
             logits       = $Frame.Logits
+            input_min    = $Frame.InputMin
+            input_max    = $Frame.InputMax
+            input_mean   = $Frame.InputMean
             jpeg_size    = $Frame.JpegLen
         }
         $meta | ConvertTo-Json -Depth 3 | Set-Content -Path $jsonPath -Encoding UTF8
@@ -250,12 +274,15 @@ function Try-ExtractFrame {
     $magicIndex = Find-MagicIndex -Buffer $script:Buffer
     if ($magicIndex -lt 0) {
         if ($script:Buffer.Count -gt 3) {
-            $script:Buffer.RemoveRange(0, $script:Buffer.Count - 3)
+            $discardCount = $script:Buffer.Count - 3
+            Append-TextDiagnostic -Bytes $script:Buffer.GetRange(0, $discardCount).ToArray()
+            $script:Buffer.RemoveRange(0, $discardCount)
         }
         return $null
     }
 
     if ($magicIndex -gt 0) {
+        Append-TextDiagnostic -Bytes $script:Buffer.GetRange(0, $magicIndex).ToArray()
         $script:Buffer.RemoveRange(0, $magicIndex)
     }
 
@@ -269,7 +296,7 @@ function Try-ExtractFrame {
         return $null
     }
     $jpegLen = [int](Get-LeUInt32 -Buffer $header -Offset 16)
-    if (($jpegLen -le 0) -or ($jpegLen -gt 65535)) {
+    if (($jpegLen -le 0) -or ($jpegLen -gt 524288)) {
         $script:Buffer.RemoveAt(0)
         return $null
     }
@@ -302,6 +329,7 @@ function Try-ExtractFrame {
         Version      = [int]$header[4]
         ClassId      = [int]$header[5]
         RawClassId   = [int]$header[6]
+        InputHash    = [int]$header[7]
         Confidence   = (Get-LeUInt16 -Buffer $header -Offset 8) / 1000.0
         Regression   = (Get-LeUInt16 -Buffer $header -Offset 10) / 1000.0
         PipelineMs   = [int](Get-LeUInt16 -Buffer $header -Offset 12)
@@ -315,6 +343,10 @@ function Try-ExtractFrame {
             (Get-VisualLogit -Value $header[27]),
             (Get-VisualLogit -Value $header[28])
         )
+        InputMin     = ([int]$header[29] - 128)
+        InputMax     = ([int]$header[30] - 128)
+        InputMean    = ([int]$header[31] - 128)
+        HasInputStats = (($header[29] -ne 0) -or ($header[30] -ne 0) -or ($header[31] -ne 0))
         ClassName    = Get-ClassName -ClassId ([int]$header[5])
         JpegHead     = if ($jpegLen -ge 4) { Format-HexBytes -Bytes $jpeg[0..3] } else { "" }
         JpegTail     = if ($jpegLen -ge 2) { Format-HexBytes -Bytes $jpeg[($jpegLen - 2)..($jpegLen - 1)] } else { "" }
@@ -366,9 +398,11 @@ function Connect-Serial {
     try {
         $script:SerialPort = New-Object System.IO.Ports.SerialPort($comboPorts.SelectedItem, $Baud, [System.IO.Ports.Parity]::None, 8, [System.IO.Ports.StopBits]::One)
         $script:SerialPort.ReadTimeout = 20
-        $script:SerialPort.ReadBufferSize = 262144
+        $script:SerialPort.ReadBufferSize = 1048576
         $script:SerialPort.Open()
         $script:Buffer.Clear()
+        $script:TotalBytesReceived = 0L
+        $script:LastTextLog = ""
         $script:LastFrameTick = $null
         $script:LastFrameId = $null
         $script:DisplayFps = 0.0
@@ -422,8 +456,12 @@ function Update-Viewer {
         $labelInfer.Text = "Infer: $($Frame.InferMs) ms"
         $labelFps.Text = ("FPS: {0:F1}" -f $script:DisplayFps)
         $labelFrame.Text = "Frame ID: $($Frame.FrameId)"
-        $labelJpeg.Text = "JPEG size: $($Frame.JpegLen) bytes"
-        $labelLogits.Text = "Logits: $($Frame.Logits -join ', ')"
+        $labelJpeg.Text = "JPEG: ${sourceWidth}x${sourceHeight}, $($Frame.JpegLen) bytes"
+        if ($Frame.HasInputStats) {
+            $labelLogits.Text = "Logits: $($Frame.Logits -join ', ')`r`nInput q: min=$($Frame.InputMin) max=$($Frame.InputMax) mean=$($Frame.InputMean) hash=$($Frame.InputHash)"
+        } else {
+            $labelLogits.Text = "Logits: $($Frame.Logits -join ', ')"
+        }
         $progressConfidence.Value = [Math]::Max(0, [Math]::Min(1000, [int]($Frame.Confidence * 1000.0)))
         $progressWater.Value = [Math]::Max(0, [Math]::Min(1000, [int]($Frame.Regression * 1000.0)))
 
@@ -760,7 +798,7 @@ $labelSaveCount.Text = "Photos: 0"
 $panelRight.Controls.Add($labelSaveCount)
 
 $timer = New-Object System.Windows.Forms.Timer
-$timer.Interval = 150
+$timer.Interval = 30
 $timer.Add_Tick({
     if (($script:SerialPort -eq $null) -or (-not $script:SerialPort.IsOpen)) {
         return
@@ -772,6 +810,7 @@ $timer.Add_Tick({
             $chunk = New-Object byte[] $available
             $count = $script:SerialPort.Read($chunk, 0, $available)
             if ($count -gt 0) {
+                $script:TotalBytesReceived += $count
                 if ($count -eq $chunk.Length) {
                     $script:Buffer.AddRange($chunk)
                 } else {
@@ -815,6 +854,10 @@ $timer.Add_Tick({
                 Save-FrameArtifacts -Frame $latestFrame
             }
             $textDiag.Text = "len=$($latestFrame.JpegLen)`r`nhead=$($latestFrame.JpegHead)`r`ntail=$($latestFrame.JpegTail)`r`nend=$($latestFrame.TailMagic)`r`nfail=$([Environment]::NewLine)$script:LastFailedJpegPath"
+        } else {
+            $textDiag.Text = "rx=$script:TotalBytesReceived bytes`r`nbuffer=$($script:Buffer.Count) bytes`r`nwaiting for AIV1 frame`r`n--- device output ---`r`n$script:LastTextLog"
+            $textDiag.SelectionStart = $textDiag.TextLength
+            $textDiag.ScrollToCaret()
         }
     } catch {
         Disconnect-Serial

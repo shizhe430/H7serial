@@ -1,0 +1,17 @@
+../Core/Src/camera_app.c:1786:13:camera_app_finger_log	2
+../Core/Src/camera_app.c:1690:13:camera_app_oled_refresh_stub	9
+../Core/Src/camera_app.c:2085:13:camera_app_pump_ctrl_apply_state	10
+../Core/Src/camera_app.c:709:16:camera_app_capture_jpeg_snapshot	14
+../Core/Src/camera_app.c:1897:16:camera_app_finger_try_connect.isra	3
+../Core/Src/camera_app.c:1850:13:camera_app_pump_ctrl_report_session_to_esp32	6
+../Core/Src/camera_app.c:466:16:camera_app_recover_camera	23
+../Core/Src/camera_app.c:2205:13:camera_app_pump_ctrl_start_manual_cold	4
+../Core/Src/camera_app.c:2170:13:camera_app_pump_ctrl_return_to_standby	5
+../Core/Src/camera_app.c:2182:13:camera_app_pump_ctrl_fault_to_standby	5
+../Core/Src/camera_app.c:2597:13:camera_app_pump_ctrl_decode_fail	2
+../Core/Src/camera_app.c:1594:5:AI_GetState	1
+../Core/Src/camera_app.c:2902:6:HAL_DCMI_FrameEventCallback	1
+../Core/Src/camera_app.c:2908:6:HAL_DCMI_ErrorCallback	1
+../Core/Src/camera_app.c:2915:6:CameraApp_SignalFrameDone	1
+../Core/Src/camera_app.c:2920:6:CameraApp_Init	29
+../Core/Src/camera_app.c:3144:6:CameraApp_Run	152

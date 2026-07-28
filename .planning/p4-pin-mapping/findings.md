@@ -1,0 +1,22 @@
+# Findings: P4 引脚映射
+
+- 资料目录包含 `DNESP32P4硬件参考手册_V1.0.pdf`、`3，原理图.zip`、两份硬件资料 ZIP、ESP32-P4 参考资料和开发指南。
+- 程序源码 ZIP 尚在下载，不影响硬件映射阶段。
+- `3，原理图.zip` 内含：小系统板原理图、尺寸图、小系统板 IO 分配 XLSX、底板原理图和底板 IO 分配 XLSX。
+- 硬件手册确认小系统板尺寸 68x33 mm，采用两组 1x25 板对板接口，引出 48 个 IO。
+- 小系统板配置：ESP32-P4NRW32、32 MB PSRAM、16 MB W25Q128 Flash。
+- 小系统板板载 MIPI-CSI/DSI、TF 卡、USB Slave/JTAG、UART 下载、LED/BOOT/RESET；这些连接会占用或约束部分 GPIO，必须以随包 IO 表为准。
+- 小系统板本身不集成 C6，符合外置 C6 走 UART 的现有架构。
+- `openpyxl` 初始缺失，已安装 3.1.5。
+- 小系统板 P1/P2 视觉核对：P1-1..25 依次为 GPIO37、38、2..22、32、33；P2 含 5V/GND、GPIO53、52、24、25、31、29、28、27、26、30、35、36、45、46、47、48、50、49、51、23、RESET、USB_DM、USB_DP。
+- 可安全优先分配的独立 GPIO：2-23、26-31、36、46-50；GPIO53 在不用 DSI/LCD 时也独立。
+- 应保留/避免：GPIO24/25(USB JTAG)、GPIO35(BOOT)、GPIO37/38(UART0 调试)、GPIO39-44(TF/SDIO)、GPIO51(板载 LED)、GPIO52(LCD_RST)、专用 USB_DM/DP、Flash 和 MIPI 专用脚。
+- GPIO32/33 为板载 I2C，并连接 MIPI 接口侧电平转换；可用于外置 3.3V I2C 语音模块，但应检查并联上拉强度。
+- 乐鑫官方 `esp-video-components` 明确支持 ESP32-P4 DVP 自定义引脚和 OV2640，仓库包含 320x240 JPEG 等配置。
+- 官方 P4 DVP 示例将 XCLK/PCLK/VSYNC/DE/D0-D7/SCCB/RESET/PWDN 全部配置为普通 GPIO，证明不要求固定 DVP 引脚组。
+- 当前 STM32 工程未输出 OV2640 XCLK，映射表也没有 XCLK；推断现用摄像头模块自带时钟，但新底板应预留可选 XCLK。
+- 最终分配：DVP D0-D7=GPIO2-9，PCLK=10，VSYNC=11，HREF/DE=12，可选XCLK=13，SCCB=14/15，RESET=16，PWDN=17，补光=18。
+- OLED 使用 GPIO26-30；DS18B20=31；语音I2C=32/33；泵PWM=36；AS608=46/47/48；外置C6 UART=49/50。
+- 40条主信号无重复GPIO、无重复P1/P2针位；34条已确认，6条条件确认。
+- 电源与C6对端连接另列，不把5V/GND/供电信号误作GPIO映射。
+- Excel打印预览的主映射、资源审计、DVP说明、电源和依据页均无截断或重叠。

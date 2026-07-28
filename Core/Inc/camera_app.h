@@ -14,8 +14,9 @@ extern "C" {
 #define APP_MODE_JPEG_DIAG  4U
 #define APP_MODE_COLORBAR_VIEW 5U
 #define APP_MODE_AI_VISUAL  6U
+#define APP_MODE_DUAL_CAMERA_DIAG 7U
 #ifndef APP_MODE
-#define APP_MODE  APP_MODE_PUMP_CTRL
+#define APP_MODE  APP_MODE_AI_VISUAL
 #endif
 
 /* Camera-independent fallback used only by the timed demonstration branch. */

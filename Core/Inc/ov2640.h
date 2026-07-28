@@ -17,6 +17,9 @@ extern "C" {
 #define OV2640_REG_ID_PIDH   0x0AU
 #define OV2640_REG_ID_PIDL   0x0BU
 
+#define OV2640_CAMERA_WATER  0U
+#define OV2640_CAMERA_FACE   1U
+
 typedef enum
 {
     OV2640_LIGHT_MODE_AUTO = 0x00,
@@ -66,13 +69,17 @@ typedef enum
 } ov2640_special_effect_t;
 uint8_t OV2640_Init(void);
 uint8_t OV2640_IsReady(void);
+uint8_t OV2640_SelectCamera(uint8_t camera_id);
+uint8_t OV2640_GetSelectedCamera(void);
 uint8_t OV2640_ProbeID(uint16_t *mid, uint16_t *pid);
+uint8_t OV2640_ProbeCamera(uint8_t camera_id, uint16_t *mid, uint16_t *pid);
 uint8_t OV2640_Probe(uint16_t *mid, uint16_t *pid);  /* 仅上电+复位+SCCB+读ID */
 uint8_t OV2640_SetLightMode(ov2640_light_mode_t mode);
 uint8_t OV2640_SetColorSaturation(ov2640_color_saturation_t saturation);
 uint8_t OV2640_SetBrightness(ov2640_brightness_t brightness);
 uint8_t OV2640_SetContrast(ov2640_contrast_t contrast);
 uint8_t OV2640_SetSpecialEffect(ov2640_special_effect_t effect);
+uint8_t OV2640_LockAutoExposureGain(void);
 uint8_t OV2640_SetOutputFormatJPEG(void);
 uint8_t OV2640_SetOutputFormatRGB565(void);
 uint8_t OV2640_SetOutputSize(uint16_t width, uint16_t height);

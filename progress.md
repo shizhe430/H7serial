@@ -1,0 +1,48 @@
+# Progress
+
+## 2026-07-16
+- Verified PB10 physical output using a temporary 500 ms GPIO toggle test.
+- Verified ESP32-C6 receives STM32 USART3 data.
+- Started model stability and formal workflow recovery.
+- Read the persistent-planning and surgical-debugging instructions.
+- Confirmed there is no Git snapshot for the reported Wednesday 23:16 stable state.
+- Identified active AI visual mode and duplicate ESP32 self-tests as formal-mode cleanup items.
+- Began checking current generated model I/O metadata and camera pipeline against references.
+- Verified all hard-coded model quantization/dequantization constants against the generated X-CUBE-AI report.
+- Verified board-style class thresholds and branch order against `evaluate_onnx_sets.py`.
+- Verified geometry/mask ordering against `preprocess_v3.py`; documented the custom CLAHE/OpenCV mismatch.
+- Compared DCMI GPIO/DMA settings with the July 5 and July 10 stable Git baselines.
+- Audited linker map and MPU placement; ruled out buffer overlap and JPEG DMA cacheability as causes.
+- Located CubeIDE local-history snapshots for precise per-save comparisons.
+- Diffed the current controller against the earliest local-history snapshot; isolated ESP32 diagnostics as the only new per-frame path.
+- Ran the current ONNX on 150 images using both PC preprocessing and an exact simulation of MCU preprocessing.
+- Ruled out preprocessing mismatch as the cause of all-class random jumps, while confirming a smaller half-to-low degradation.
+- Restored `APP_MODE_PUMP_CTRL` and disabled duplicate ESP32 self-test traffic plus the PB10 boot GPIO test.
+- Aligned active JPEG preprocessing with OpenCV; offline half classification recovered from 27/30 to 30/30.
+- Updated stable cup detection to tolerate low/half/full jitter while still requiring three consecutive cup frames.
+- Added three-frame half/full class target stops at regression boundaries 0.395 and 0.665.
+- Forced a full Release rebuild of all generated model, HAL, driver, and application objects successfully.
+- Flash attempt could not start because the target board was unpowered (`0.00 V`).
+- Rebuilt after the target-stop and stable-cup changes; final ELF size is 314732 bytes text, 19232 bytes data, and 356868 bytes BSS.
+- Inspected final ELF strings to confirm formal pump mode and absence of diagnostic hello traffic.
+- Began AI visual lag investigation after the user switched back to visual mode.
+- Identified per-byte PowerShell serial buffering and UI-based FPS calculation as concrete viewer bottlenecks.
+- Replaced per-byte buffering with native `AddRange`, enlarged the serial buffer to 256 KiB, and changed FPS calculation to use frame-ID deltas.
+- Corrected viewer logit decoding to reverse the firmware's visual-byte encoding.
+- Validated the patched PowerShell parser and restarted the viewer on COM16 with the optimized script.
+- Measured the restarted viewer at nearly one full CPU core, confirming remaining lag is still PC-side.
+- Read live viewer controls through UI Automation and confirmed frames continue at about 4.7 FPS despite the 0.0 FPS label.
+- Replaced unsupported `TickCount64` timing with `Stopwatch` timestamps and reduced serial/UI polling from 30 ms to 80 ms.
+- Added automatic serial connection on viewer startup after the requested port is selected.
+- Added fixed-size CLAHE interpolation maps so OpenCV-aligned preprocessing no longer performs tile division and branching for every pixel.
+- Built, flashed, and verified the optimized AI visual firmware; pipeline recovered to 168 ms and live FPS to 3.8-4.8.
+- Verified classification stability over 20 live samples: all remained low/raw1 with continuous frame IDs and no cross-class jumping.
+- Investigated a reported pump no-rotation condition without changing the formal workflow. Confirmed the current ELF is PUMP_CTRL and fast mode drives PH6 directly high; prepared loaded-voltage checks to distinguish firmware, MOSFET, supply, wiring, and pump faults.
+- Committed and pushed the verified pump workflow as `2b995ea` before changing ESP32 session reporting.
+- Integrated one-shot fingerprint ID and volume reporting into all pump completion paths and rebuilt Release successfully.
+- Attempted to flash the integration ELF, but ST-Link reported 1.15 V target voltage and no core ID; no flash operation occurred.
+- Fixed the pre-dispense voice interruption by separating silent wait cancellation from real dispensing faults and gating pump start on stable cup presence.
+- Rebuilt Release successfully; hardware flashing was unavailable because ST-Link reported 0.00 V target voltage.
+- Analyzed the attached 13:31 log and identified `decode_err/JDR_FMT1` as the actual source of the pre-dispense abort announcement.
+- Limited capture/decode/inference fault announcements to periods when the pump is physically running, then rebuilt Release successfully.
+- Identified likely ESP32/shared-rail power instability from repeated JPEG corruption, fingerprint link failure, ST-Link voltage loss, and an MCU reset not requested by firmware.

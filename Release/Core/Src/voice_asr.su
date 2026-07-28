@@ -1,0 +1,3 @@
+../Core/Src/voice_asr.c:31:6:WriteOneByte	32	static
+../Core/Src/voice_asr.c:39:6:Asr_Speak	32	static
+../Core/Src/voice_asr.c:54:5:Asr_Result	32	static
