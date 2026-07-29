@@ -29,3 +29,5 @@
 - Firmware switch implementation now has a common `camera_app_switch_camera_for_capture()` path. It stops DCMI, selects the target camera through OV2640 PWDN control, reinitializes the current DCMI profile, clears JPEG/frame state, reattaches the JPEG buffer, and logs `[CAM] switch ...`.
 - The pre-dispense identity hook is placed after `cup_stable` voice announcement and before decision-window timing is calculated. This prevents the optional face-camera capture from shortening the user's voice-command window.
 - `CAMERA_FACE_IDENTITY_ENABLE` remains `0U` by default. Enabling it currently performs a bounded face-camera JPEG validation and latches placeholder `id=0`; it is not real recognition yet.
+- `APP_MODE_FACE_DIAG` is the standalone face-camera test mode. It selects `OV2640_CAMERA_FACE`, initializes JPEG capture, and prints `[FACE_DIAG] cam=1 frame=... jpeg=... fps=... valid=1`; it does not initialize the pump, water-level AI, fingerprint module, or ESP32 reporting.
+- To test face camera on the breadboard, temporarily set `APP_MODE` to `APP_MODE_FACE_DIAG`, build, burn, and check the serial log. After testing, set it back to `APP_MODE_PUMP_CTRL`.

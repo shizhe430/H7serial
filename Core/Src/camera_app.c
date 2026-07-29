@@ -285,6 +285,9 @@ static void camera_app_esp32_link_selftest_poll(void);
 static uint8_t camera_app_dual_prepare_camera(uint8_t camera_id, uint16_t *mid, uint16_t *pid);
 static void camera_app_dual_camera_run(void);
 #endif
+#if (APP_MODE == APP_MODE_FACE_DIAG)
+static void camera_app_face_diag_run(void);
+#endif
 #if (APP_MODE == APP_MODE_PUMP_CTRL)
 static void camera_app_pump_ctrl_apply_state(uint8_t state);
 static void camera_app_pump_ctrl_set_work_state(uint8_t next_state, const char *reason);
@@ -3861,6 +3864,64 @@ static void camera_app_dual_camera_run(void)
 }
 #endif
 
+#if (APP_MODE == APP_MODE_FACE_DIAG)
+static void camera_app_face_diag_run(void)
+{
+    static uint32_t s_frame_id = 0U;
+    static uint32_t s_last_log_ms = 0U;
+    uint32_t now_ms = HAL_GetTick();
+    uint32_t jpeg_off = 0U;
+    uint32_t jpeg_len = 0U;
+    uint8_t status;
+    char msg[128];
+    int len;
+
+    status = camera_app_capture_jpeg_snapshot(1500U, &jpeg_off, &jpeg_len);
+    if ((status != 0U) || (camera_app_validate_jpeg_frame(jpeg_off, jpeg_len) != 0U))
+    {
+        g_camera_bad_frame_count++;
+        len = snprintf(msg, sizeof(msg),
+                       "[FACE_DIAG] capture fail cam=%u status=%u bad=%lu\r\n",
+                       (unsigned)OV2640_GetSelectedCamera(),
+                       (unsigned)status,
+                       (unsigned long)g_camera_bad_frame_count);
+        camera_app_text_tx(msg, (uint16_t)len);
+
+        if (g_camera_bad_frame_count >= CAMERA_BAD_FRAME_THRESHOLD)
+        {
+            (void)camera_app_recover_camera("face_diag");
+        }
+        HAL_Delay(100U);
+        return;
+    }
+
+    g_camera_bad_frame_count = 0U;
+    s_frame_id++;
+
+    if ((now_ms - s_last_log_ms) >= 500U)
+    {
+        uint32_t fps_x10 = 0U;
+
+        if (s_last_log_ms != 0U)
+        {
+            uint32_t dt = now_ms - s_last_log_ms;
+            fps_x10 = (dt != 0U) ? (10000U / dt) : 0U;
+        }
+
+        len = snprintf(msg, sizeof(msg),
+                       "[FACE_DIAG] cam=%u frame=%lu jpeg=%lu off=%lu fps=%lu.%lu valid=1\r\n",
+                       (unsigned)OV2640_GetSelectedCamera(),
+                       (unsigned long)s_frame_id,
+                       (unsigned long)jpeg_len,
+                       (unsigned long)jpeg_off,
+                       (unsigned long)(fps_x10 / 10U),
+                       (unsigned long)(fps_x10 % 10U));
+        camera_app_text_tx(msg, (uint16_t)len);
+        s_last_log_ms = now_ms;
+    }
+}
+#endif
+
 void HAL_DCMI_FrameEventCallback(DCMI_HandleTypeDef *hdcmi_ptr)
 {
     (void)hdcmi_ptr;
@@ -3902,6 +3963,9 @@ void CameraApp_Init(void)
 #elif (APP_MODE == APP_MODE_DUAL_CAMERA_DIAG)
     camera_app_log("[APP] CameraApp_Init enter\r\n");
     camera_app_log("[APP] mode=DUAL_CAMERA_DIAG\r\n");
+#elif (APP_MODE == APP_MODE_FACE_DIAG)
+    camera_app_log("[APP] CameraApp_Init enter\r\n");
+    camera_app_log("[APP] mode=FACE_DIAG\r\n");
 #elif (APP_MODE == APP_MODE_PUMP_CTRL)
     camera_app_log("[APP] CameraApp_Init enter\r\n");
     camera_app_log("[APP] mode=PUMP_CTRL\r\n");
@@ -4177,6 +4241,18 @@ void CameraApp_Run(void)
     if (g_camera_ready != 0U)
     {
         camera_app_dual_camera_run();
+    }
+    else
+    {
+        HAL_Delay(100U);
+    }
+    return;
+#endif
+
+#if (APP_MODE == APP_MODE_FACE_DIAG)
+    if (g_camera_ready != 0U)
+    {
+        camera_app_face_diag_run();
     }
     else
     {

@@ -16,3 +16,5 @@
 - 2026-07-29: Restored default firmware mode to APP_MODE_PUMP_CTRL with the water camera selected.
 - 2026-07-29: Added common camera switching/recovery code and a macro-gated pre-dispense face identity placeholder.
 - 2026-07-29: Release build passed with CAMERA_FACE_IDENTITY_ENABLE=0. Size: text 317692, data 19232, bss 358564.
+- 2026-07-29: Committed and pushed the dual camera switch scaffold as 72a4330.
+- 2026-07-29: Added APP_MODE_FACE_DIAG for breadboard-only face-camera validation. FACE_DIAG build passed, then default APP_MODE was restored to PUMP_CTRL and rebuilt successfully.

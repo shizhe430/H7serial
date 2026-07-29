@@ -21,6 +21,7 @@ Preserve the completed drinking-machine firmware and replace AS608 with H743-exe
 - [complete] Validate the second camera image path: fixed face camera view shows a clear live image.
 - [complete] Add shared camera switching/recovery code for water camera and face camera.
 - [in_progress] Add a pre-dispense face identity stub: switch cam0 -> cam1 -> latch id or 0 -> switch cam1 -> cam0.
+- [in_progress] Add a standalone face-camera diagnostic mode that does not touch pump or water-level inference.
 - [pending] Collect face-camera samples from the mounted position.
 - [pending] Train/analyze a constrained INT8 face model that fits internal Flash/RAM.
 - [pending] Replace the stub with real face inference and template matching/classification.
