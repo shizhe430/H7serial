@@ -3869,6 +3869,7 @@ static void camera_app_face_diag_run(void)
 {
     static uint32_t s_frame_id = 0U;
     static uint32_t s_last_log_ms = 0U;
+    static uint32_t s_last_log_frame_id = 0U;
     uint32_t now_ms = HAL_GetTick();
     uint32_t jpeg_off = 0U;
     uint32_t jpeg_len = 0U;
@@ -3905,7 +3906,8 @@ static void camera_app_face_diag_run(void)
         if (s_last_log_ms != 0U)
         {
             uint32_t dt = now_ms - s_last_log_ms;
-            fps_x10 = (dt != 0U) ? (10000U / dt) : 0U;
+            uint32_t df = s_frame_id - s_last_log_frame_id;
+            fps_x10 = (dt != 0U) ? ((df * 10000U) / dt) : 0U;
         }
 
         len = snprintf(msg, sizeof(msg),
@@ -3918,6 +3920,7 @@ static void camera_app_face_diag_run(void)
                        (unsigned long)(fps_x10 % 10U));
         camera_app_text_tx(msg, (uint16_t)len);
         s_last_log_ms = now_ms;
+        s_last_log_frame_id = s_frame_id;
     }
 }
 #endif
