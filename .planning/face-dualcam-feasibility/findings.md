@@ -21,3 +21,11 @@
 - Open-source embedding avoids identity-model retraining, but each user still needs several enrollment frames to create an averaged feature template. Public face images can supply PTQ calibration data.
 - ST Model Zoo YuNet 320x320 is not an H743 candidate as published because its documented internal RAM footprint is about 1.1 MiB.
 - Temporary direct-parallel control allocation: camera 1 PWDN PA0, camera 2 PWDN PA8, camera 1 SCCB PB4/PB3, camera 2 SCCB PA2/PA3, camera 2 RESETB PE6. DVP buses are shared only during the prototype.
+- 2026-07-29 direct-parallel validation: cam0 and cam1 both read MID/PID 0x7FA2/0x2642 and both repeatedly produce valid JPEG frames.
+- 2026-07-29 face-camera view validation: fixed cam1 XCAM_VIEW shows a clear image, proving the second OV2640 optical path is usable.
+- Actual prototype wiring uses shared RESETB PA15 and shared SCCB PB4/PB3 with only PWDN separated; this is acceptable for the temporary direct-parallel test because exactly one sensor is released at a time.
+- Current generated water model footprint is weights 182,008 B and activations 167,280 B; X-CUBE-AI report total is about Flash 259,020 B and RAM 187,088 B for the model/runtime.
+- Internal Flash remains sufficient for a second small INT8 face model, but internal RAM requires a shared activation arena and a constrained face model. Large MobileFaceNet/YuNet-style models still require reduction or external memory.
+- Firmware switch implementation now has a common `camera_app_switch_camera_for_capture()` path. It stops DCMI, selects the target camera through OV2640 PWDN control, reinitializes the current DCMI profile, clears JPEG/frame state, reattaches the JPEG buffer, and logs `[CAM] switch ...`.
+- The pre-dispense identity hook is placed after `cup_stable` voice announcement and before decision-window timing is calculated. This prevents the optional face-camera capture from shortening the user's voice-command window.
+- `CAMERA_FACE_IDENTITY_ENABLE` remains `0U` by default. Enabling it currently performs a bounded face-camera JPEG validation and latches placeholder `id=0`; it is not real recognition yet.

@@ -16,7 +16,15 @@ extern "C" {
 #define APP_MODE_AI_VISUAL  6U
 #define APP_MODE_DUAL_CAMERA_DIAG 7U
 #ifndef APP_MODE
-#define APP_MODE  APP_MODE_AI_VISUAL
+#define APP_MODE  APP_MODE_PUMP_CTRL
+#endif
+
+#ifndef CAMERA_APP_ACTIVE_CAMERA
+#define CAMERA_APP_ACTIVE_CAMERA OV2640_CAMERA_WATER
+#endif
+
+#ifndef CAMERA_FACE_IDENTITY_ENABLE
+#define CAMERA_FACE_IDENTITY_ENABLE 0U
 #endif
 
 /* Camera-independent fallback used only by the timed demonstration branch. */

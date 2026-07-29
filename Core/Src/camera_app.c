@@ -277,6 +277,7 @@ static const camera_dcmi_profile_t k_camera_dcmi_profiles[] = {
 static uint8_t camera_app_capture_jpeg_snapshot(uint32_t timeout_ms, uint32_t *jpeg_off, uint32_t *jpeg_len);
 static uint8_t camera_app_validate_jpeg_frame(uint32_t jpeg_off, uint32_t jpeg_len);
 static uint8_t camera_app_startup_validate(const char *reason);
+static uint8_t camera_app_switch_camera_for_capture(uint8_t camera_id, const char *reason);
 static void camera_app_camera_auto_ctrl_reset(void);
 static void camera_app_camera_auto_ctrl_note_good_frame(void);
 static void camera_app_esp32_link_selftest_poll(void);
@@ -290,6 +291,7 @@ static void camera_app_pump_ctrl_set_work_state(uint8_t next_state, const char *
 static void camera_app_pump_ctrl_return_to_standby(const char *reason);
 static void camera_app_pump_ctrl_start_manual_cold(const char *reason);
 static uint8_t camera_app_pump_ctrl_session_active(void);
+static void camera_app_face_identity_try_once(const char *reason);
 static void camera_app_esp32_log(const char *fmt, ...);
 static void camera_app_esp32_init(void);
 static void camera_app_esp32_rx_start(void);
@@ -519,6 +521,49 @@ static uint8_t camera_app_reinit_dcmi_profile(uint32_t profile_idx)
                                   k_camera_dcmi_profiles[profile_idx].vs,
                                   k_camera_dcmi_profiles[profile_idx].hs,
                                   k_camera_dcmi_profiles[profile_idx].jpeg_mode);
+}
+
+static uint8_t camera_app_switch_camera_for_capture(uint8_t camera_id, const char *reason)
+{
+    char buf[96];
+    int len;
+
+    g_camera_ready = 0U;
+    g_frame_done = 0U;
+    g_frame_error = 0U;
+    g_camera_bad_frame_count = 0U;
+    camera_app_camera_auto_ctrl_reset();
+
+    (void)HAL_DCMI_Stop(&hdcmi);
+
+    if (OV2640_SelectCamera(camera_id) != OV2640_OK)
+    {
+        len = snprintf(buf, sizeof(buf),
+                       "[CAM] switch fail cam=%u reason=%s step=select\r\n",
+                       (unsigned)camera_id, (reason != NULL) ? reason : "unknown");
+        camera_app_text_tx(buf, (uint16_t)len);
+        return 1U;
+    }
+
+    if (camera_app_reinit_dcmi_profile(g_camera_dcmi_profile_idx) != 0U)
+    {
+        len = snprintf(buf, sizeof(buf),
+                       "[CAM] switch fail cam=%u reason=%s step=dcmi\r\n",
+                       (unsigned)camera_id, (reason != NULL) ? reason : "unknown");
+        camera_app_text_tx(buf, (uint16_t)len);
+        return 2U;
+    }
+
+    JPEG_Stream_Init();
+    OV2640_AttachFrameBuffer(JPEG_Stream_GetBuf(), JPEG_Stream_GetMaxSize());
+    HAL_NVIC_SetPriority(DCMI_IRQn, 5, 0);
+    HAL_NVIC_EnableIRQ(DCMI_IRQn);
+
+    len = snprintf(buf, sizeof(buf),
+                   "[CAM] switch ok cam=%u reason=%s\r\n",
+                   (unsigned)camera_id, (reason != NULL) ? reason : "unknown");
+    camera_app_text_tx(buf, (uint16_t)len);
+    return 0U;
 }
 
 static void camera_app_camera_auto_ctrl_reset(void)
@@ -2042,6 +2087,63 @@ static void camera_app_pump_ctrl_reset_fingerprint_session(void)
     g_pump_ctrl.esp32_done_reported = 0U;
 }
 
+static void camera_app_face_identity_try_once(const char *reason)
+{
+#if (CAMERA_FACE_IDENTITY_ENABLE != 0U)
+    uint32_t jpeg_off = 0U;
+    uint32_t jpeg_len = 0U;
+    uint8_t status = 0U;
+
+    if (g_pump_ctrl.fingerprint_session_locked != 0U)
+    {
+        return;
+    }
+
+    status = camera_app_switch_camera_for_capture(OV2640_CAMERA_FACE, reason);
+    if (status == 0U)
+    {
+        status = OV2640_Init();
+    }
+    if (status == OV2640_OK)
+    {
+        status = OV2640_SetOutputFormatJPEG();
+    }
+    if (status == OV2640_OK)
+    {
+        status = OV2640_SetOutputSize(CAMERA_WIDTH, CAMERA_HEIGHT);
+    }
+    if (status == OV2640_OK)
+    {
+        HAL_Delay(150U);
+        status = camera_app_capture_jpeg_snapshot(1200U, &jpeg_off, &jpeg_len);
+    }
+    if ((status == 0U) && (camera_app_validate_jpeg_frame(jpeg_off, jpeg_len) == 0U))
+    {
+        g_pump_ctrl.session_user_id = 0U;
+        g_pump_ctrl.fingerprint_session_locked = 1U;
+        camera_app_log("[FACE] placeholder id=0\r\n");
+    }
+    else
+    {
+        camera_app_log("[FACE] placeholder fail id=0\r\n");
+    }
+
+    if (camera_app_switch_camera_for_capture(OV2640_CAMERA_WATER, "face_return") == 0U)
+    {
+        if ((OV2640_Init() == OV2640_OK) &&
+            (OV2640_SetOutputFormatJPEG() == OV2640_OK) &&
+            (OV2640_SetOutputSize(CAMERA_WIDTH, CAMERA_HEIGHT) == OV2640_OK))
+        {
+            HAL_Delay(150U);
+            g_camera_ready = 1U;
+            g_camera_recover_warmup_frames = CAMERA_RECOVER_WARMUP_FRAMES;
+        }
+    }
+#else
+    (void)reason;
+#endif
+}
+
 static uint8_t camera_app_finger_try_connect(void)
 {
     AS608_SysPara sys_para = {0};
@@ -2611,6 +2713,7 @@ static void camera_app_pump_ctrl_enter_decision_window(uint32_t now_ms)
     g_pump_ctrl.voice_command_armed = 0U;
     camera_app_pump_ctrl_set_work_state(CAMERA_WORK_STATE_DECISION_WINDOW, "cup_stable");
     Asr_Speak(ASR_ANNOUNCER, ASR_SPEAK_CUP_DETECTED);
+    camera_app_face_identity_try_once("cup_stable");
     now_ms = HAL_GetTick();
     g_pump_ctrl.voice_accept_after_ms = now_ms + PUMP_VOICE_PROMPT_GUARD_MS;
     g_pump_ctrl.decision_deadline_ms = g_pump_ctrl.voice_accept_after_ms + PUMP_DECISION_WINDOW_MS;
@@ -3811,6 +3914,14 @@ void CameraApp_Init(void)
     {
         static const char msg[] = "[JPEG] diag mode on\r\n";
         camera_app_text_tx(msg, (uint16_t)(sizeof(msg) - 1U));
+    }
+#endif
+
+#if (APP_MODE != APP_MODE_DUAL_CAMERA_DIAG)
+    if (camera_app_switch_camera_for_capture(CAMERA_APP_ACTIVE_CAMERA, "init") != 0U)
+    {
+        camera_app_log("[APP] camera select fail\r\n");
+        return;
     }
 #endif
 
