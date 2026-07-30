@@ -1,0 +1,411 @@
+
+[13:31:05.191]收←◆[APP] recover ok mid=0x7FA2 pid=0x2642 try=2 cfg=RLL_JE
+
+[13:31:05.465]收←◆[PUMP] warmup_skip cls=1 left=1
+
+[13:31:05.667]收←◆[PUMP] warmup_skip cls=1 left=0
+
+[13:31:05.865]收←◆[PUMP] cls=1 raw_cls=1 conf=95.3% reg=0.387 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=21 actions=0
+
+[13:31:06.068]收←◆[PUMP] cls=1 raw_cls=1 conf=96.8% reg=0.276 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=22 actions=0
+
+[13:31:06.267]收←◆[PUMP] cls=1 raw_cls=1 conf=91.9% reg=0.252 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=23 actions=0
+
+[13:31:06.465]收←◆[PUMP] cls=1 raw_cls=1 conf=93.9% reg=0.244 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=24 actions=0
+
+[13:31:06.664]收←◆[PUMP] cls=1 raw_cls=1 conf=73.3% reg=0.328 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=25 actions=0
+
+[13:31:06.868]收←◆[PUMP] cls=1 raw_cls=1 conf=94.7% reg=0.260 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=26 actions=0
+
+[13:31:07.064]收←◆[PUMP] cls=1 raw_cls=1 conf=90.7% reg=0.252 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=27 actions=0
+
+[13:31:07.266]收←◆[PUMP] cls=1 raw_cls=1 conf=93.0% reg=0.252 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=28 actions=0
+
+[13:31:07.466]收←◆[PUMP] cls=1 raw_cls=1 conf=95.1% reg=0.236 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=29 actions=0
+
+[13:31:07.665]收←◆[PUMP] cls=1 raw_cls=1 conf=95.1% reg=0.268 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=30 actions=0
+
+[13:31:07.865]收←◆[PUMP] cls=1 raw_cls=1 conf=93.9% reg=0.260 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=31 actions=0
+
+[13:31:08.065]收←◆[PUMP] cls=1 raw_cls=1 conf=93.5% reg=0.244 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=32 actions=0
+
+[13:31:08.265]收←◆[PUMP] cls=1 raw_cls=1 conf=90.7% reg=0.260 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=33 actions=0
+
+[13:31:08.465]收←◆[PUMP] cls=1 raw_cls=1 conf=95.1% reg=0.260 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=34 actions=0
+
+[13:31:08.665]收←◆[PUMP] cls=1 raw_cls=1 conf=95.7% reg=0.236 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=35 actions=0
+
+[13:31:08.782]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=10257 head=FF D8 FF E0
+
+[13:31:09.065]收←◆[PUMP] cls=1 raw_cls=1 conf=94.7% reg=0.244 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=36 actions=0
+
+[13:31:09.265]收←◆[PUMP] cls=1 raw_cls=1 conf=92.5% reg=0.252 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=37 actions=0
+
+[13:31:09.465]收←◆[PUMP] cls=1 raw_cls=1 conf=93.9% reg=0.244 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=38 actions=0
+
+[13:31:09.664]收←◆[PUMP] cls=1 raw_cls=1 conf=87.9% reg=0.260 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=39 actions=0
+
+[13:31:09.864]收←◆[PUMP] cls=1 raw_cls=1 conf=90.1% reg=0.244 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=40 actions=0
+
+[13:31:09.982]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=9884 head=FF D8 FF E0
+
+[13:31:10.264]收←◆[PUMP] cls=1 raw_cls=1 conf=90.0% reg=0.260 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=41 actions=0
+
+[13:31:10.463]收←◆[PUMP] cls=1 raw_cls=1 conf=90.1% reg=0.244 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=42 actions=0
+
+[13:31:10.664]收←◆[PUMP] cls=1 raw_cls=1 conf=95.1% reg=0.227 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=43 actions=0
+
+[13:31:10.864]收←◆[PUMP] cls=1 raw_cls=1 conf=82.0% reg=0.357 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=44 actions=0
+
+[13:31:11.063]收←◆[PUMP] cls=1 raw_cls=1 conf=93.5% reg=0.252 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=45 actions=0
+
+[13:31:11.264]收←◆[PUMP] cls=1 raw_cls=1 conf=92.4% reg=0.200 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=46 actions=0
+
+[13:31:11.463]收←◆[PUMP] cls=1 raw_cls=1 conf=90.7% reg=0.252 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=47 actions=0
+
+[13:31:11.664]收←◆[PUMP] cls=1 raw_cls=1 conf=95.1% reg=0.252 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=48 actions=0
+
+[13:31:11.862]收←◆[PUMP] cls=1 raw_cls=1 conf=83.4% reg=0.276 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=49 actions=0
+
+[13:31:12.061]收←◆[PUMP] cls=1 raw_cls=1 conf=70.4% reg=0.301 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=50 actions=0
+
+[13:31:12.182]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=10047 head=FF D8 FF E0
+
+[13:31:12.463]收←◆[PUMP] cls=1 raw_cls=1 conf=79.8% reg=0.236 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=51 actions=0
+
+[13:31:12.662]收←◆[PUMP] cls=0 raw_cls=0 conf=99.7% reg=0.043 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=52 actions=0
+
+[13:31:12.862]收←◆[PUMP] cls=1 raw_cls=1 conf=85.1% reg=0.284 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=53 actions=0
+
+[13:31:13.062]收←◆[PUMP] cls=1 raw_cls=1 conf=81.0% reg=0.276 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=54 actions=0
+
+[13:31:13.263]收←◆[PUMP] cls=1 raw_cls=1 conf=94.3% reg=0.260 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=55 actions=0
+
+[13:31:13.382]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=11326 head=FF D8 FF E0
+
+[13:31:13.664]收←◆[PUMP] cls=1 raw_cls=1 conf=80.0% reg=0.100 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=56 actions=0
+
+[13:31:13.863]收←◆[PUMP] cls=1 raw_cls=1 conf=64.0% reg=0.097 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=57 actions=0
+
+[13:31:14.063]收←◆[PUMP] cls=1 raw_cls=1 conf=49.8% reg=0.097 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=58 actions=0
+
+[13:31:14.182]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=12508 head=FF D8 FF E0
+
+[13:31:14.380]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=13142 head=FF D8 FF E0
+[APP] recover start reason=pump_decode
+
+[13:31:19.051]收←◆[BUILD] Release Oopt Jul 17 2026 13:30:27
+
+[BOOT] main enter
+[BOOT] stage=camera_init_enter
+[APP] CameraApp_Init enter
+[APP] mode=PUMP_CTRL
+[APP] pump init ok
+
+[13:31:20.584]收←◆[FINGER] connect fail code=0xFF wak=1
+
+[13:31:21.270]收←◆[APP] probe ok mid=0x7FA2 pid=0x2642
+
+[13:31:21.688]收←◆[APP] ov init ok
+[APP] jpeg fmt ok
+[APP] size ok
+
+[13:31:23.396]收←◆[APP] jpeg fmt ok
+[APP] ai init ok
+[APP] CameraApp_Init done
+[BOOT] stage=camera_init_exit
+[BOOT] camera init return
+
+[13:31:23.479]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=10550 head=FF D8 FF E0
+
+[13:31:23.679]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=10684 head=FF D8 FF E0
+[APP] recover start reason=pump_decode
+
+[13:31:25.053]收←◆[APP] recover ok mid=0x7FA2 pid=0x2642 try=1 cfg=RLL_JE
+
+[13:31:25.247]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=10190 head=FF D8 FF E0
+
+[13:31:25.529]收←◆[PUMP] warmup_skip cls=1 left=1
+
+[13:31:25.647]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=10578 head=FF D8 FF E0
+
+[13:31:25.848]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=10146 head=FF D8 FF E0
+[APP] recover start reason=pump_decode
+
+[13:31:28.619]收←◆[APP] recover ok mid=0x7FA2 pid=0x2642 try=2 cfg=RLL_JE
+
+[13:31:28.894]收←◆[PUMP] warmup_skip cls=1 left=1
+
+[13:31:29.016]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=10080 head=FF D8 FF E0
+
+[13:31:29.294]收←◆[PUMP] warmup_skip cls=4 left=0
+
+[13:31:29.413]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=9868 head=FF D8 FF E0
+
+[13:31:29.694]收←◆[PUMP] cls=1 raw_cls=1 conf=91.9% reg=0.227 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=4 actions=0
+
+[13:31:29.813]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=10211 head=FF D8 FF E0
+
+[13:31:30.094]收←◆[PUMP] cls=1 raw_cls=1 conf=91.1% reg=0.152 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=5 actions=0
+
+[13:31:30.293]收←◆[PUMP] wf standby -> wait_cmd reason=cup_stable
+[PUMP] cls=1 raw_cls=1 conf=60.7% reg=0.135 wf=wait_cmd target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=6 actions=0
+
+[13:31:30.414]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=11062 head=FF D8 FF E0
+
+[13:31:30.435]收←◆[PUMP] wf wait_cmd -> fault reason=decode_err
+[PUMP] wf fault -> standby reason=ready
+
+[13:31:30.693]收←◆[PUMP] cls=1 raw_cls=1 conf=93.0% reg=0.276 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=7 actions=0
+
+[13:31:30.813]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=10028 head=FF D8 FF E0
+
+[13:31:31.094]收←◆[PUMP] cls=1 raw_cls=1 conf=78.6% reg=0.268 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=8 actions=0
+
+[13:31:31.292]收←◆[PUMP] cls=1 raw_cls=1 conf=65.3% reg=0.301 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=9 actions=0
+
+[13:31:31.493]收←◆[PUMP] cls=1 raw_cls=1 conf=84.0% reg=0.284 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=10 actions=0
+
+[13:31:31.612]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=10030 head=FF D8 FF E0
+
+[13:31:31.894]收←◆[PUMP] cls=2 raw_cls=2 conf=57.2% reg=0.490 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=11 actions=0
+
+[13:31:32.012]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=9837 head=FF D8 FF E0
+
+[13:31:32.212]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=9837 head=FF D8 FF E0
+[APP] recover start reason=pump_decode
+
+[13:31:33.585]收←◆[APP] recover ok mid=0x7FA2 pid=0x2642 try=1 cfg=RLL_JE
+
+[13:31:33.860]收←◆[PUMP] warmup_skip cls=1 left=1
+
+[13:31:34.060]收←◆[PUMP] warmup_skip cls=1 left=0
+
+[13:31:34.261]收←◆[PUMP] cls=1 raw_cls=1 conf=61.0% reg=0.260 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=14 actions=0
+
+[13:31:34.458]收←◆[PUMP] cls=1 raw_cls=1 conf=49.8% reg=0.244 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=15 actions=0
+
+[13:31:34.661]收←◆[PUMP] cls=1 raw_cls=1 conf=68.1% reg=0.152 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=16 actions=0
+
+[13:31:34.860]收←◆[PUMP] cls=1 raw_cls=1 conf=89.9% reg=0.209 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=17 actions=0
+
+[13:31:35.059]收←◆[PUMP] cls=1 raw_cls=1 conf=87.7% reg=0.227 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=18 actions=0
+
+[13:31:35.260]收←◆[PUMP] cls=1 raw_cls=1 conf=65.2% reg=0.260 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=19 actions=0
+
+[13:31:35.379]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=9709 head=FF D8 FF E0
+
+[13:31:35.660]收←◆[PUMP] cls=1 raw_cls=1 conf=87.1% reg=0.252 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=20 actions=0
+
+[13:31:35.860]收←◆[PUMP] cls=1 raw_cls=1 conf=68.3% reg=0.328 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=21 actions=0
+
+[13:31:36.061]收←◆[PUMP] cls=1 raw_cls=1 conf=89.2% reg=0.292 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=22 actions=0
+
+[13:31:36.260]收←◆[PUMP] cls=1 raw_cls=1 conf=85.1% reg=0.157 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=23 actions=0
+
+[13:31:36.459]收←◆[PUMP] cls=1 raw_cls=1 conf=60.5% reg=0.311 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=24 actions=0
+
+[13:31:36.577]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=9673 head=FF D8 FF E0
+
+[13:31:36.778]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=10045 head=FF D8 FF E0
+[APP] recover start reason=pump_decode
+
+[13:31:38.151]收←◆[APP] recover ok mid=0x7FA2 pid=0x2642 try=1 cfg=RLL_JE
+
+[13:31:38.427]收←◆[PUMP] warmup_skip cls=1 left=1
+
+[13:31:38.626]收←◆[PUMP] warmup_skip cls=1 left=0
+
+[13:31:38.826]收←◆[PUMP] cls=4 raw_cls=4 conf=99.0% reg=0.016 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=27 actions=0
+
+[13:31:39.026]收←◆[PUMP] cls=4 raw_cls=4 conf=66.4% reg=0.089 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=28 actions=0
+
+[13:31:39.226]收←◆[PUMP] cls=1 raw_cls=2 conf=75.5% reg=0.252 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=29 actions=0
+
+[13:31:39.425]收←◆[PUMP] cls=1 raw_cls=1 conf=89.8% reg=0.195 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=30 actions=0
+
+[13:31:39.626]收←◆[PUMP] cls=1 raw_cls=1 conf=36.7% reg=0.135 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=31 actions=0
+
+[13:31:39.826]收←◆[PUMP] cls=4 raw_cls=4 conf=41.6% reg=0.133 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=32 actions=0
+
+[13:31:39.945]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=9757 head=FF D8 FF E0
+
+[13:31:40.226]收←◆[PUMP] cls=1 raw_cls=1 conf=56.9% reg=0.222 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=33 actions=0
+
+[13:31:40.345]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=10258 head=FF D8 FF E0
+
+[13:31:40.545]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=10309 head=FF D8 FF E0
+[APP] recover start reason=pump_decode
+
+[13:31:41.919]收←◆[APP] recover ok mid=0x7FA2 pid=0x2642 try=1 cfg=RLL_JE
+
+[13:31:42.194]收←◆[PUMP] warmup_skip cls=4 left=1
+
+[13:31:42.394]收←◆[PUMP] warmup_skip cls=1 left=0
+
+[13:31:42.593]收←◆[PUMP] cls=1 raw_cls=1 conf=72.6% reg=0.187 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=36 actions=0
+
+[13:31:42.793]收←◆[PUMP] cls=1 raw_cls=1 conf=87.5% reg=0.244 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=37 actions=0
+
+[13:31:42.912]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=10409 head=FF D8 FF E0
+
+[13:31:43.112]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=10315 head=FF D8 FF E0
+[APP] recover start reason=pump_decode
+
+[13:31:44.483]收←◆[APP] recover ok mid=0x7FA2 pid=0x2642 try=1 cfg=RLL_JE
+
+[13:31:44.679]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=10041 head=FF D8 FF E0
+
+[13:31:44.960]收←◆[PUMP] warmup_skip cls=4 left=1
+
+[13:31:45.158]收←◆[PUMP] warmup_skip cls=2 left=0
+
+[13:31:45.278]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=10021 head=FF D8 FF E0
+
+[13:31:45.560]收←◆[PUMP] cls=1 raw_cls=2 conf=57.0% reg=0.301 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=40 actions=0
+
+[13:31:45.679]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=10489 head=FF D8 FF E0
+
+[13:31:45.960]收←◆[PUMP] cls=2 raw_cls=2 conf=82.5% reg=0.520 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=41 actions=0
+
+[13:31:46.160]收←◆[PUMP] cls=1 raw_cls=1 conf=68.2% reg=0.284 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=42 actions=0
+
+[13:31:46.279]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=9797 head=FF D8 FF E0
+
+[13:31:46.559]收←◆[PUMP] cls=1 raw_cls=1 conf=88.5% reg=0.276 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=43 actions=0
+
+[13:31:46.679]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=10525 head=FF D8 FF E0
+
+[13:31:46.879]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=10346 head=FF D8 FF E0
+[APP] recover start reason=pump_decode
+
+[13:31:51.088]收←◆[APP] recover ok mid=0x7FA2 pid=0x2642 try=1 cfg=RLL_JD
+
+[13:31:51.364]收←◆[PUMP] warmup_skip cls=1 left=1
+
+[13:31:51.564]收←◆[PUMP] warmup_skip cls=1 left=0
+
+[13:31:51.682]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=10231 head=FF D8 FF E0
+
+[13:31:51.882]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=9910 head=FF D8 FF E0
+[APP] recover start reason=pump_decode
+
+[13:31:53.255]收←◆[APP] recover ok mid=0x7FA2 pid=0x2642 try=1 cfg=RLL_JD
+
+[13:31:53.449]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=9976 head=FF D8 FF E0
+
+[13:31:53.649]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=10067 head=FF D8 FF E0
+[APP] recover start reason=pump_decode
+
+[13:31:55.023]收←◆[APP] recover ok mid=0x7FA2 pid=0x2642 try=1 cfg=RLL_JD
+
+[13:31:55.299]收←◆[PUMP] warmup_skip cls=4 left=1
+
+[13:31:55.499]收←◆[PUMP] warmup_skip cls=1 left=0
+
+[13:31:55.618]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=10346 head=FF D8 FF E0
+
+[13:31:55.898]收←◆[PUMP] cls=1 raw_cls=1 conf=75.8% reg=0.276 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=48 actions=0
+
+[13:31:56.099]收←◆[PUMP] cls=1 raw_cls=1 conf=86.8% reg=0.260 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=49 actions=0
+
+[13:31:56.299]收←◆[PUMP] cls=1 raw_cls=1 conf=93.0% reg=0.284 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=50 actions=0
+
+[13:31:56.498]收←◆[PUMP] cls=1 raw_cls=1 conf=91.2% reg=0.252 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=51 actions=0
+
+[13:31:56.698]收←◆[PUMP] cls=1 raw_cls=1 conf=91.9% reg=0.292 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=52 actions=0
+
+[13:31:56.817]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=9660 head=FF D8 FF E0
+
+[13:31:57.098]收←◆[PUMP] cls=2 raw_cls=1 conf=53.8% reg=0.395 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=53 actions=0
+
+[13:31:57.216]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=9980 head=FF D8 FF E0
+
+[13:31:57.498]收←◆[PUMP] cls=1 raw_cls=1 conf=68.0% reg=0.376 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=54 actions=0
+
+[13:31:57.616]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=9863 head=FF D8 FF E0
+
+[13:31:57.897]收←◆[PUMP] cls=1 raw_cls=1 conf=91.9% reg=0.292 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=55 actions=0
+
+[13:31:58.096]收←◆[PUMP] cls=1 raw_cls=1 conf=83.5% reg=0.268 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=56 actions=0
+
+[13:31:58.297]收←◆[PUMP] cls=1 raw_cls=1 conf=81.7% reg=0.200 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=57 actions=0
+
+[13:31:58.496]收←◆[PUMP] cls=1 raw_cls=1 conf=85.9% reg=0.347 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=58 actions=0
+
+[13:31:58.616]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=10054 head=FF D8 FF E0
+
+[13:31:58.896]收←◆[PUMP] cls=1 raw_cls=1 conf=76.1% reg=0.284 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=59 actions=0
+
+[13:31:59.096]收←◆[PUMP] cls=1 raw_cls=1 conf=83.1% reg=0.311 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=60 actions=0
+
+[13:31:59.296]收←◆[PUMP] cls=1 raw_cls=1 conf=82.1% reg=0.376 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=61 actions=0
+
+[13:31:59.415]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=9825 head=FF D8 FF E0
+
+[13:31:59.696]收←◆[PUMP] cls=2 raw_cls=1 conf=82.8% reg=0.395 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=62 actions=0
+
+[13:31:59.815]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=9802 head=FF D8 FF E0
+
+[13:32:00.014]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=9531 head=FF D8 FF E0
+[APP] recover start reason=pump_decode
+
+[13:32:01.388]收←◆[APP] recover ok mid=0x7FA2 pid=0x2642 try=1 cfg=RLL_JD
+
+[13:32:01.664]收←◆[PUMP] warmup_skip cls=1 left=1
+
+[13:32:01.864]收←◆[PUMP] warmup_skip cls=1 left=0
+
+[13:32:02.063]收←◆[PUMP] cls=1 raw_cls=1 conf=84.6% reg=0.133 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=65 actions=0
+
+[13:32:02.263]收←◆[PUMP] cls=1 raw_cls=1 conf=78.6% reg=0.328 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=66 actions=0
+
+[13:32:02.463]收←◆[PUMP] cls=1 raw_cls=1 conf=87.9% reg=0.276 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=67 actions=0
+
+[13:32:02.663]收←◆[PUMP] cls=1 raw_cls=1 conf=94.7% reg=0.260 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=68 actions=0
+
+[13:32:02.863]收←◆[PUMP] cls=1 raw_cls=1 conf=81.1% reg=0.227 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=69 actions=0
+
+[13:32:03.063]收←◆[PUMP] cls=1 raw_cls=1 conf=70.2% reg=0.347 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=70 actions=0
+
+[13:32:03.262]收←◆[PUMP] cls=1 raw_cls=1 conf=73.1% reg=0.376 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=71 actions=0
+
+[13:32:03.381]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=10029 head=FF D8 FF E0
+
+[13:32:03.662]收←◆[PUMP] cls=1 raw_cls=1 conf=89.9% reg=0.301 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=72 actions=0
+
+[13:32:03.781]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=9903 head=FF D8 FF E0
+
+[13:32:04.061]收←◆[PUMP] cls=1 raw_cls=1 conf=89.0% reg=0.168 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=73 actions=0
+
+[13:32:04.181]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=9677 head=FF D8 FF E0
+
+[13:32:04.386]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=9908 head=FF D8 FF E0
+[APP] recover start reason=pump_decode
+
+[13:32:05.753]收←◆[APP] recover ok mid=0x7FA2 pid=0x2642 try=1 cfg=RLL_JD
+
+[13:32:06.032]收←◆[PUMP] warmup_skip cls=2 left=1
+
+[13:32:06.232]收←◆[PUMP] warmup_skip cls=1 left=0
+
+[13:32:06.432]收←◆[PUMP] cls=4 raw_cls=4 conf=82.0% reg=0.065 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=76 actions=0
+
+[13:32:06.631]收←◆[PUMP] cls=1 raw_cls=1 conf=82.5% reg=0.079 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=77 actions=0
+
+[13:32:06.831]收←◆[PUMP] cls=4 raw_cls=4 conf=64.5% reg=0.468 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=78 actions=0
+
+[13:32:07.030]收←◆[PUMP] cls=1 raw_cls=1 conf=51.6% reg=0.168 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=79 actions=0
+
+[13:32:07.234]收←◆[PUMP] cls=1 raw_cls=1 conf=80.6% reg=0.146 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=80 actions=0
+
+[13:32:07.431]收←◆[PUMP] cls=1 raw_cls=1 conf=64.9% reg=0.114 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=81 actions=0
+
+[13:32:07.549]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=12935 head=FF D8 FF E0
+
+[13:32:07.831]收←◆[PUMP] cls=2 raw_cls=1 conf=91.9% reg=0.479 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 frames=82 actions=0
+
+[13:32:07.949]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=12800 head=FF D8 FF E0
+
+[13:32:08.149]收←◆[PUMP] decode_err prep=0 decomp=6 wh=320x240 jpeg=12961 head=FF D8 FF E0
+[APP] recover start reason=pump_decode

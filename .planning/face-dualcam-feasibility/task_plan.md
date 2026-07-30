@@ -24,6 +24,10 @@ Preserve the completed drinking-machine firmware and replace AS608 with H743-exe
 - [in_progress] Add a standalone face-camera diagnostic mode that does not touch pump or water-level inference.
 - [pending] Collect face-camera samples from the mounted position.
 - [pending] Train/analyze a constrained INT8 face model that fits internal Flash/RAM.
+- [in_progress] Enable final external SDRAM and QSPI Flash configuration in CubeMX, then add firmware self-tests. QSPI JEDEC ID passes; SDRAM firmware/timing and LCD loading are excluded, so diagnosis has moved to isolating the NAND shared D6 path and the SDRAM/core-board hardware.
+- [complete] Burn ALIENTEK experiment 14's original `Template.hex`, verify SDRAM on the same board, restore the drinking-machine ELF, then use the result to isolate firmware versus board behavior.
+- [complete] Run a controlled 50 MHz SDRAM diagnostic with the official 400 MHz CPU clock, physical cache roundtrip, and corrected refresh count.
+- [pending] Migrate final-board pins: tank input PI1, pump PWM PI0, I2C4 SDA PH12, and remove PF6/PF7 GPIO use before QSPI.
 - [pending] Replace the stub with real face inference and template matching/classification.
 - [pending] Integrate pre-dispense identity state with automatic, voice, and mechanical modes.
 - [pending] Run dual-camera endurance and complete workflow regression tests.
@@ -42,3 +46,6 @@ Preserve the completed drinking-machine firmware and replace AS608 with H743-exe
 ## Errors
 - planning-with-files session-catchup script was absent at the documented path; continued with direct Git inspection.
 - GitHub HTTPS push failed three times due TCP timeout/reset. SSH ports are reachable but no GitHub SSH public key is configured.
+- CubeProgrammer direct `-r32` access to FMC SDRAM failed; used the ST-LINK GDB server and CPU-side SRAM probe instead.
+- The first GDB-server launch split the CubeProgrammer path at spaces; switched to CubeIDE's no-space bundled tool path.
+- The first hardware-breakpoint attempt to change PG9 before the SDRAM test did not hit and timed out; terminated GDB/server, reset the MCU, and used a temporary source-gated single-variable build instead.

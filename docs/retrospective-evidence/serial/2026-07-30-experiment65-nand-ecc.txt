@@ -1,0 +1,736 @@
+
+[19:17:14.130]收←◆ LCD ID:5510
+
+[19:17:14.345]收←◆CTP ID:911
+
+[19:17:15.771]收←◆bad block index:3844
+bad block index:3880
+bad block index:3942
+bad block index:3958
+bad block index:3986
+bad block index:4002
+bad block index:4016
+bad block index:4022
+bad block index:4040
+bad block index:4042
+bad block index:4064
+bad block index:4066
+bad block index:4072
+bad block index:4076
+bad block index:4078
+bad block index:4080
+bad block index:4082
+bad block index:4084
+bad block index:4088
+bad block index:4090
+bad block index:4092
+total block num:4096
+good block num:4075
+valid block num:2052
+err hd,rd:0x55a55569,0xffff3
+eccnum,eccstart:1,0
+PageNum,ColNum:49536,0
+errorpos:4091
+err hd,rd:0x55a55569,0xffff3
+eccnum,eccstart:1,0
+PageNum,ColNum:49536,0
+errorpos:4091
+
+[19:17:15.936]收←◆err hd,rd:0x55a95556,0x5556a296
+eccnum,eccstart:1,3
+PageNum,ColNum:259727,1536
+2bit ecc error or more
+err hd,rd:0x55a95556,0x5556a296
+eccnum,eccstart:1,3
+PageNum,ColNum:259727,1536
+2bit ecc error or more
+2bit ecc error or more
+
+[19:17:17.580]收←◆bad block index:3844
+bad block index:3880
+bad block index:3942
+bad block index:3958
+bad block index:3986
+bad block index:4002
+bad block index:4016
+bad block index:4022
+bad block index:4040
+bad block index:4042
+bad block index:4064
+bad block index:4066
+bad block index:4072
+bad block index:4076
+bad block index:4078
+bad block index:4080
+bad block index:4082
+bad block index:4084
+bad block index:4088
+bad block index:4090
+bad block index:4092
+total block num:4096
+good block num:4075
+valid block num:2052
+err hd,rd:0x55a55569,0xffff3
+eccnum,eccstart:1,0
+PageNum,ColNum:259712,0
+errorpos:4091
+err hd,rd:0x55a55569,0xffff3
+eccnum,eccstart:1,0
+PageNum,ColNum:259712,0
+errorpos:4091
+
+[19:17:17.747]收←◆err hd,rd:0x55a95556,0x5556a296
+eccnum,eccstart:1,3
+PageNum,ColNum:258191,1536
+2bit ecc error or more
+err hd,rd:0x55a95556,0x5556a296
+eccnum,eccstart:1,3
+PageNum,ColNum:258191,1536
+2bit ecc error or more
+2bit ecc error or more
+
+[19:17:18.376]收←◆bad block index:3844
+bad block index:3880
+bad block index:3942
+bad block index:3958
+bad block index:3986
+bad block index:4002
+bad block index:4016
+bad block index:4022
+bad block index:4040
+bad block index:4042
+bad block index:4064
+bad block index:4066
+bad block index:4072
+bad block index:4076
+bad block index:4078
+bad block index:4080
+bad block index:4082
+bad block index:4084
+bad block index:4088
+bad block index:4090
+bad block index:4092
+total block num:4096
+good block num:4075
+valid block num:2052
+err hd,rd:0x55a55569,0xffff3
+eccnum,eccstart:1,0
+PageNum,ColNum:258176,0
+errorpos:4091
+err hd,rd:0x55a55569,0xffff3
+eccnum,eccstart:1,0
+PageNum,ColNum:258176,0
+errorpos:4091
+
+[19:17:18.607]收←◆err hd,rd:0x55a95556,0x5556a296
+eccnum,eccstart:1,3
+PageNum,ColNum:51215,1536
+2bit ecc error or more
+err hd,rd:0x55a95556,0x5556a296
+eccnum,eccstart:1,3
+PageNum,ColNum:51215,1536
+2bit ecc error or more
+2bit ecc error or more
+
+[19:17:19.236]收←◆bad block index:3844
+bad block index:3880
+bad block index:3942
+bad block index:3958
+bad block index:3986
+bad block index:4002
+bad block index:4016
+bad block index:4022
+bad block index:4040
+bad block index:4042
+bad block index:4064
+bad block index:4066
+bad block index:4072
+bad block index:4076
+bad block index:4078
+bad block index:4080
+bad block index:4082
+bad block index:4084
+bad block index:4088
+bad block index:4090
+bad block index:4092
+total block num:4096
+good block num:4075
+valid block num:2052
+err hd,rd:0x55a55569,0xffff3
+eccnum,eccstart:1,0
+PageNum,ColNum:51200,0
+errorpos:4091
+err hd,rd:0x55a55569,0xffff3
+eccnum,eccstart:1,0
+PageNum,ColNum:51200,0
+errorpos:4091
+
+[19:17:19.401]收←◆err hd,rd:0x55a95556,0x5556a296
+eccnum,eccstart:1,3
+PageNum,ColNum:51087,1536
+2bit ecc error or more
+err hd,rd:0x55a95556,0x5556a296
+eccnum,eccstart:1,3
+PageNum,ColNum:51087,1536
+2bit ecc error or more
+2bit ecc error or more
+
+[19:17:20.032]收←◆bad block index:3844
+bad block index:3880
+bad block index:3942
+bad block index:3958
+bad block index:3986
+bad block index:4002
+bad block index:4016
+bad block index:4022
+bad block index:4040
+bad block index:4042
+bad block index:4064
+bad block index:4066
+bad block index:4072
+bad block index:4076
+bad block index:4078
+bad block index:4080
+bad block index:4082
+bad block index:4084
+bad block index:4088
+bad block index:4090
+bad block index:4092
+total block num:4096
+good block num:4075
+valid block num:2052
+err hd,rd:0x55a55569,0xffff3
+eccnum,eccstart:1,0
+PageNum,ColNum:51072,0
+errorpos:4091
+err hd,rd:0x55a55569,0xffff3
+eccnum,eccstart:1,0
+PageNum,ColNum:51072,0
+errorpos:4091
+
+[19:17:20.196]收←◆err hd,rd:0x55a95556,0x5556a296
+eccnum,eccstart:1,3
+PageNum,ColNum:50959,1536
+2bit ecc error or more
+err hd,rd:0x55a95556,0x5556a296
+eccnum,eccstart:1,3
+PageNum,ColNum:50959,1536
+2bit ecc error or more
+2bit ecc error or more
+
+[19:17:20.822]收←◆bad block index:3844
+bad block index:3880
+bad block index:3942
+bad block index:3958
+bad block index:3986
+bad block index:4002
+bad block index:4016
+bad block index:4022
+bad block index:4040
+bad block index:4042
+bad block index:4064
+bad block index:4066
+bad block index:4072
+bad block index:4076
+bad block index:4078
+bad block index:4080
+bad block index:4082
+bad block index:4084
+bad block index:4088
+bad block index:4090
+bad block index:4092
+total block num:4096
+good block num:4075
+valid block num:2052
+err hd,rd:0x55a55569,0xffff3
+eccnum,eccstart:1,0
+PageNum,ColNum:50944,0
+errorpos:4091
+err hd,rd:0x55a55569,0xffff3
+eccnum,eccstart:1,0
+PageNum,ColNum:50944,0
+errorpos:4091
+
+[19:17:20.990]收←◆err hd,rd:0x55a95556,0x5556a296
+eccnum,eccstart:1,3
+PageNum,ColNum:50831,1536
+2bit ecc error or more
+err hd,rd:0x55a95556,0x5556a296
+eccnum,eccstart:1,3
+PageNum,ColNum:50831,1536
+2bit ecc error or more
+2bit ecc error or more
+
+[19:17:21.622]收←◆bad block index:3844
+bad block index:3880
+bad block index:3942
+bad block index:3958
+bad block index:3986
+bad block index:4002
+bad block index:4016
+bad block index:4022
+bad block index:4040
+bad block index:4042
+bad block index:4064
+bad block index:4066
+bad block index:4072
+bad block index:4076
+bad block index:4078
+bad block index:4080
+bad block index:4082
+bad block index:4084
+bad block index:4088
+bad block index:4090
+bad block index:4092
+total block num:4096
+good block num:4075
+valid block num:2052
+err hd,rd:0x55a55569,0xffff3
+eccnum,eccstart:1,0
+PageNum,ColNum:50816,0
+errorpos:4091
+err hd,rd:0x55a55569,0xffff3
+eccnum,eccstart:1,0
+PageNum,ColNum:50816,0
+errorpos:4091
+
+[19:17:21.785]收←◆err hd,rd:0x55a95556,0x5556a296
+eccnum,eccstart:1,3
+PageNum,ColNum:50575,1536
+2bit ecc error or more
+err hd,rd:0x55a95556,0x5556a296
+eccnum,eccstart:1,3
+PageNum,ColNum:50575,1536
+2bit ecc error or more
+2bit ecc error or more
+
+[19:17:22.416]收←◆bad block index:3844
+bad block index:3880
+bad block index:3942
+bad block index:3958
+bad block index:3986
+bad block index:4002
+bad block index:4016
+bad block index:4022
+bad block index:4040
+bad block index:4042
+bad block index:4064
+bad block index:4066
+bad block index:4072
+bad block index:4076
+bad block index:4078
+bad block index:4080
+bad block index:4082
+bad block index:4084
+bad block index:4088
+bad block index:4090
+bad block index:4092
+total block num:4096
+good block num:4075
+valid block num:2052
+err hd,rd:0x55a55569,0xffff3
+eccnum,eccstart:1,0
+PageNum,ColNum:50560,0
+errorpos:4091
+err hd,rd:0x55a55569,0xffff3
+eccnum,eccstart:1,0
+PageNum,ColNum:50560,0
+errorpos:4091
+
+[19:17:22.576]收←◆err hd,rd:0x55a95556,0x5556a296
+eccnum,eccstart:1,3
+PageNum,ColNum:50447,1536
+2bit ecc error or more
+err hd,rd:0x55a95556,0x5556a296
+eccnum,eccstart:1,3
+PageNum,ColNum:50447,1536
+2bit ecc error or more
+2bit ecc error or more
+
+[19:17:23.211]收←◆bad block index:3844
+bad block index:3880
+bad block index:3942
+bad block index:3958
+bad block index:3986
+bad block index:4002
+bad block index:4016
+bad block index:4022
+bad block index:4040
+bad block index:4042
+bad block index:4064
+bad block index:4066
+bad block index:4072
+bad block index:4076
+bad block index:4078
+bad block index:4080
+bad block index:4082
+bad block index:4084
+bad block index:4088
+bad block index:4090
+bad block index:4092
+total block num:4096
+good block num:4075
+valid block num:2052
+err hd,rd:0x55a55569,0xffff3
+eccnum,eccstart:1,0
+PageNum,ColNum:50432,0
+errorpos:4091
+err hd,rd:0x55a55569,0xffff3
+eccnum,eccstart:1,0
+PageNum,ColNum:50432,0
+errorpos:4091
+
+[19:17:23.370]收←◆err hd,rd:0x55a95556,0x5556a296
+eccnum,eccstart:1,3
+PageNum,ColNum:50319,1536
+2bit ecc error or more
+err hd,rd:0x55a95556,0x5556a296
+eccnum,eccstart:1,3
+PageNum,ColNum:50319,1536
+2bit ecc error or more
+2bit ecc error or more
+
+[19:17:24.000]收←◆bad block index:3844
+bad block index:3880
+bad block index:3942
+bad block index:3958
+
+[19:17:24.060]收←◆bad block index:3986
+bad block index:4002
+bad block index:4016
+bad block index:4022
+bad block index:4040
+bad block index:4042
+bad block index:4064
+bad block index:4066
+bad block index:4072
+bad block index:4076
+bad block index:4078
+bad block index:4080
+bad block index:4082
+bad block index:4084
+bad block index:4088
+bad block index:4090
+bad block index:4092
+total block num:4096
+good block num:4075
+valid block num:2052
+err hd,rd:0x55a55569,0xffff3
+eccnum,eccstart:1,0
+PageNum,ColNum:50304,0
+errorpos:4091
+err hd,rd:0x55a55569,0xffff3
+eccnum,eccstart:1,0
+PageNum,ColNum:50304,0
+errorpos:4091
+
+[19:17:24.169]收←◆err hd,rd:0x55a95556,0x5556a296
+eccnum,eccstart:1,3
+PageNum,ColNum:50191,1536
+2bit ecc error or more
+err hd,rd:0x55a95556,0x5556a296
+eccnum,eccstart:1,3
+PageNum,ColNum:50191,1536
+2bit ecc error or more
+2bit ecc error or more
+
+[19:17:24.800]收←◆bad block index:3844
+bad block index:3880
+bad block index:3942
+bad block index:3958
+bad block index:3986
+bad block index:4002
+bad block index:4016
+bad block index:4022
+bad block index:4040
+bad block index:4042
+bad block index:4064
+bad block index:4066
+bad block index:4072
+bad block index:4076
+bad block index:4078
+bad block index:4080
+bad block index:4082
+bad block index:4084
+bad block index:4088
+bad block index:4090
+bad block index:4092
+total block num:4096
+good block num:4075
+valid block num:2052
+err hd,rd:0x55a55569,0xffff3
+eccnum,eccstart:1,0
+PageNum,ColNum:50176,0
+errorpos:4091
+err hd,rd:0x55a55569,0xffff3
+eccnum,eccstart:1,0
+PageNum,ColNum:50176,0
+errorpos:4091
+
+[19:17:24.964]收←◆err hd,rd:0x55a95556,0x5556a296
+eccnum,eccstart:1,3
+PageNum,ColNum:50063,1536
+2bit ecc error or more
+err hd,rd:0x55a95556,0x5556a296
+eccnum,eccstart:1,3
+PageNum,ColNum:50063,1536
+2bit ecc error or more
+2bit ecc error or more
+
+[19:17:25.595]收←◆bad block index:3844
+bad block index:3880
+bad block index:3942
+bad block index:3958
+bad block index:3986
+bad block index:4002
+bad block index:4016
+bad block index:4022
+bad block index:4040
+bad block index:4042
+bad block index:4064
+bad block index:4066
+bad block index:4072
+bad block index:4076
+bad block index:4078
+bad block index:4080
+bad block index:4082
+bad block index:4084
+bad block index:4088
+bad block index:4090
+bad block index:4092
+total block num:4096
+good block num:4075
+valid block num:2052
+err hd,rd:0x55a55569,0xffff3
+eccnum,eccstart:1,0
+PageNum,ColNum:50048,0
+errorpos:4091
+err hd,rd:0x55a55569,0xffff3
+eccnum,eccstart:1,0
+PageNum,ColNum:50048,0
+errorpos:4091
+
+[19:17:25.758]收←◆err hd,rd:0x55a95556,0x5556a296
+eccnum,eccstart:1,3
+PageNum,ColNum:49935,1536
+2bit ecc error or more
+err hd,rd:0x55a95556,0x5556a296
+eccnum,eccstart:1,3
+PageNum,ColNum:49935,1536
+2bit ecc error or more
+2bit ecc error or more
+
+[19:17:26.384]收←◆bad block index:3844
+bad block index:3880
+bad block index:3942
+bad block index:3958
+bad block index:3986
+bad block index:4002
+bad block index:4016
+bad block index:4022
+bad block index:4040
+bad block index:4042
+bad block index:4064
+bad block index:4066
+bad block index:4072
+bad block index:4076
+bad block index:4078
+bad block index:4080
+bad block index:4082
+bad block index:4084
+bad block index:4088
+bad block index:4090
+bad block index:4092
+total block num:4096
+good block num:4075
+valid block num:2052
+err hd,rd:0x55a55569,0xffff3
+eccnum,eccstart:1,0
+PageNum,ColNum:49920,0
+errorpos:4091
+err hd,rd:0x55a55569,0xffff3
+eccnum,eccstart:1,0
+PageNum,ColNum:49920,0
+errorpos:4091
+
+[19:17:26.551]收←◆err hd,rd:0x55a95556,0x5556a296
+eccnum,eccstart:1,3
+PageNum,ColNum:49807,1536
+2bit ecc error or more
+err hd,rd:0x55a95556,0x5556a296
+eccnum,eccstart:1,3
+PageNum,ColNum:49807,1536
+2bit ecc error or more
+2bit ecc error or more
+
+[19:17:27.184]收←◆bad block index:3844
+bad block index:3880
+bad block index:3942
+bad block index:3958
+bad block index:3986
+bad block index:4002
+bad block index:4016
+bad block index:4022
+bad block index:4040
+bad block index:4042
+bad block index:4064
+bad block index:4066
+bad block index:4072
+bad block index:4076
+bad block index:4078
+bad block index:4080
+bad block index:4082
+bad block index:4084
+bad block index:4088
+bad block index:4090
+bad block index:4092
+total block num:4096
+good block num:4075
+valid block num:2052
+err hd,rd:0x55a55569,0xffff3
+eccnum,eccstart:1,0
+PageNum,ColNum:49792,0
+errorpos:4091
+err hd,rd:0x55a55569,0xffff3
+eccnum,eccstart:1,0
+PageNum,ColNum:49792,0
+errorpos:4091
+
+[19:17:27.347]收←◆err hd,rd:0x55a95556,0x5556a296
+eccnum,eccstart:1,3
+PageNum,ColNum:49679,1536
+2bit ecc error or more
+err hd,rd:0x55a95556,0x5556a296
+eccnum,eccstart:1,3
+PageNum,ColNum:49679,1536
+2bit ecc error or more
+2bit ecc error or more
+
+[19:17:27.978]收←◆bad block index:3844
+bad block index:3880
+bad block index:3942
+bad block index:3958
+bad block index:3986
+bad block index:4002
+bad block index:4016
+bad block index:4022
+bad block index:4040
+bad block index:4042
+bad block index:4064
+bad block index:4066
+bad block index:4072
+bad block index:4076
+bad block index:4078
+bad block index:4080
+bad block index:4082
+bad block index:4084
+bad block index:4088
+bad block index:4090
+bad block index:4092
+total block num:4096
+good block num:4075
+valid block num:2052
+err hd,rd:0x55a55569,0xffff3
+eccnum,eccstart:1,0
+PageNum,ColNum:49664,0
+errorpos:4091
+err hd,rd:0x55a55569,0xffff3
+eccnum,eccstart:1,0
+PageNum,ColNum:49664,0
+errorpos:4091
+
+[19:17:28.140]收←◆err hd,rd:0x55a95556,0x5556a296
+eccnum,eccstart:1,3
+PageNum,ColNum:49551,1536
+2bit ecc error or more
+err hd,rd:0x55a95556,0x5556a296
+eccnum,eccstart:1,3
+PageNum,ColNum:49551,1536
+2bit ecc error or more
+2bit ecc error or more
+
+[19:17:28.770]收←◆bad block index:3844
+bad block index:3880
+bad block index:3942
+bad block index:3958
+bad block index:3986
+bad block index:4002
+bad block index:4016
+bad block index:4022
+bad block index:4040
+bad block index:4042
+bad block index:4064
+bad block index:4066
+bad block index:4072
+bad block index:4076
+bad block index:4078
+bad block index:4080
+bad block index:4082
+bad block index:4084
+bad block index:4088
+bad block index:4090
+bad block index:4092
+total block num:4096
+good block num:4075
+valid block num:2052
+err hd,rd:0x55a55569,0xffff3
+eccnum,eccstart:1,0
+PageNum,ColNum:49536,0
+errorpos:4091
+err hd,rd:0x55a55569,0xffff3
+eccnum,eccstart:1,0
+PageNum,ColNum:49536,0
+errorpos:4091
+
+[19:17:28.936]收←◆err hd,rd:0x55a95556,0x5556a296
+eccnum,eccstart:1,3
+PageNum,ColNum:49423,1536
+2bit ecc error or more
+err hd,rd:0x55a95556,0x5556a296
+eccnum,eccstart:1,3
+PageNum,ColNum:49423,1536
+2bit ecc error or more
+2bit ecc error or more
+
+[19:17:29.566]收←◆bad block index:3844
+bad block index:3880
+bad block index:3942
+bad block index:3958
+bad block index:3986
+bad block index:4002
+bad block index:4016
+bad block index:4022
+bad block index:4040
+bad block index:4042
+bad block index:4064
+bad block index:4066
+bad block index:4072
+bad block index:4076
+bad block index:4078
+bad block index:4080
+bad block index:4082
+bad block index:4084
+bad block index:4088
+bad block index:4090
+bad block index:4092
+total block num:4096
+good block num:4075
+valid block num:2052
+err hd,rd:0x55a55569,0xffff3
+eccnum,eccstart:1,0
+PageNum,ColNum:49408,0
+errorpos:4091
+err hd,rd:0x55a55569,0xffff3
+eccnum,eccstart:1,0
+PageNum,ColNum:49408,0
+errorpos:4091
+
+[19:17:29.730]收←◆err hd,rd:0x55a95556,0x5556a296
+eccnum,eccstart:1,3
+PageNum,ColNum:49295,1536
+2bit ecc error or more
+err hd,rd:0x55a95556,0x5556a296
+eccnum,eccstart:1,3
+PageNum,ColNum:49295,1536
+2bit ecc error or more
+2bit ecc error or more

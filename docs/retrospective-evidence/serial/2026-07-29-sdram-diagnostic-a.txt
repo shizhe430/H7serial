@@ -1,0 +1,118 @@
+
+[15:47:18.192]收←◆[FINGER] connect fail code=0xFF wak=1
+
+[15:47:18.392]收←◆[PUMP] cls=0 raw_cls=0 conf=97.9% reg=0.003 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=5 abn=0 tgt=0 frames=33 actions=0
+
+[15:47:18.591]收←◆[PUMP] cls=0 raw_cls=0 conf=96.3% reg=0.003 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=6 abn=0 tgt=0 frames=34 actions=0
+
+[15:47:18.790]收←◆[PUMP] cls=0 raw_cls=0 conf=90.9% reg=0.003 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=7 abn=0 tgt=0 frames=35 actions=0
+
+[15:47:18.991]收←◆[PUMP] cls=0 raw_cls=0 conf=99.4% reg=0.003 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=8 abn=0 tgt=0 frames=36 actions=0
+
+[15:47:19.190]收←◆[PUMP] cls=0 raw_cls=0 conf=99.3% reg=0.003 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=9 abn=0 tgt=0 frames=37 actions=0
+
+[15:47:19.390]收←◆[PUMP] cls=0 raw_cls=0 conf=95.4% reg=0.003 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=10 abn=0 tgt=0 frames=38 actions=0
+
+[15:47:19.590]收←◆[PUMP] cls=0 raw_cls=0 conf=96.8% reg=0.003 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=11 abn=0 tgt=0 frames=39 actions=0
+
+[15:47:19.791]收←◆[PUMP] cls=0 raw_cls=0 conf=95.1% reg=0.003 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=12 abn=0 tgt=0 frames=40 actions=0
+
+[15:47:25.370]收←◆[BUILD] Release Oopt Jul 29 2026 15:46:42
+
+[BOOT] main enter
+[SDRAM] test fail code=1 base=0xC0000000 size=32MB
+[QSPI] id=EF4019 status=0
+[QSPI] sr1=00 sr2=02 sr3=60 status=0
+[QSPI] sfdp=FFFFFFFF rev=FFFF status=0
+[BOOT] stage=camera_init_enter
+[APP] CameraApp_Init enter
+[APP] mode=PUMP_CTRL
+
+[15:47:25.487]收←◆[CAM] switch ok cam=0 reason=init
+[APP] pump init ok
+
+[15:47:27.026]收←◆[FINGER] connect fail code=0xFF wak=1
+
+[15:47:27.716]收←◆[APP] probe ok mid=0x7FA2 pid=0x2642
+
+[15:47:28.133]收←◆[APP] ov init ok
+[APP] jpeg fmt ok
+[APP] size ok
+
+[15:47:29.841]收←◆[APP] jpeg fmt ok
+[APP] ai init ok
+[APP] CameraApp_Init done
+[BOOT] stage=camera_init_exit
+[BOOT] camera init return
+
+[15:47:31.374]收←◆[FINGER] connect fail code=0xFF wak=1
+
+[15:47:31.543]收←◆[PUMP] cls=4 raw_cls=4 conf=99.9% reg=0.008 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=0 abn=0 tgt=0 frames=1 actions=0
+
+[15:47:31.744]收←◆[PUMP] cls=4 raw_cls=4 conf=100.0% reg=0.003 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=0 abn=0 tgt=0 frames=2 actions=0
+
+[15:47:31.943]收←◆[PUMP] cls=4 raw_cls=4 conf=100.0% reg=0.003 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=0 abn=0 tgt=0 frames=3 actions=0
+
+[15:47:32.143]收←◆[PUMP] cls=4 raw_cls=4 conf=100.0% reg=0.005 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=0 abn=0 tgt=0 frames=4 actions=0
+
+[15:47:32.343]收←◆[PUMP] cls=4 raw_cls=4 conf=100.0% reg=0.003 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=0 abn=0 tgt=0 frames=5 actions=0
+
+[15:47:32.544]收←◆[PUMP] cls=4 raw_cls=4 conf=100.0% reg=0.003 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=0 abn=0 tgt=0 frames=6 actions=0
+
+[15:47:32.742]收←◆[PUMP] cls=4 raw_cls=4 conf=100.0% reg=0.003 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=0 abn=0 tgt=0 frames=7 actions=0
+
+[15:47:32.942]收←◆[PUMP] cls=4 raw_cls=4 conf=100.0% reg=0.003 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=0 abn=0 tgt=0 frames=8 actions=0
+
+[15:47:34.475]收←◆[FINGER] connect fail code=0xFF wak=1
+
+[15:47:34.674]收←◆[PUMP] cls=4 raw_cls=4 conf=100.0% reg=0.003 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=0 abn=0 tgt=0 frames=9 actions=0
+
+[15:47:34.874]收←◆[PUMP] cls=4 raw_cls=4 conf=99.9% reg=0.005 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=0 abn=0 tgt=0 frames=10 actions=0
+
+[15:47:35.074]收←◆[PUMP] cls=4 raw_cls=4 conf=100.0% reg=0.005 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=0 abn=0 tgt=0 frames=11 actions=0
+
+[15:47:35.274]收←◆[PUMP] cls=4 raw_cls=4 conf=100.0% reg=0.003 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=0 abn=0 tgt=0 frames=12 actions=0
+
+[15:47:35.474]收←◆[PUMP] cls=4 raw_cls=4 conf=100.0% reg=0.003 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=0 abn=0 tgt=0 frames=13 actions=0
+
+[15:47:35.674]收←◆[PUMP] cls=4 raw_cls=4 conf=100.0% reg=0.003 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=0 abn=0 tgt=0 frames=14 actions=0
+
+[15:47:35.873]收←◆[PUMP] cls=4 raw_cls=4 conf=100.0% reg=0.003 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=0 abn=0 tgt=0 frames=15 actions=0
+
+[15:47:36.072]收←◆[PUMP] cls=4 raw_cls=4 conf=100.0% reg=0.003 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=0 abn=0 tgt=0 frames=16 actions=0
+
+[15:47:37.606]收←◆[FINGER] connect fail code=0xFF wak=1
+
+[15:47:37.805]收←◆[PUMP] cls=4 raw_cls=4 conf=99.7% reg=0.005 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=0 abn=0 tgt=0 frames=17 actions=0
+
+[15:47:38.004]收←◆[PUMP] cls=4 raw_cls=4 conf=100.0% reg=0.003 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=0 abn=0 tgt=0 frames=18 actions=0
+
+[15:47:38.205]收←◆[PUMP] cls=4 raw_cls=4 conf=100.0% reg=0.003 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=0 abn=0 tgt=0 frames=19 actions=0
+
+[15:47:38.405]收←◆[PUMP] cls=4 raw_cls=4 conf=100.0% reg=0.003 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=0 abn=0 tgt=0 frames=20 actions=0
+
+[15:47:38.605]收←◆[PUMP] cls=4 raw_cls=4 conf=100.0% reg=0.003 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=0 abn=0 tgt=0 frames=21 actions=0
+
+[15:47:38.805]收←◆[PUMP] cls=4 raw_cls=4 conf=100.0% reg=0.003 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=0 abn=0 tgt=0 frames=22 actions=0
+
+[15:47:39.005]收←◆[PUMP] cls=4 raw_cls=4 conf=100.0% reg=0.003 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=0 abn=0 tgt=0 frames=23 actions=0
+
+[15:47:39.204]收←◆[PUMP] cls=4 raw_cls=4 conf=100.0% reg=0.003 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=0 abn=0 tgt=0 frames=24 actions=0
+
+[15:47:40.737]收←◆[FINGER] connect fail code=0xFF wak=1
+
+[15:47:40.937]收←◆[PUMP] cls=4 raw_cls=4 conf=100.0% reg=0.003 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=0 abn=0 tgt=0 frames=25 actions=0
+
+[15:47:41.137]收←◆[PUMP] cls=4 raw_cls=4 conf=100.0% reg=0.005 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=0 abn=0 tgt=0 frames=26 actions=0
+
+[15:47:41.336]收←◆[PUMP] cls=4 raw_cls=4 conf=100.0% reg=0.003 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=0 abn=0 tgt=0 frames=27 actions=0
+
+[15:47:41.536]收←◆[PUMP] cls=4 raw_cls=4 conf=99.4% reg=0.005 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=0 abn=0 tgt=0 frames=28 actions=0
+
+[15:47:41.736]收←◆[PUMP] cls=4 raw_cls=4 conf=99.9% reg=0.003 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=0 abn=0 tgt=0 frames=29 actions=0
+
+[15:47:41.936]收←◆[PUMP] cls=4 raw_cls=4 conf=98.3% reg=0.014 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=0 abn=0 tgt=0 frames=30 actions=0
+
+[15:47:42.136]收←◆[PUMP] cls=4 raw_cls=4 conf=100.0% reg=0.003 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=0 abn=0 tgt=0 frames=31 actions=0
+
+[15:47:42.336]收←◆[PUMP] cls=4 raw_cls=4 conf=100.0% reg=0.003 wf=standby target=none temp=cold fid=0 req=stop applied=stop duty=0 ph6=0 fill_ms=0 vol=0 lost=0 abn=0 tgt=0 frames=32 actions=0

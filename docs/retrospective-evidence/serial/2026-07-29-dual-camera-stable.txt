@@ -1,0 +1,225 @@
+[11:46:01.368]收←◆[BUILD] Release Oopt Jul 29 2026 11:45:11
+
+[BOOT] main enter
+[BOOT] stage=camera_init_enter
+[APP] CameraApp_Init enter
+[APP] mode=DUAL_CAMERA_DIAG
+
+[11:46:02.591]收←◆[DUAL] probe cam=0 status=0 mid=0x7FA2 pid=0x2642
+
+[11:46:03.817]收←◆[DUAL] probe cam=1 status=0 mid=0x7FA2 pid=0x2642
+[APP] CameraApp_Init done
+[BOOT] stage=camera_init_exit
+[BOOT] camera init return
+
+[11:46:05.276]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=14875 valid=1
+
+[11:46:06.834]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8553 valid=1
+
+[11:46:08.390]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=14838 valid=1
+
+[11:46:09.947]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8422 valid=1
+
+[11:46:11.507]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=14849 valid=1
+
+[11:46:13.063]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8422 valid=1
+
+[11:47:30.751]收←◆[BUILD] Release Oopt Jul 29 2026 11:45:11
+
+[BOOT] main enter
+[BOOT] stage=camera_init_enter
+[APP] CameraApp_Init enter
+[APP] mode=DUAL_CAMERA_DIAG
+
+[11:47:31.976]收←◆[DUAL] probe cam=0 status=0 mid=0x7FA2 pid=0x2642
+
+[11:47:33.198]收←◆[DUAL] probe cam=1 status=0 mid=0x7FA2 pid=0x2642
+[APP] CameraApp_Init done
+[BOOT] stage=camera_init_exit
+[BOOT] camera init return
+
+[11:47:34.656]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16417 valid=1
+
+[11:47:36.216]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8459 valid=1
+
+[11:47:37.774]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16420 valid=1
+
+[11:47:39.332]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8563 valid=1
+
+[11:47:40.890]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16394 valid=1
+
+[11:47:42.447]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8477 valid=1
+
+[11:47:44.005]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16440 valid=1
+
+[11:47:45.564]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8488 valid=1
+
+[11:47:47.122]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16513 valid=1
+
+[11:47:48.680]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8589 valid=1
+
+[11:47:50.236]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16489 valid=1
+
+[11:47:51.794]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8515 valid=1
+
+[11:47:53.353]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16535 valid=1
+
+[11:47:54.912]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8424 valid=1
+
+[11:47:56.469]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16516 valid=1
+
+[11:47:58.028]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8518 valid=1
+
+[11:47:59.586]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16414 valid=1
+
+[11:48:01.142]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8477 valid=1
+
+[11:48:02.699]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16521 valid=1
+
+[11:48:04.257]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8406 valid=1
+
+[11:48:05.818]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16486 valid=1
+
+[11:48:07.375]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8446 valid=1
+
+[11:48:08.934]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16408 valid=1
+
+[11:48:10.492]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8405 valid=1
+
+[11:48:12.050]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=14026 valid=1
+
+[11:48:13.607]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8466 valid=1
+
+[11:48:15.166]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16307 valid=1
+
+[11:48:16.723]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8072 valid=1
+
+[11:48:18.282]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=14097 valid=1
+
+[11:48:19.840]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8285 valid=1
+
+[11:48:21.395]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=13828 valid=1
+
+[11:48:22.956]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=7941 valid=1
+
+[11:48:24.513]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=14211 valid=1
+
+[11:48:26.072]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8017 valid=1
+
+[11:48:27.628]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16071 valid=1
+
+[11:48:29.187]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8016 valid=1
+
+[11:48:30.746]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16299 valid=1
+
+[11:48:32.304]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8020 valid=1
+
+[11:48:33.862]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16404 valid=1
+
+[11:48:35.417]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=17189 valid=1
+
+[11:48:36.976]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16495 valid=1
+
+[11:48:38.536]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8228 valid=1
+
+[11:48:40.094]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16294 valid=1
+
+[11:48:41.652]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=17335 valid=1
+
+[11:48:43.208]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16570 valid=1
+
+[11:48:44.766]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8198 valid=1
+
+[11:48:46.326]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16137 valid=1
+
+[11:48:47.883]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8288 valid=1
+
+[11:48:49.441]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16442 valid=1
+
+[11:48:51.000]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8207 valid=1
+
+[11:48:52.556]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16456 valid=1
+
+[11:48:54.116]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8367 valid=1
+
+[11:48:55.674]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16449 valid=1
+
+[11:48:57.232]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8069 valid=1
+
+[11:48:58.788]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16488 valid=1
+
+[11:49:00.347]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8124 valid=1
+
+[11:49:01.906]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16436 valid=1
+
+[11:49:03.464]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8256 valid=1
+
+[11:49:05.022]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16513 valid=1
+
+[11:49:06.580]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8698 valid=1
+
+[11:49:08.136]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16513 valid=1
+
+[11:49:09.696]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8550 valid=1
+
+[11:49:11.253]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16430 valid=1
+
+[11:49:12.812]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8562 valid=1
+
+[11:49:14.370]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16456 valid=1
+
+[11:49:15.928]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8668 valid=1
+
+[11:49:17.483]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16444 valid=1
+
+[11:49:19.042]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8490 valid=1
+
+[11:49:20.602]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16457 valid=1
+
+[11:49:22.160]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8437 valid=1
+
+[11:49:23.716]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16495 valid=1
+
+[11:49:25.276]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8686 valid=1
+
+[11:49:26.834]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16572 valid=1
+
+[11:49:28.392]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8559 valid=1
+
+[11:49:29.950]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16362 valid=1
+
+[11:49:31.506]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=17277 valid=1
+
+[11:49:33.065]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16459 valid=1
+
+[11:49:34.624]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8464 valid=1
+
+[11:49:36.182]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16533 valid=1
+
+[11:49:37.738]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8673 valid=1
+
+[11:49:39.295]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16586 valid=1
+
+[11:49:40.856]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8705 valid=1
+
+[11:49:42.413]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16292 valid=1
+
+[11:49:43.972]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8547 valid=1
+
+[11:49:45.528]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16437 valid=1
+
+[11:49:47.088]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8708 valid=1
+
+[11:49:48.645]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16442 valid=1
+
+[11:49:50.203]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8507 valid=1
+
+[11:49:51.762]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16415 valid=1
+
+[11:49:53.319]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8488 valid=1
+
+[11:49:54.878]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16486 valid=1
+
+[11:49:56.436]收←◆[DUAL] cam=1 mid=0x7FA2 pid=0x2642 jpeg=8460 valid=1
+
+[11:49:57.994]收←◆[DUAL] cam=0 mid=0x7FA2 pid=0x2642 jpeg=16480 valid=1
