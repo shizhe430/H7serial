@@ -5,17 +5,24 @@
 
 # Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS += \
+../Core/Src/as608.c \
 ../Core/Src/camera_app.c \
 ../Core/Src/dcmi.c \
 ../Core/Src/dma.c \
+../Core/Src/face_ai.c \
+../Core/Src/fmc.c \
 ../Core/Src/gpio.c \
 ../Core/Src/i2c.c \
 ../Core/Src/jpeg_decode.c \
 ../Core/Src/jpeg_stream.c \
 ../Core/Src/main.c \
+../Core/Src/oled_1.c \
+../Core/Src/oled_status.c \
+../Core/Src/oledfont.c \
 ../Core/Src/ov2640.c \
 ../Core/Src/ov2640_sccb.c \
 ../Core/Src/pump.c \
+../Core/Src/quadspi.c \
 ../Core/Src/stm32h7xx_hal_msp.c \
 ../Core/Src/stm32h7xx_it.c \
 ../Core/Src/sysmem.c \
@@ -25,17 +32,24 @@ C_SRCS += \
 ../Core/Src/voice_asr.c 
 
 OBJS += \
+./Core/Src/as608.o \
 ./Core/Src/camera_app.o \
 ./Core/Src/dcmi.o \
 ./Core/Src/dma.o \
+./Core/Src/face_ai.o \
+./Core/Src/fmc.o \
 ./Core/Src/gpio.o \
 ./Core/Src/i2c.o \
 ./Core/Src/jpeg_decode.o \
 ./Core/Src/jpeg_stream.o \
 ./Core/Src/main.o \
+./Core/Src/oled_1.o \
+./Core/Src/oled_status.o \
+./Core/Src/oledfont.o \
 ./Core/Src/ov2640.o \
 ./Core/Src/ov2640_sccb.o \
 ./Core/Src/pump.o \
+./Core/Src/quadspi.o \
 ./Core/Src/stm32h7xx_hal_msp.o \
 ./Core/Src/stm32h7xx_it.o \
 ./Core/Src/sysmem.o \
@@ -45,17 +59,24 @@ OBJS += \
 ./Core/Src/voice_asr.o 
 
 C_DEPS += \
+./Core/Src/as608.d \
 ./Core/Src/camera_app.d \
 ./Core/Src/dcmi.d \
 ./Core/Src/dma.d \
+./Core/Src/face_ai.d \
+./Core/Src/fmc.d \
 ./Core/Src/gpio.d \
 ./Core/Src/i2c.d \
 ./Core/Src/jpeg_decode.d \
 ./Core/Src/jpeg_stream.d \
 ./Core/Src/main.d \
+./Core/Src/oled_1.d \
+./Core/Src/oled_status.d \
+./Core/Src/oledfont.d \
 ./Core/Src/ov2640.d \
 ./Core/Src/ov2640_sccb.d \
 ./Core/Src/pump.d \
+./Core/Src/quadspi.d \
 ./Core/Src/stm32h7xx_hal_msp.d \
 ./Core/Src/stm32h7xx_it.d \
 ./Core/Src/sysmem.d \

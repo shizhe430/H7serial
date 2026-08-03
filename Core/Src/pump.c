@@ -10,119 +10,48 @@
 
 static uint8_t s_pump_initialized = 0U;
 static uint16_t s_pump_last_duty = 0U;
-static uint8_t s_pump_ph6_gpio_mode = 0U;
-
-static void pump_ph6_set_af_mode(void)
-{
-    GPIOH->MODER &= ~GPIO_MODER_MODE6_Msk;
-    GPIOH->MODER |= GPIO_MODER_MODE6_1;
-    GPIOH->OTYPER &= ~GPIO_OTYPER_OT6;
-    GPIOH->OSPEEDR |= GPIO_OSPEEDR_OSPEED6_Msk;
-    GPIOH->PUPDR &= ~GPIO_PUPDR_PUPD6_Msk;
-    GPIOH->AFR[0] &= ~GPIO_AFRL_AFSEL6_Msk;
-    GPIOH->AFR[0] |= (2UL << GPIO_AFRL_AFSEL6_Pos);
-    s_pump_ph6_gpio_mode = 0U;
-}
-
-#if ((PUMP_GPIO_TEST_MODE != 0U) || (PUMP_FAST_DC_TEST_MODE != 0U))
-static void pump_ph6_set_gpio_mode(void)
-{
-    GPIOH->MODER &= ~GPIO_MODER_MODE6_Msk;
-    GPIOH->MODER |= GPIO_MODER_MODE6_0;
-    GPIOH->OTYPER &= ~GPIO_OTYPER_OT6;
-    GPIOH->OSPEEDR |= GPIO_OSPEEDR_OSPEED6_Msk;
-    GPIOH->PUPDR &= ~GPIO_PUPDR_PUPD6_Msk;
-    s_pump_ph6_gpio_mode = 1U;
-}
-#endif
 
 void Pump_Init(void)
 {
-    GPIO_InitTypeDef gpio_init = {0};
-
     if (s_pump_initialized != 0U)
     {
         return;
     }
 
-    RCC->AHB4ENR |= RCC_AHB4ENR_GPIOHEN;
-    RCC->AHB4ENR |= RCC_AHB4ENR_GPIOFEN;
+    __HAL_RCC_GPIOI_CLK_ENABLE();
+    RCC->APB1LENR |= RCC_APB1LENR_TIM5EN;
 
-    gpio_init.Pin = GPIO_PIN_7;
-    gpio_init.Mode = GPIO_MODE_INPUT;
-    gpio_init.Pull = GPIO_PULLUP;
-    gpio_init.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(GPIOF, &gpio_init);
+    GPIOI->MODER &= ~GPIO_MODER_MODE0_Msk;
+    GPIOI->MODER |= GPIO_MODER_MODE0_1;
+    GPIOI->OTYPER &= ~GPIO_OTYPER_OT0;
+    GPIOI->OSPEEDR |= GPIO_OSPEEDR_OSPEED0_Msk;
+    GPIOI->PUPDR &= ~GPIO_PUPDR_PUPD0_Msk;
+    GPIOI->AFR[0] &= ~GPIO_AFRL_AFSEL0_Msk;
+    GPIOI->AFR[0] |= (2UL << GPIO_AFRL_AFSEL0_Pos);
 
-#if (PUMP_GPIO_TEST_MODE == 0U)
-    RCC->APB1LENR |= RCC_APB1LENR_TIM12EN;
-
-    pump_ph6_set_af_mode();
-
-    TIM12->CR1 = 0U;
-    TIM12->PSC = 3U;
-    TIM12->ARR = PUMP_PWM_MAX;
-    TIM12->CCMR1 = 0U;
-    TIM12->CCMR1 |= (6UL << TIM_CCMR1_OC1M_Pos);
-    TIM12->CCMR1 |= TIM_CCMR1_OC1PE;
-    TIM12->CCR1 = 0U;
-    TIM12->CCER = TIM_CCER_CC1E;
-    TIM12->EGR = TIM_EGR_UG;
-    TIM12->CR1 |= TIM_CR1_ARPE;
-    TIM12->CR1 |= TIM_CR1_CEN;
-#else
-    pump_ph6_set_gpio_mode();
-    GPIOH->BSRR = ((uint32_t)GPIO_PIN_6 << 16U);
-#endif
+    TIM5->CR1 = 0U;
+    TIM5->PSC = 11U;
+    TIM5->ARR = PUMP_PWM_MAX;
+    TIM5->CCMR2 = 0U;
+    TIM5->CCMR2 |= (6UL << TIM_CCMR2_OC4M_Pos);
+    TIM5->CCMR2 |= TIM_CCMR2_OC4PE;
+    TIM5->CCR4 = 0U;
+    TIM5->CCER = TIM_CCER_CC4E;
+    TIM5->EGR = TIM_EGR_UG;
+    TIM5->CR1 |= TIM_CR1_ARPE;
+    TIM5->CR1 |= TIM_CR1_CEN;
 
     s_pump_initialized = 1U;
 }
 
 void Pump_SetSpeed(uint16_t duty)
 {
-#if (PUMP_GPIO_TEST_MODE == 0U)
-#if (PUMP_FAST_DC_TEST_MODE != 0U)
-    if (duty >= PUMP_DUTY_FAST)
-    {
-        if (s_pump_ph6_gpio_mode == 0U)
-        {
-            pump_ph6_set_gpio_mode();
-        }
-
-        GPIOH->BSRR = GPIO_PIN_6;
-        s_pump_last_duty = PUMP_PWM_MAX;
-        return;
-    }
-
-    if (s_pump_ph6_gpio_mode != 0U)
-    {
-        if (duty == 0U)
-        {
-            GPIOH->BSRR = ((uint32_t)GPIO_PIN_6 << 16U);
-            s_pump_last_duty = 0U;
-            return;
-        }
-
-        pump_ph6_set_af_mode();
-    }
-#endif
-
     if (duty > PUMP_PWM_MAX)
     {
         duty = PUMP_PWM_MAX;
     }
 
-    TIM12->CCR1 = duty;
-#else
-    if (duty == 0U)
-    {
-        GPIOH->BSRR = ((uint32_t)GPIO_PIN_6 << 16U);
-    }
-    else
-    {
-        GPIOH->BSRR = GPIO_PIN_6;
-    }
-#endif
+    TIM5->CCR4 = duty;
 
     s_pump_last_duty = duty;
 }
@@ -174,5 +103,5 @@ uint16_t Pump_GetLastDuty(void)
 
 uint32_t Pump_GetPinLevel(void)
 {
-    return (GPIOH->IDR & GPIO_PIN_6) ? 1U : 0U;
+    return (TIM5->CCR4 != 0U) ? 1U : 0U;
 }

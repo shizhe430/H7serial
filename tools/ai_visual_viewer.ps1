@@ -1,7 +1,12 @@
 param(
     [string]$Port = "",
     [int]$Baud = 921600,
-    [string]$SaveDir = ""
+    [string]$SaveDir = "",
+    [int]$RoiOffsetX = 0,
+    [int]$RoiOffsetY = 0,
+    [int]$ViewShiftX = 0,
+    [int]$ViewShiftY = 0,
+    [int]$ViewFillValue = 180
 )
 
 Add-Type -AssemblyName System.Windows.Forms
@@ -427,11 +432,29 @@ function Update-Viewer {
         $bitmap = [System.Drawing.Bitmap]::new($sourceWidth, $sourceHeight)
         $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
         $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-        $graphics.DrawImage($sourceBitmap, 0, 0, $sourceWidth, $sourceHeight)
+        $fill = [System.Drawing.Color]::FromArgb($ViewFillValue, $ViewFillValue, $ViewFillValue)
+        $graphics.Clear($fill)
+        if (($sourceWidth -eq 320) -and ($sourceHeight -eq 240)) {
+            $graphics.DrawImage($sourceBitmap, -$ViewShiftX, -$ViewShiftY, $sourceWidth, $sourceHeight)
+        } else {
+            $graphics.DrawImage($sourceBitmap, 0, 0, $sourceWidth, $sourceHeight)
+        }
 
         $centerX = [int]($sourceWidth / 2)
+        if (($sourceWidth -eq 320) -and ($sourceHeight -eq 240)) {
+            $centerX += $RoiOffsetX
+        }
         $centerY = [int]($sourceHeight / 2)
-        $radius = [int]([Math]::Min($sourceWidth, $sourceHeight) * 0.42)
+        if (($sourceWidth -eq 320) -and ($sourceHeight -eq 240)) {
+            $centerY += $RoiOffsetY
+        }
+        $radius = if (($sourceWidth -eq 320) -and ($sourceHeight -eq 240)) {
+            100
+        } elseif (($sourceWidth -eq 224) -and ($sourceHeight -eq 224)) {
+            100
+        } else {
+            [int]([Math]::Min($sourceWidth, $sourceHeight) * 0.42)
+        }
         $penColor = Get-ClassColor -ClassId $Frame.ClassId
         $pen = [System.Drawing.Pen]::new($penColor, 3.0)
         $roiLeft = [int]($centerX - $radius)

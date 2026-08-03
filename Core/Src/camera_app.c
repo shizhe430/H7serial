@@ -11,6 +11,7 @@
 #include "voice_asr.h"
 #include "waterlevel.h"
 #include "waterlevel_data_params.h"
+#include "face_ai.h"
 #include "test_image_input.h"
 #include <stdarg.h>
 #include <stdio.h>
@@ -69,6 +70,16 @@ static volatile uint8_t g_frame_error = 0U;
 #define CAMERA_AI_VISUAL_TAIL3    0x31U
 #define CAMERA_AI_VISUAL_HEADER_SIZE 32U
 #define CAMERA_AI_VISUAL_SEND_GRAY_ONLY 0U
+
+#define CAMERA_FACE_VISUAL_MAGIC0   0x46U
+#define CAMERA_FACE_VISUAL_MAGIC1   0x41U
+#define CAMERA_FACE_VISUAL_MAGIC2   0x56U
+#define CAMERA_FACE_VISUAL_MAGIC3   0x31U
+#define CAMERA_FACE_VISUAL_TAIL0    0x46U
+#define CAMERA_FACE_VISUAL_TAIL1    0x41U
+#define CAMERA_FACE_VISUAL_TAIL2    0x45U
+#define CAMERA_FACE_VISUAL_TAIL3    0x31U
+#define CAMERA_FACE_VISUAL_HEADER_SIZE 48U
 
 #define PUMP_AI_CONF_MIN          0.60f
 #define PUMP_DECISION_WINDOW_MS   5000U
@@ -238,6 +249,9 @@ static uint8_t g_ai_gray_buf[CAMERA_AI_INPUT_SIZE];
 static camera_ai_context_t g_ai_ctx;
 #endif
 static uint8_t g_camera_ready = 0U;
+#if (APP_MODE == APP_MODE_FACE_AI_VISUAL)
+static uint8_t g_face_enroll_pending = 0U;
+#endif
 #if (APP_MODE == APP_MODE_PUMP_CTRL)
 static camera_pump_ctrl_state_t g_pump_ctrl;
 static AS608_Handle g_finger_sensor;
@@ -287,6 +301,12 @@ static void camera_app_dual_camera_run(void);
 #endif
 #if (APP_MODE == APP_MODE_FACE_DIAG)
 static void camera_app_face_diag_run(void);
+#endif
+#if ((APP_MODE == APP_MODE_FACE_AI_DIAG) || (APP_MODE == APP_MODE_FACE_AI_VISUAL))
+static void camera_app_face_ai_diag_run(void);
+#endif
+#if (APP_MODE == APP_MODE_FACE_AI_VISUAL)
+static void camera_app_face_ai_poll_command(void);
 #endif
 #if (APP_MODE == APP_MODE_PUMP_CTRL)
 static void camera_app_pump_ctrl_apply_state(uint8_t state);
@@ -1737,6 +1757,92 @@ static void camera_app_ai_visual_send_gray_frame(const camera_ai_result_t *resul
 }
 #endif
 
+#if (APP_MODE == APP_MODE_FACE_AI_VISUAL)
+static void camera_app_face_store_u16le(uint8_t *dst, uint16_t value)
+{
+    dst[0] = (uint8_t)(value & 0xFFU);
+    dst[1] = (uint8_t)((value >> 8) & 0xFFU);
+}
+
+static void camera_app_face_store_u32le(uint8_t *dst, uint32_t value)
+{
+    dst[0] = (uint8_t)(value & 0xFFU);
+    dst[1] = (uint8_t)((value >> 8) & 0xFFU);
+    dst[2] = (uint8_t)((value >> 16) & 0xFFU);
+    dst[3] = (uint8_t)((value >> 24) & 0xFFU);
+}
+
+static void camera_app_face_ai_visual_send_frame(const face_ai_result_t *result,
+                                                 uint32_t frame_id,
+                                                 const uint8_t *jpeg,
+                                                 uint32_t jpeg_len)
+{
+    uint8_t header[CAMERA_FACE_VISUAL_HEADER_SIZE];
+    uint8_t tail[4];
+    uint8_t flags = 0U;
+    uint16_t score_permille;
+    int32_t norm_milli;
+
+    if ((result == NULL) || (jpeg == NULL) || (jpeg_len == 0U) || (jpeg_len > 65535U))
+    {
+        return;
+    }
+
+    if (result->detection_valid != 0U)
+    {
+        flags |= 0x01U;
+    }
+    if (result->embedding_valid != 0U)
+    {
+        flags |= 0x02U;
+    }
+    if (result->reference_ready != 0U)
+    {
+        flags |= 0x04U;
+    }
+    if (result->match_valid != 0U)
+    {
+        flags |= 0x08U;
+    }
+    score_permille = (uint16_t)camera_app_float_to_permille(result->score);
+    norm_milli = (result->embedding_norm >= 0.0f)
+                     ? (int32_t)((result->embedding_norm * 1000.0f) + 0.5f)
+                     : (int32_t)((result->embedding_norm * 1000.0f) - 0.5f);
+
+    memset(header, 0, sizeof(header));
+    header[0] = CAMERA_FACE_VISUAL_MAGIC0;
+    header[1] = CAMERA_FACE_VISUAL_MAGIC1;
+    header[2] = CAMERA_FACE_VISUAL_MAGIC2;
+    header[3] = CAMERA_FACE_VISUAL_MAGIC3;
+    header[4] = 0x01U;
+    header[5] = OV2640_GetSelectedCamera();
+    header[6] = flags;
+    header[7] = result->status;
+    camera_app_face_store_u32le(&header[8], frame_id);
+    camera_app_face_store_u32le(&header[12], jpeg_len);
+    camera_app_face_store_u16le(&header[16], score_permille);
+    camera_app_face_store_u16le(&header[18], (uint16_t)result->x1);
+    camera_app_face_store_u16le(&header[20], (uint16_t)result->y1);
+    camera_app_face_store_u16le(&header[22], (uint16_t)result->x2);
+    camera_app_face_store_u16le(&header[24], (uint16_t)result->y2);
+    camera_app_face_store_u32le(&header[28], result->detection_ms);
+    camera_app_face_store_u32le(&header[32], result->identity_ms);
+    camera_app_face_store_u32le(&header[36], result->total_ms);
+    camera_app_face_store_u32le(&header[40], (uint32_t)norm_milli);
+    camera_app_face_store_u16le(&header[44], (uint16_t)camera_app_float_to_permille(result->similarity));
+    camera_app_face_store_u16le(&header[46], result->matched_id);
+
+    tail[0] = CAMERA_FACE_VISUAL_TAIL0;
+    tail[1] = CAMERA_FACE_VISUAL_TAIL1;
+    tail[2] = CAMERA_FACE_VISUAL_TAIL2;
+    tail[3] = CAMERA_FACE_VISUAL_TAIL3;
+
+    HAL_UART_Transmit(&huart1, header, (uint16_t)sizeof(header), HAL_MAX_DELAY);
+    HAL_UART_Transmit(&huart1, (uint8_t *)jpeg, (uint16_t)jpeg_len, HAL_MAX_DELAY);
+    HAL_UART_Transmit(&huart1, tail, (uint16_t)sizeof(tail), HAL_MAX_DELAY);
+}
+#endif
+
 int AI_GetState(void)
 {
 #if (APP_MODE == APP_MODE_PUMP_CTRL)
@@ -1830,7 +1936,7 @@ static const char *camera_app_temp_name(uint8_t temp)
 
 static uint8_t camera_app_cold_key_is_down(void)
 {
-    return (HAL_GPIO_ReadPin(GPIOF, GPIO_PIN_7) == GPIO_PIN_RESET) ? 1U : 0U;
+    return 0U;
 }
 
 static void camera_app_oled_refresh_stub(void)
@@ -3925,6 +4031,160 @@ static void camera_app_face_diag_run(void)
 }
 #endif
 
+#if ((APP_MODE == APP_MODE_FACE_AI_DIAG) || (APP_MODE == APP_MODE_FACE_AI_VISUAL))
+static void camera_app_face_cmd_log(const char *text)
+{
+    if (text != NULL)
+    {
+        (void)HAL_UART_Transmit(&huart1, (uint8_t *)text, (uint16_t)strlen(text), HAL_MAX_DELAY);
+    }
+}
+
+#if (APP_MODE == APP_MODE_FACE_AI_VISUAL)
+static void camera_app_face_ai_poll_command(void)
+{
+    static char command[32];
+    static uint8_t command_len = 0U;
+    uint8_t byte;
+
+    if (__HAL_UART_GET_FLAG(&huart1, UART_FLAG_ORE) != RESET)
+    {
+        __HAL_UART_CLEAR_OREFLAG(&huart1);
+    }
+
+    while (HAL_UART_Receive(&huart1, &byte, 1U, 0U) == HAL_OK)
+    {
+        /* Single-byte commands survive while SFace blocks polling for several seconds. */
+        if ((command_len == 0U) && (byte == 'E'))
+        {
+            g_face_enroll_pending = 1U;
+            camera_app_face_cmd_log("[FACE_AI] enroll pending id=1\r\n");
+        }
+        else if ((command_len == 0U) && (byte == 'C'))
+        {
+            if (FaceAI_ClearEnrollment() == 0U)
+            {
+                camera_app_face_cmd_log("[FACE_AI] enrollment clear ok\r\n");
+            }
+            else
+            {
+                camera_app_face_cmd_log("[FACE_AI] enrollment clear fail\r\n");
+            }
+        }
+        else if ((byte == '\r') || (byte == '\n'))
+        {
+            command[command_len] = '\0';
+            if ((strcmp(command, "ENROLL") == 0) || (strcmp(command, "ENROLL 1") == 0))
+            {
+                g_face_enroll_pending = 1U;
+                camera_app_face_cmd_log("[FACE_AI] enroll pending id=1\r\n");
+            }
+            else if (strcmp(command, "CLEAR") == 0)
+            {
+                if (FaceAI_ClearEnrollment() == 0U)
+                {
+                    camera_app_face_cmd_log("[FACE_AI] enrollment clear ok\r\n");
+                }
+                else
+                {
+                    camera_app_face_cmd_log("[FACE_AI] enrollment clear fail\r\n");
+                }
+            }
+            command_len = 0U;
+        }
+        else if ((byte >= 0x20U) && (byte <= 0x7EU))
+        {
+            if (command_len + 1U < sizeof(command))
+            {
+                command[command_len++] = (char)byte;
+            }
+            else
+            {
+                command_len = 0U;
+            }
+        }
+    }
+}
+#endif
+
+static void camera_app_face_ai_diag_run(void)
+{
+    static uint32_t s_frame_id = 0U;
+    uint32_t jpeg_off = 0U;
+    uint32_t jpeg_len = 0U;
+    face_ai_result_t result;
+    uint8_t status;
+    char msg[128];
+    int len;
+
+#if (APP_MODE == APP_MODE_FACE_AI_VISUAL)
+    camera_app_face_ai_poll_command();
+#endif
+
+    status = camera_app_capture_jpeg_snapshot(2000U, &jpeg_off, &jpeg_len);
+    if ((status != 0U) || (camera_app_validate_jpeg_frame(jpeg_off, jpeg_len) != 0U))
+    {
+        g_camera_bad_frame_count++;
+        len = snprintf(msg, sizeof(msg),
+                       "[FACE_AI] capture fail cam=%u status=%u bad=%lu\r\n",
+                       (unsigned)OV2640_GetSelectedCamera(),
+                       (unsigned)status,
+                       (unsigned long)g_camera_bad_frame_count);
+        camera_app_text_tx(msg, (uint16_t)len);
+
+        if (g_camera_bad_frame_count >= CAMERA_BAD_FRAME_THRESHOLD)
+        {
+            (void)camera_app_recover_camera("face_ai_diag");
+        }
+        HAL_Delay(100U);
+        return;
+    }
+
+    g_camera_bad_frame_count = 0U;
+    s_frame_id++;
+    len = snprintf(msg, sizeof(msg),
+                   "[FACE_AI] cam=%u frame=%lu jpeg=%lu off=%lu valid=1\r\n",
+                   (unsigned)OV2640_GetSelectedCamera(),
+                   (unsigned long)s_frame_id,
+                   (unsigned long)jpeg_len,
+                   (unsigned long)jpeg_off);
+    camera_app_text_tx(msg, (uint16_t)len);
+
+    (void)FaceAI_RunJpeg(JPEG_Stream_GetBuf() + jpeg_off, jpeg_len, &result);
+#if (APP_MODE == APP_MODE_FACE_AI_VISUAL)
+    result.reference_ready = FaceAI_HasEnrollment();
+    if (g_face_enroll_pending != 0U)
+    {
+        if (result.embedding_valid != 0U)
+        {
+            uint8_t enroll_status = FaceAI_EnrollReference(1U, &result);
+
+            g_face_enroll_pending = 0U;
+            if (enroll_status == 0U)
+            {
+                result.reference_ready = 1U;
+                result.match_valid = 1U;
+                result.matched_id = 1U;
+                result.similarity = 1.0f;
+                camera_app_face_cmd_log("[FACE_AI] enroll id=1 complete\r\n");
+            }
+            else
+            {
+                camera_app_face_cmd_log("[FACE_AI] enroll id=1 fail\r\n");
+            }
+        }
+    }
+    camera_app_face_ai_visual_send_frame(&result,
+                                         s_frame_id,
+                                         JPEG_Stream_GetBuf() + jpeg_off,
+                                         jpeg_len);
+    HAL_Delay(100U);
+#else
+    HAL_Delay(500U);
+#endif
+}
+#endif
+
 void HAL_DCMI_FrameEventCallback(DCMI_HandleTypeDef *hdcmi_ptr)
 {
     (void)hdcmi_ptr;
@@ -3969,6 +4229,12 @@ void CameraApp_Init(void)
 #elif (APP_MODE == APP_MODE_FACE_DIAG)
     camera_app_log("[APP] CameraApp_Init enter\r\n");
     camera_app_log("[APP] mode=FACE_DIAG\r\n");
+#elif (APP_MODE == APP_MODE_FACE_AI_DIAG)
+    camera_app_log("[APP] CameraApp_Init enter\r\n");
+    camera_app_log("[APP] mode=FACE_AI_DIAG\r\n");
+#elif (APP_MODE == APP_MODE_FACE_AI_VISUAL)
+    camera_app_log("[APP] CameraApp_Init enter\r\n");
+    camera_app_log("[APP] mode=FACE_AI_VISUAL\r\n");
 #elif (APP_MODE == APP_MODE_PUMP_CTRL)
     camera_app_log("[APP] CameraApp_Init enter\r\n");
     camera_app_log("[APP] mode=PUMP_CTRL\r\n");
@@ -4009,7 +4275,7 @@ void CameraApp_Init(void)
     camera_app_camera_auto_ctrl_reset();
     g_camera_ready = 1U;
     camera_app_log("[APP] mode=TIMED_DEMO camera_ai=bypassed\r\n");
-    camera_app_log("[APP] PF6=cup/abnormal PF7=manual half_ms=8651 full_ms=17301\r\n");
+    camera_app_log("[APP] PF6=cup/abnormal manual_key=disabled half_ms=8651 full_ms=17301\r\n");
     camera_app_log("[APP] CameraApp_Init done\r\n");
     return;
 #endif
@@ -4256,6 +4522,18 @@ void CameraApp_Run(void)
     if (g_camera_ready != 0U)
     {
         camera_app_face_diag_run();
+    }
+    else
+    {
+        HAL_Delay(100U);
+    }
+    return;
+#endif
+
+#if ((APP_MODE == APP_MODE_FACE_AI_DIAG) || (APP_MODE == APP_MODE_FACE_AI_VISUAL))
+    if (g_camera_ready != 0U)
+    {
+        camera_app_face_ai_diag_run();
     }
     else
     {

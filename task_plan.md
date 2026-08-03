@@ -1,33 +1,56 @@
-# Model Stability and Formal Workflow Recovery
+# CubeMX Regression and Dual-Camera Face AI
 
 ## Goal
-Restore stable STM32 water-level inference and return the firmware to the formal pump-control workflow without losing the verified ESP32-C6 reporting interface.
 
-## Success Criteria
-- Board preprocessing and model I/O conversion match the current QAT INT8 model.
-- Static cup scenes do not jump arbitrarily across all five classes because of firmware defects.
-- Low/half/full postprocessing uses the approved 0.395 and 0.665 boundaries.
-- DCMI capture and cache handling match the known stable camera pipeline.
-- Formal `APP_MODE_PUMP_CTRL` is selected; ESP32 diagnostic traffic and PB10 GPIO delay are disabled.
-- Release build succeeds, with automatic/voice/manual targets and abnormal/cup-loss stops still reachable.
+Set the validated external-memory clock, then replace the slow `buffalo_sc` face models with a lightweight YuNet + SFace candidate pair while preserving the camera-0 water-level/pump workflow.
 
 ## Phases
-- [completed] 1. Compare current camera, model I/O, and postprocessing against generated metadata and PC reference code.
-- [completed] 2. Compare camera/DMA/cache configuration against stable Git baselines and identify regressions.
-- [completed] 3. Apply only confirmed fixes and restore formal runtime configuration.
-- [completed] 4. Build, inspect the resulting binary, and provide a focused board verification sequence.
-- [in_progress] 5. Flash and verify ESP32 fingerprint/volume session reporting on hardware.
+
+- [x] Baseline the generated project and identify CubeMX regressions.
+- [x] Restore clock, UART, QSPI/SDRAM, and camera initialization settings surgically.
+- [x] Verify the project builds without changing the existing pump-control behavior.
+- [x] Add coordinated face detection/recognition test flow on camera 1.
+- [x] Set FMC-SDRAM to 100 MHz and verify the complete external-memory startup path on hardware.
+- [x] Download/analyze the ST YuNet INT8 and OpenCV SFace INT8 models for STM32H7.
+- [x] Replace the camera-1 face diagnostic preprocessing/postprocessing for the new model interfaces.
+- [x] Add an isolated FAV1 JPEG/face-box protocol and a visual camera-1 face diagnostic mode.
+- [x] Add a dedicated Windows visual viewer without changing the existing water-level AIV1 viewer.
+- [x] Add fixed-ID=1 enrollment, QSPI persistence, and cosine-similarity matching.
+- [x] Persist YuNet/SFace and validated clock/UART settings in CubeMX metadata and add a post-generation regression check.
+- [ ] Verify a real detected face through five-point alignment on camera 1; model runtime and the original pump build are already verified.
+
+## Success Criteria
+
+- Existing `PUMP_CTRL` camera path remains unchanged except for required generated-code repairs.
+- UART baud/format and system clocks match the last known stable configuration.
+- YuNet and SFace generated sources are represented in both Release and Debug build configurations.
+- Camera 1 can be selected, captured, and passed through the detector and recognizer without using camera 0's water-level buffers.
+- A full Release build completes, or any blocker is recorded with its exact error.
 
 ## Constraints
-- Preserve the current generated QAT INT8 model files.
-- Preserve STM32-to-ESP32 `STM_FP` and `STM_DONE` reporting.
-- Do not alter unrelated pump, voice, fingerprint, OLED, or safety behavior.
+
+- Do not overwrite or revert unrelated user changes.
+- Do not allocate the face AI activation buffer over existing LCD/camera buffers.
+- Keep face AI validation isolated from the normal pump workflow until the second-camera test passes.
+- FAV1 header is 48 bytes, followed by JPEG and a 4-byte FAE1 tail; it is independent of AIV1.
+- Enrollment record uses QSPI offset `0x01000000` and is loaded into the SDRAM face database at `0xC1800000`.
+- SFace matching uses OpenCV's documented LFW cosine-similarity threshold of `0.363` and exposes `Enroll ID=1` and `Clear ID` in the face viewer.
+
+## Current Decisions
+
+- Keep `APP_MODE_PUMP_CTRL` unchanged while validating face AI.
+- Add a separate `APP_MODE_FACE_AI_DIAG` for camera 1.
+- Reuse one SDRAM activation pool sequentially for YuNet and SFace.
+- Place YuNet weights at `0x90000000` and SFace weights at `0x90400000`.
+- W25Q256 requires four-byte address mode; mapped reads and programming use 32-bit addresses.
 
 ## Errors Encountered
-- `rg.exe` cannot execute in this environment (`Access is denied`); use PowerShell `Select-String`.
-- First session-catchup path used `.codex`; the installed planning skill is under `.agents`.
-- Hardware flash attempt failed because ST-Link reported target voltage `0.00 V` and no core ID; retry only after the board is powered.
-- UI Automation could not find the viewer's custom-styled Connect button. Replaced external clicking with script-level auto-connect when a port is selected.
-- A one-line UI Automation enumeration command had an invalid empty PowerShell pipeline element; it was not repeated because auto-connect removes the need for enumeration.
-- ESP32 integration ELF flashing did not start because ST-Link measured only 1.15 V and could not read the target core ID.
-- Integration commit `104c380` could not be pushed because HTTPS connections to GitHub timed out; stable baseline `2b995ea` was pushed before the outage.
+
+| Error | Attempt | Resolution |
+|---|---:|---|
+| CubeMX reset HSE, PLL range, UART baud, DCMI polarity, DMA priority, GPIO analog switch and IRQ declarations | 1 | Pending surgical source and `.ioc` repair |
+| FMC/QSPI selected PLL2 but generated MSP code supplied no PLL2 parameters | 1 | Pending explicit PLL2 configuration in MSP clock setup |
+| Release makefiles omit generated `facedet` and `faceid` sources | 1 | Pending makefile update |
+| Face diagnostic stopped after first JPEG | 1 | External weights were not programmed; added a temporary updater and programmed both weights with device-side CRC checks |
+| YuNet raised `CFSR=0x01000000` at model entry | 1 | Added a 32 MB cacheable Normal-memory MPU region for external SDRAM; YuNet and SFace then ran successfully |
+| `.ioc` and `.mxproject` still referenced `facedet/faceid` after the runtime had moved to YuNet/SFace | 1 | Replaced the CubeMX model metadata with project-local YuNet/SFace paths and added `tools/check_cubemx_regressions.ps1` |

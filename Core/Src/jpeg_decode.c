@@ -50,6 +50,15 @@ static uint8_t s_last_decomp_status = JDR_OK;
 static uint16_t s_last_width = 0U;
 static uint16_t s_last_height = 0U;
 
+typedef struct
+{
+    uint8_t *dst;
+    uint16_t width;
+    uint16_t height;
+} rgb888_out_t;
+
+static rgb888_out_t s_rgb888_out;
+
 static uint8_t clamp_u8(int32_t v)
 {
     if (v < 0)
@@ -317,6 +326,44 @@ static int tjpgd_output(JDEC *jd, void *bitmap, JRECT *rect)
     return 1U;
 }
 
+static int tjpgd_output_rgb888(JDEC *jd, void *bitmap, JRECT *rect)
+{
+    rgb888_out_t *out = &s_rgb888_out;
+    uint8_t *src = (uint8_t *)bitmap;
+    uint32_t x;
+    uint32_t y;
+    uint32_t w;
+    uint32_t h;
+
+    if ((out == NULL) || (out->dst == NULL) || (bitmap == NULL) || (rect == NULL))
+    {
+        return 0;
+    }
+
+    if ((rect->right >= out->width) || (rect->bottom >= out->height))
+    {
+        return 0;
+    }
+
+    w = (uint32_t)(rect->right - rect->left + 1);
+    h = (uint32_t)(rect->bottom - rect->top + 1);
+
+    for (y = 0U; y < h; y++)
+    {
+        uint8_t *dst = &out->dst[(((uint32_t)rect->top + y) * out->width + (uint32_t)rect->left) * 3U];
+
+        for (x = 0U; x < w; x++)
+        {
+            dst[(x * 3U) + 0U] = src[(x * 3U) + 0U];
+            dst[(x * 3U) + 1U] = src[(x * 3U) + 1U];
+            dst[(x * 3U) + 2U] = src[(x * 3U) + 2U];
+        }
+        src += (w * 3U);
+    }
+
+    return 1;
+}
+
 uint8_t jpeg_to_ai_input(const uint8_t *jpg, uint32_t jpg_len, void *dst_input)
 {
     JDEC jd;
@@ -391,6 +438,57 @@ uint8_t jpeg_to_ai_input(const uint8_t *jpg, uint32_t jpg_len, void *dst_input)
             dst[y * DST_W + x] = (ai_i8)((int16_t)g - 128);
 #endif
         }
+    }
+
+    return 0U;
+}
+
+uint8_t jpeg_to_rgb888(const uint8_t *jpg, uint32_t jpg_len,
+                       uint8_t *dst_rgb, uint16_t dst_w, uint16_t dst_h)
+{
+    JDEC jd;
+    JRESULT jr;
+    jpg_stream_t stream;
+
+    if ((jpg == NULL) || (jpg_len == 0U) || (dst_rgb == NULL) ||
+        (dst_w == 0U) || (dst_h == 0U))
+    {
+        return 1U;
+    }
+
+    s_last_prepare_status = JDR_OK;
+    s_last_decomp_status = JDR_OK;
+    s_last_width = 0U;
+    s_last_height = 0U;
+    memset(dst_rgb, 0, ((uint32_t)dst_w * (uint32_t)dst_h * 3U));
+
+    stream.jpg = jpg;
+    stream.jpg_len = jpg_len;
+    stream.jpg_pos = 0U;
+
+    jr = jd_prepare(&jd, tjpgd_input, s_workbuf, sizeof(s_workbuf), &stream);
+    s_last_prepare_status = (uint8_t)jr;
+    if (jr != JDR_OK)
+    {
+        return 2U;
+    }
+
+    s_last_width = (uint16_t)jd.width;
+    s_last_height = (uint16_t)jd.height;
+    if ((jd.width > dst_w) || (jd.height > dst_h))
+    {
+        return 3U;
+    }
+
+    s_rgb888_out.dst = dst_rgb;
+    s_rgb888_out.width = dst_w;
+    s_rgb888_out.height = dst_h;
+
+    jr = jd_decomp(&jd, tjpgd_output_rgb888, 0);
+    s_last_decomp_status = (uint8_t)jr;
+    if (jr != JDR_OK)
+    {
+        return 4U;
     }
 
     return 0U;

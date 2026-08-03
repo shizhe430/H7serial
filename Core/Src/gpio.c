@@ -49,7 +49,9 @@ void MX_GPIO_Init(void)
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
+  __HAL_RCC_GPIOG_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
+  __HAL_RCC_GPIOI_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOC, OLED_CS_Pin|OLED_RES_Pin|OLED_DC_Pin, GPIO_PIN_RESET);
@@ -58,29 +60,20 @@ void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0|GPIO_PIN_8|GPIO_PIN_15, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOH, AMBIENT_LED2_Pin|AMBIENT_LED1_Pin|PUMP_PWM_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOH, AMBIENT_LED2_Pin|AMBIENT_LED1_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1|OLED_SCL_Pin|OLED_SDA_Pin|GPIO_PIN_3
                           |GPIO_PIN_4, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(PUMP_PWM_GPIO_Port, PUMP_PWM_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : AS608_WAK_Pin */
   GPIO_InitStruct.Pin = AS608_WAK_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(AS608_WAK_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : COLD_KEY_Pin */
-  GPIO_InitStruct.Pin = COLD_KEY_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
-  HAL_GPIO_Init(COLD_KEY_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : TANK_LEVEL_Pin */
-  GPIO_InitStruct.Pin = TANK_LEVEL_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(TANK_LEVEL_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : OLED_CS_Pin OLED_RES_Pin OLED_DC_Pin */
   GPIO_InitStruct.Pin = OLED_CS_Pin|OLED_RES_Pin|OLED_DC_Pin;
@@ -96,8 +89,8 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : AMBIENT_LED2_Pin AMBIENT_LED1_Pin PUMP_PWM_Pin */
-  GPIO_InitStruct.Pin = AMBIENT_LED2_Pin|AMBIENT_LED1_Pin|PUMP_PWM_Pin;
+  /*Configure GPIO pins : AMBIENT_LED2_Pin AMBIENT_LED1_Pin */
+  GPIO_InitStruct.Pin = AMBIENT_LED2_Pin|AMBIENT_LED1_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -116,6 +109,19 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_MEDIUM;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PUMP_PWM_Pin */
+  GPIO_InitStruct.Pin = PUMP_PWM_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(PUMP_PWM_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : TANK_LEVEL_Pin */
+  GPIO_InitStruct.Pin = TANK_LEVEL_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(TANK_LEVEL_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PA15 */
   GPIO_InitStruct.Pin = GPIO_PIN_15;
