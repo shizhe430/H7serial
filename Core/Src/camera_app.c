@@ -335,7 +335,8 @@ static void camera_app_dual_camera_run(void);
 #if (APP_MODE == APP_MODE_FACE_DIAG)
 static void camera_app_face_diag_run(void);
 #endif
-#if ((APP_MODE == APP_MODE_FACE_AI_DIAG) || (APP_MODE == APP_MODE_FACE_AI_VISUAL))
+#if ((APP_MODE == APP_MODE_FACE_AI_DIAG) || (APP_MODE == APP_MODE_FACE_AI_VISUAL) || \
+     (APP_MODE == APP_MODE_OPENMV_HOST_DIAG))
 static void camera_app_face_ai_diag_run(void);
 #endif
 #if (APP_MODE == APP_MODE_FACE_AI_VISUAL)
@@ -1790,7 +1791,7 @@ static void camera_app_ai_visual_send_gray_frame(const camera_ai_result_t *resul
 }
 #endif
 
-#if (APP_MODE == APP_MODE_FACE_AI_VISUAL)
+#if ((APP_MODE == APP_MODE_FACE_AI_VISUAL) || (APP_MODE == APP_MODE_OPENMV_HOST_DIAG))
 static void camera_app_face_store_u16le(uint8_t *dst, uint16_t value)
 {
     dst[0] = (uint8_t)(value & 0xFFU);
@@ -3566,6 +3567,7 @@ static void camera_app_pump_ctrl_report(const camera_ai_result_t *result)
 }
 #endif
 
+#if (APP_MODE == APP_MODE_PUMP_CTRL)
 static void camera_app_pump_ctrl_fail(const char *tag, uint32_t code, uint8_t fault_if_running)
 {
     char buf[64];
@@ -4020,6 +4022,7 @@ static void camera_app_timed_demo_run(void)
     camera_app_pump_ctrl_consume_result(&result);
 }
 #endif
+#endif
 
 #if (ESP32_LINK_SELFTEST_ON_BOOT != 0U)
 static void camera_app_esp32_link_selftest_poll(void)
@@ -4294,7 +4297,9 @@ static void camera_app_face_diag_run(void)
 }
 #endif
 
-#if ((APP_MODE == APP_MODE_FACE_AI_DIAG) || (APP_MODE == APP_MODE_FACE_AI_VISUAL))
+#if ((APP_MODE == APP_MODE_FACE_AI_DIAG) || (APP_MODE == APP_MODE_FACE_AI_VISUAL) || \
+     (APP_MODE == APP_MODE_OPENMV_HOST_DIAG))
+#if (APP_MODE == APP_MODE_FACE_AI_VISUAL)
 static void camera_app_face_cmd_log(const char *text)
 {
     if (text != NULL)
@@ -4302,6 +4307,7 @@ static void camera_app_face_cmd_log(const char *text)
         (void)HAL_UART_Transmit(&huart1, (uint8_t *)text, (uint16_t)strlen(text), HAL_MAX_DELAY);
     }
 }
+#endif
 
 #if (APP_MODE == APP_MODE_FACE_AI_VISUAL)
 static void camera_app_face_ai_poll_command(void)
@@ -4413,7 +4419,14 @@ static void camera_app_face_ai_diag_run(void)
                    (unsigned long)jpeg_off);
     camera_app_text_tx(msg, (uint16_t)len);
 
+#if (APP_MODE == APP_MODE_OPENMV_HOST_DIAG)
+    /* Host-only OpenMV test: the PC performs Haar/LBP on this JPEG stream. */
+    memset(&result, 0, sizeof(result));
+    result.status = 0U;
+#else
     (void)FaceAI_RunJpeg(JPEG_Stream_GetBuf() + jpeg_off, jpeg_len, &result);
+#endif
+#if ((APP_MODE == APP_MODE_FACE_AI_VISUAL) || (APP_MODE == APP_MODE_OPENMV_HOST_DIAG))
 #if (APP_MODE == APP_MODE_FACE_AI_VISUAL)
     result.reference_ready = FaceAI_HasEnrollment();
     if (g_face_enroll_pending != 0U)
@@ -4437,6 +4450,7 @@ static void camera_app_face_ai_diag_run(void)
             }
         }
     }
+#endif
     camera_app_face_ai_visual_send_frame(&result,
                                          s_frame_id,
                                          JPEG_Stream_GetBuf() + jpeg_off,
@@ -4498,6 +4512,9 @@ void CameraApp_Init(void)
 #elif (APP_MODE == APP_MODE_FACE_AI_VISUAL)
     camera_app_log("[APP] CameraApp_Init enter\r\n");
     camera_app_log("[APP] mode=FACE_AI_VISUAL\r\n");
+#elif (APP_MODE == APP_MODE_OPENMV_HOST_DIAG)
+    camera_app_log("[APP] CameraApp_Init enter\r\n");
+    camera_app_log("[APP] mode=OPENMV_HOST_DIAG\r\n");
 #elif (APP_MODE == APP_MODE_PUMP_CTRL)
     camera_app_log("[APP] CameraApp_Init enter\r\n");
     camera_app_log("[APP] mode=PUMP_CTRL\r\n");
@@ -4793,7 +4810,8 @@ void CameraApp_Run(void)
     return;
 #endif
 
-#if ((APP_MODE == APP_MODE_FACE_AI_DIAG) || (APP_MODE == APP_MODE_FACE_AI_VISUAL))
+#if ((APP_MODE == APP_MODE_FACE_AI_DIAG) || (APP_MODE == APP_MODE_FACE_AI_VISUAL) || \
+     (APP_MODE == APP_MODE_OPENMV_HOST_DIAG))
     if (g_camera_ready != 0U)
     {
         camera_app_face_ai_diag_run();
