@@ -14,6 +14,9 @@
 #include "waterlevel.h"
 #include "waterlevel_data_params.h"
 #include "face_ai.h"
+#if (APP_MODE == APP_MODE_OPENMV_BOARD_DIAG)
+#include "openmv_face.h"
+#endif
 #include "test_image_input.h"
 #include <stdarg.h>
 #include <stdio.h>
@@ -261,7 +264,7 @@ static uint8_t g_ai_gray_buf[CAMERA_AI_INPUT_SIZE];
 static camera_ai_context_t g_ai_ctx;
 #endif
 static uint8_t g_camera_ready = 0U;
-#if (APP_MODE == APP_MODE_FACE_AI_VISUAL)
+#if ((APP_MODE == APP_MODE_FACE_AI_VISUAL) || (APP_MODE == APP_MODE_OPENMV_BOARD_DIAG))
 static uint8_t g_face_enroll_pending = 0U;
 #endif
 #if (APP_MODE == APP_MODE_PUMP_CTRL)
@@ -336,10 +339,10 @@ static void camera_app_dual_camera_run(void);
 static void camera_app_face_diag_run(void);
 #endif
 #if ((APP_MODE == APP_MODE_FACE_AI_DIAG) || (APP_MODE == APP_MODE_FACE_AI_VISUAL) || \
-     (APP_MODE == APP_MODE_OPENMV_HOST_DIAG))
+     (APP_MODE == APP_MODE_OPENMV_HOST_DIAG) || (APP_MODE == APP_MODE_OPENMV_BOARD_DIAG))
 static void camera_app_face_ai_diag_run(void);
 #endif
-#if (APP_MODE == APP_MODE_FACE_AI_VISUAL)
+#if ((APP_MODE == APP_MODE_FACE_AI_VISUAL) || (APP_MODE == APP_MODE_OPENMV_BOARD_DIAG))
 static void camera_app_face_ai_poll_command(void);
 #endif
 #if (APP_MODE == APP_MODE_PUMP_CTRL)
@@ -1791,7 +1794,8 @@ static void camera_app_ai_visual_send_gray_frame(const camera_ai_result_t *resul
 }
 #endif
 
-#if ((APP_MODE == APP_MODE_FACE_AI_VISUAL) || (APP_MODE == APP_MODE_OPENMV_HOST_DIAG))
+#if ((APP_MODE == APP_MODE_FACE_AI_VISUAL) || (APP_MODE == APP_MODE_OPENMV_HOST_DIAG) || \
+     (APP_MODE == APP_MODE_OPENMV_BOARD_DIAG))
 static void camera_app_face_store_u16le(uint8_t *dst, uint16_t value)
 {
     dst[0] = (uint8_t)(value & 0xFFU);
@@ -1865,6 +1869,11 @@ static void camera_app_face_ai_visual_send_frame(const face_ai_result_t *result,
     camera_app_face_store_u32le(&header[40], (uint32_t)norm_milli);
     camera_app_face_store_u16le(&header[44], (uint16_t)camera_app_float_to_permille(result->similarity));
     camera_app_face_store_u16le(&header[46], result->matched_id);
+#if (APP_MODE == APP_MODE_OPENMV_BOARD_DIAG)
+    header[26] = 0x02U;
+#else
+    header[26] = 0x01U;
+#endif
 
     tail[0] = CAMERA_FACE_VISUAL_TAIL0;
     tail[1] = CAMERA_FACE_VISUAL_TAIL1;
@@ -4298,8 +4307,8 @@ static void camera_app_face_diag_run(void)
 #endif
 
 #if ((APP_MODE == APP_MODE_FACE_AI_DIAG) || (APP_MODE == APP_MODE_FACE_AI_VISUAL) || \
-     (APP_MODE == APP_MODE_OPENMV_HOST_DIAG))
-#if (APP_MODE == APP_MODE_FACE_AI_VISUAL)
+     (APP_MODE == APP_MODE_OPENMV_HOST_DIAG) || (APP_MODE == APP_MODE_OPENMV_BOARD_DIAG))
+#if ((APP_MODE == APP_MODE_FACE_AI_VISUAL) || (APP_MODE == APP_MODE_OPENMV_BOARD_DIAG))
 static void camera_app_face_cmd_log(const char *text)
 {
     if (text != NULL)
@@ -4309,7 +4318,7 @@ static void camera_app_face_cmd_log(const char *text)
 }
 #endif
 
-#if (APP_MODE == APP_MODE_FACE_AI_VISUAL)
+#if ((APP_MODE == APP_MODE_FACE_AI_VISUAL) || (APP_MODE == APP_MODE_OPENMV_BOARD_DIAG))
 static void camera_app_face_ai_poll_command(void)
 {
     static char command[32];
@@ -4326,11 +4335,24 @@ static void camera_app_face_ai_poll_command(void)
         /* Single-byte commands survive while SFace blocks polling for several seconds. */
         if ((command_len == 0U) && (byte == 'E'))
         {
+#if (APP_MODE == APP_MODE_OPENMV_BOARD_DIAG)
+            if (OpenMVFace_BeginEnrollment(1U) == 0U)
+            {
+                g_face_enroll_pending = 1U;
+                camera_app_face_cmd_log("[OPENMV] enroll begin id=1 frames=5\r\n");
+            }
+#else
             g_face_enroll_pending = 1U;
             camera_app_face_cmd_log("[FACE_AI] enroll pending id=1\r\n");
+#endif
         }
         else if ((command_len == 0U) && (byte == 'C'))
         {
+#if (APP_MODE == APP_MODE_OPENMV_BOARD_DIAG)
+            OpenMVFace_ClearReference();
+            g_face_enroll_pending = 0U;
+            camera_app_face_cmd_log("[OPENMV] reference clear ok\r\n");
+#else
             if (FaceAI_ClearEnrollment() == 0U)
             {
                 camera_app_face_cmd_log("[FACE_AI] enrollment clear ok\r\n");
@@ -4339,17 +4361,31 @@ static void camera_app_face_ai_poll_command(void)
             {
                 camera_app_face_cmd_log("[FACE_AI] enrollment clear fail\r\n");
             }
+#endif
         }
         else if ((byte == '\r') || (byte == '\n'))
         {
             command[command_len] = '\0';
             if ((strcmp(command, "ENROLL") == 0) || (strcmp(command, "ENROLL 1") == 0))
             {
+#if (APP_MODE == APP_MODE_OPENMV_BOARD_DIAG)
+                if (OpenMVFace_BeginEnrollment(1U) == 0U)
+                {
+                    g_face_enroll_pending = 1U;
+                    camera_app_face_cmd_log("[OPENMV] enroll begin id=1 frames=5\r\n");
+                }
+#else
                 g_face_enroll_pending = 1U;
                 camera_app_face_cmd_log("[FACE_AI] enroll pending id=1\r\n");
+#endif
             }
             else if (strcmp(command, "CLEAR") == 0)
             {
+#if (APP_MODE == APP_MODE_OPENMV_BOARD_DIAG)
+                OpenMVFace_ClearReference();
+                g_face_enroll_pending = 0U;
+                camera_app_face_cmd_log("[OPENMV] reference clear ok\r\n");
+#else
                 if (FaceAI_ClearEnrollment() == 0U)
                 {
                     camera_app_face_cmd_log("[FACE_AI] enrollment clear ok\r\n");
@@ -4358,6 +4394,7 @@ static void camera_app_face_ai_poll_command(void)
                 {
                     camera_app_face_cmd_log("[FACE_AI] enrollment clear fail\r\n");
                 }
+#endif
             }
             command_len = 0U;
         }
@@ -4386,7 +4423,7 @@ static void camera_app_face_ai_diag_run(void)
     char msg[128];
     int len;
 
-#if (APP_MODE == APP_MODE_FACE_AI_VISUAL)
+#if ((APP_MODE == APP_MODE_FACE_AI_VISUAL) || (APP_MODE == APP_MODE_OPENMV_BOARD_DIAG))
     camera_app_face_ai_poll_command();
 #endif
 
@@ -4423,10 +4460,16 @@ static void camera_app_face_ai_diag_run(void)
     /* Host-only OpenMV test: the PC performs Haar/LBP on this JPEG stream. */
     memset(&result, 0, sizeof(result));
     result.status = 0U;
+#elif (APP_MODE == APP_MODE_OPENMV_BOARD_DIAG)
+    {
+        openmv_face_stats_t stats;
+        (void)OpenMVFace_RunJpeg(JPEG_Stream_GetBuf() + jpeg_off, jpeg_len, &result, &stats);
+    }
 #else
     (void)FaceAI_RunJpeg(JPEG_Stream_GetBuf() + jpeg_off, jpeg_len, &result);
 #endif
-#if ((APP_MODE == APP_MODE_FACE_AI_VISUAL) || (APP_MODE == APP_MODE_OPENMV_HOST_DIAG))
+#if ((APP_MODE == APP_MODE_FACE_AI_VISUAL) || (APP_MODE == APP_MODE_OPENMV_HOST_DIAG) || \
+     (APP_MODE == APP_MODE_OPENMV_BOARD_DIAG))
 #if (APP_MODE == APP_MODE_FACE_AI_VISUAL)
     result.reference_ready = FaceAI_HasEnrollment();
     if (g_face_enroll_pending != 0U)
@@ -4449,6 +4492,13 @@ static void camera_app_face_ai_diag_run(void)
                 camera_app_face_cmd_log("[FACE_AI] enroll id=1 fail\r\n");
             }
         }
+    }
+#elif (APP_MODE == APP_MODE_OPENMV_BOARD_DIAG)
+    result.reference_ready = OpenMVFace_HasReference();
+    if ((g_face_enroll_pending != 0U) && (result.reference_ready != 0U))
+    {
+        g_face_enroll_pending = 0U;
+        camera_app_face_cmd_log("[OPENMV] enroll id=1 complete\r\n");
     }
 #endif
     camera_app_face_ai_visual_send_frame(&result,
@@ -4515,6 +4565,9 @@ void CameraApp_Init(void)
 #elif (APP_MODE == APP_MODE_OPENMV_HOST_DIAG)
     camera_app_log("[APP] CameraApp_Init enter\r\n");
     camera_app_log("[APP] mode=OPENMV_HOST_DIAG\r\n");
+#elif (APP_MODE == APP_MODE_OPENMV_BOARD_DIAG)
+    camera_app_log("[APP] CameraApp_Init enter\r\n");
+    camera_app_log("[APP] mode=OPENMV_BOARD_DIAG\r\n");
 #elif (APP_MODE == APP_MODE_PUMP_CTRL)
     camera_app_log("[APP] CameraApp_Init enter\r\n");
     camera_app_log("[APP] mode=PUMP_CTRL\r\n");
@@ -4811,7 +4864,7 @@ void CameraApp_Run(void)
 #endif
 
 #if ((APP_MODE == APP_MODE_FACE_AI_DIAG) || (APP_MODE == APP_MODE_FACE_AI_VISUAL) || \
-     (APP_MODE == APP_MODE_OPENMV_HOST_DIAG))
+     (APP_MODE == APP_MODE_OPENMV_HOST_DIAG) || (APP_MODE == APP_MODE_OPENMV_BOARD_DIAG))
     if (g_camera_ready != 0U)
     {
         camera_app_face_ai_diag_run();

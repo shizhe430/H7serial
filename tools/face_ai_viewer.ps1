@@ -123,7 +123,7 @@ function Set-FrameResult {
                 $graphics.DrawImage($source, 0, 0, $source.Width, $source.Height)
                 $hasBox = ($Frame.X2 -gt $Frame.X1) -and ($Frame.Y2 -gt $Frame.Y1)
                 if ($hasBox) {
-                    $boxColor = if ($Frame.DetectionValid) { [Drawing.Color]::LimeGreen } else { [Drawing.Color]::Orange }
+                    $boxColor = if ($Frame.MatchValid) { [Drawing.Color]::LimeGreen } else { [Drawing.Color]::DarkOrange }
                     $pen = New-Object Drawing.Pen($boxColor, 3)
                     $font = New-Object Drawing.Font('Segoe UI', 12, [Drawing.FontStyle]::Bold)
                     $brush = New-Object Drawing.SolidBrush($boxColor)
@@ -134,10 +134,12 @@ function Set-FrameResult {
                         $x2 = [Math]::Max($x1 + 1, [Math]::Min($bitmap.Width - 1, $Frame.X2))
                         $y2 = [Math]::Max($y1 + 1, [Math]::Min($bitmap.Height - 1, $Frame.Y2))
                         $graphics.DrawRectangle($pen, $x1, $y1, $x2 - $x1, $y2 - $y1)
-                        $caption = if ($Frame.DetectionValid) {
-                            'FACE  {0:P1}' -f $Frame.Score
+                        $caption = if ($Frame.MatchValid) {
+                            'ID={0} MATCH' -f $Frame.MatchedId
+                        } elseif ($Frame.ReferenceReady -and $Frame.EmbeddingValid) {
+                            'FACE  NO MATCH'
                         } else {
-                            'NO FACE  {0:P1}' -f $Frame.Score
+                            'FACE'
                         }
                         $size = $graphics.MeasureString($caption, $font)
                         $textY = [Math]::Max(0, $y1 - [int]$size.Height - 2)
@@ -187,14 +189,20 @@ function Set-FrameResult {
     if ($script:EnrollmentPending -and
         ($Frame.FrameId -gt $script:EnrollmentRequestAfterFrame) -and
         $Frame.EmbeddingValid) {
-        $script:EnrollmentPending = $false
-        $buttonEnroll.Enabled = $true
-        $buttonEnroll.Text = 'Enroll ID=1'
         if ($Frame.ReferenceReady -and $Frame.MatchValid -and ($Frame.MatchedId -eq 1)) {
+            $script:EnrollmentPending = $false
+            $buttonEnroll.Enabled = $true
+            $buttonEnroll.Text = 'Enroll ID=1'
             $labelResult.Text = 'Reference: ID=1 READY' + [Environment]::NewLine + 'MATCH ID=1'
             $labelResult.ForeColor = [Drawing.Color]::ForestGreen
             Add-LogLine ('enrollment confirmed frame={0} id=1 similarity={1:F3}' -f $Frame.FrameId, $Frame.Similarity)
+        } elseif ($Frame.BackendId -eq 2) {
+            $labelResult.Text = 'ENROLL ID=1' + [Environment]::NewLine + 'COLLECTING 5 FACE FRAMES'
+            $labelResult.ForeColor = [Drawing.Color]::DarkOrange
         } else {
+            $script:EnrollmentPending = $false
+            $buttonEnroll.Enabled = $true
+            $buttonEnroll.Text = 'Enroll ID=1'
             $labelResult.Text = 'ENROLL ID=1' + [Environment]::NewLine + 'CHECK LOG FOR SAVE ERROR'
             $labelResult.ForeColor = [Drawing.Color]::Crimson
             Add-LogLine ('enrollment failed frame={0}' -f $Frame.FrameId)
@@ -209,13 +217,13 @@ function Set-FrameResult {
             $labelResult.ForeColor = [Drawing.Color]::ForestGreen
             $script:MatchCount++
             if ($Frame.Similarity -gt $script:BestSimilarity) { $script:BestSimilarity = $Frame.Similarity }
-            Add-LogLine ('decision frame={0} MATCH id={1} similarity={2:F3}' -f $Frame.FrameId, $Frame.MatchedId, $Frame.Similarity)
+            Add-LogLine ('decision frame={0} MATCH id={1} distance={2:F3} similarity={3:F3}' -f $Frame.FrameId, $Frame.MatchedId, $Frame.EmbeddingNorm, $Frame.Similarity)
         } elseif ($Frame.ReferenceReady) {
             $labelResult.Text = 'Reference: ID=1 READY' + [Environment]::NewLine + 'NO MATCH'
             $labelResult.ForeColor = [Drawing.Color]::Crimson
             $script:NoMatchCount++
             if ($Frame.Similarity -gt $script:BestSimilarity) { $script:BestSimilarity = $Frame.Similarity }
-            Add-LogLine ('decision frame={0} NO MATCH similarity={1:F3}' -f $Frame.FrameId, $Frame.Similarity)
+            Add-LogLine ('decision frame={0} NO MATCH distance={1:F3} similarity={2:F3}' -f $Frame.FrameId, $Frame.EmbeddingNorm, $Frame.Similarity)
         } else {
             $labelResult.Text = 'FACE + FEATURE OK'
             $labelResult.ForeColor = [Drawing.Color]::ForestGreen
@@ -285,6 +293,7 @@ function Parse-Frames {
             ReferenceReady = (($flags -band 0x04) -ne 0)
             MatchValid     = (($flags -band 0x08) -ne 0)
             Similarity     = ([double](Get-U16 $header 44)) / 1000.0
+            BackendId      = [byte]$header[26]
             MatchedId      = [uint16](Get-U16 $header 46)
             X1             = Get-I16 $header 18
             Y1             = Get-I16 $header 20
@@ -505,12 +514,12 @@ $labelCamera = New-ValueRow $metrics 'Camera'
 $labelFrame = New-ValueRow $metrics 'Frame'
 $labelJpeg = New-ValueRow $metrics 'JPEG'
 $labelFps = New-ValueRow $metrics 'Display rate'
-$labelScore = New-ValueRow $metrics 'YuNet score'
+$labelScore = New-ValueRow $metrics 'Detector score'
 $labelBox = New-ValueRow $metrics 'Face box'
-$labelDetTime = New-ValueRow $metrics 'YuNet time'
-$labelIdTime = New-ValueRow $metrics 'SFace time'
+$labelDetTime = New-ValueRow $metrics 'Detect pipeline time'
+$labelIdTime = New-ValueRow $metrics 'Descriptor time'
 $labelTotalTime = New-ValueRow $metrics 'Total time'
-$labelNorm = New-ValueRow $metrics 'Embedding norm'
+$labelNorm = New-ValueRow $metrics 'Embedding norm / LBP distance'
 $labelReference = New-ValueRow $metrics 'Reference'
 $labelSimilarity = New-ValueRow $metrics 'Similarity'
 $labelMatchCount = New-ValueRow $metrics 'Independent matches'
