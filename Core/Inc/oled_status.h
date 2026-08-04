@@ -8,6 +8,7 @@ extern "C" {
 #endif
 
 void OLED_Status_Init(void);
+void OLED_Status_Poll(void);
 void OLED_Status_Show(uint8_t water_level,
                       uint8_t water_out_state,
                       uint16_t temp_val,

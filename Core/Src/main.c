@@ -330,7 +330,9 @@ int main(void)
   MX_USART1_UART_Init();
   MX_DCMI_Init();
   MX_I2C4_Init();
+#if (CAMERA_FINGERPRINT_ENABLE != 0U)
   MX_USART2_UART_Init();
+#endif
   MX_USART3_UART_Init();
   MX_FMC_Init();
   MX_QUADSPI_Init();
@@ -388,10 +390,15 @@ int main(void)
   SCB->CACR &= ~SCB_CACR_FORCEWT_Msk;
   __DSB();
   __ISB();
-#if ((APP_MODE == APP_MODE_FACE_AI_DIAG) || (APP_MODE == APP_MODE_FACE_AI_VISUAL))
+#if ((APP_MODE == APP_MODE_FACE_AI_DIAG) || (APP_MODE == APP_MODE_FACE_AI_VISUAL) || \
+     ((APP_MODE == APP_MODE_PUMP_CTRL) && (CAMERA_FACE_IDENTITY_ENABLE != 0U)))
   if (FaceAI_LoadWeights() != 0U)
   {
     main_uart_print("[FACE_AI] weights load failed\r\n");
+  }
+  else if (FaceAI_InitNetworks() != 0U)
+  {
+    main_uart_print("[FACE_AI] network init failed\r\n");
   }
   (void)FaceAI_LoadEnrollment();
 #endif
@@ -411,6 +418,9 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
     CameraApp_Run();
+#if (APP_MODE == APP_MODE_PUMP_CTRL)
+    OLED_Status_Poll();
+#endif
 
     /* LED 心跳 */
     HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_1);

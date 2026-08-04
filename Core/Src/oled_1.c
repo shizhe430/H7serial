@@ -1,589 +1,655 @@
-#include "oledfont.h"
 #include "oled_1.h"
-#include "main.h"  // HAL库必需
+#include "oledfont.h"
+#include <stdio.h>
+#include <string.h>
 
+#define LCD_WIDTH_DEFAULT       800U
+#define LCD_HEIGHT_DEFAULT      480U
+#define LCD_BASE_ADDR           ((uint32_t)(0x60000000UL | 0x0007FFFEUL))
+#define LCD_MPU_REGION          MPU_REGION_NUMBER2
 
-//==============================================================================
-// 引脚定义（和你CubeMX配置的引脚必须一致！）
-//==============================================================================
-/* Pin mapping comes from main.h so the driver stays aligned with project GPIO labels. */
+#define LCD_COLOR_WHITE         0xFFFFU
+#define LCD_COLOR_BLACK         0x0000U
+#define LCD_COLOR_BLUE          0x001FU
+#define LCD_COLOR_CYAN          0x07FFU
+#define LCD_COLOR_GREEN         0x07E0U
+#define LCD_COLOR_RED           0xF800U
+#define LCD_COLOR_ORANGE        0xFCA0U
+#define LCD_COLOR_GRAY          0x8410U
+#define LCD_COLOR_LIGHT_GRAY    0xC618U
+#define LCD_COLOR_DARK          0x2104U
+#define LCD_COLOR_PANEL         0xF7BEU
+#define LCD_COLOR_NAVY          0x0210U
 
-//==============================================================================
-// 引脚操作宏（HAL库版本）
-//==============================================================================
-#define OLED_SCL_Set()   HAL_GPIO_WritePin(OLED_SCL_GPIO_Port, OLED_SCL_Pin, GPIO_PIN_SET)
-#define OLED_SCL_Clr()   HAL_GPIO_WritePin(OLED_SCL_GPIO_Port, OLED_SCL_Pin, GPIO_PIN_RESET)
+#define LCD_SCAN_L2R_U2D        0U
 
-#define OLED_SDA_Set()   HAL_GPIO_WritePin(OLED_SDA_GPIO_Port, OLED_SDA_Pin, GPIO_PIN_SET)
-#define OLED_SDA_Clr()   HAL_GPIO_WritePin(OLED_SDA_GPIO_Port, OLED_SDA_Pin, GPIO_PIN_RESET)
-
-#define OLED_RES_Set()   HAL_GPIO_WritePin(OLED_RES_GPIO_Port, OLED_RES_Pin, GPIO_PIN_SET)
-#define OLED_RES_Clr()   HAL_GPIO_WritePin(OLED_RES_GPIO_Port, OLED_RES_Pin, GPIO_PIN_RESET)
-
-#define OLED_DC_Set()    HAL_GPIO_WritePin(OLED_DC_GPIO_Port, OLED_DC_Pin, GPIO_PIN_SET)
-#define OLED_DC_Clr()    HAL_GPIO_WritePin(OLED_DC_GPIO_Port, OLED_DC_Pin, GPIO_PIN_RESET)
-
-#define OLED_CS_Set()    HAL_GPIO_WritePin(OLED_CS_GPIO_Port, OLED_CS_Pin, GPIO_PIN_SET)
-#define OLED_CS_Clr()    HAL_GPIO_WritePin(OLED_CS_GPIO_Port, OLED_CS_Pin, GPIO_PIN_RESET)
-
-
-// 饮水机UI缓存变量，仅上电初始化一次静态界面
-u8 last_water_level = 0;
-u8 last_water_out_state = 0;
-u8 last_hot_cold_mode = 0;
-u16 last_temp_val = 0;
-u16 last_dev_id = 0;
-u8 oled_init_draw = 0; // 0=未绘制静态文字，1=已绘制
-
-//******************************************************************************
-// 函数说明：OLED写入一个数据（模拟SPI）
-//******************************************************************************
-void OLED_WR_Bus(u8 dat)
+typedef struct
 {
-	u8 i;
-	OLED_CS_Clr();
-	for(i=0;i<8;i++)
-	{
-		OLED_SCL_Clr();
-		if(dat&0x80)
-		{
-			OLED_SDA_Set();
-		}
-		else
-		{
-			OLED_SDA_Clr();
-		}
-		OLED_SCL_Set();
-		dat<<=1;
-	}
-	OLED_CS_Set();
+    volatile uint16_t LCD_REG;
+    volatile uint16_t LCD_RAM;
+} lcd_bus_t;
+
+typedef struct
+{
+    uint16_t width;
+    uint16_t height;
+    uint16_t id;
+    uint8_t dir;
+    uint16_t wramcmd;
+    uint16_t setxcmd;
+    uint16_t setycmd;
+} lcd_dev_t;
+
+static lcd_dev_t s_lcd = {
+    LCD_WIDTH_DEFAULT,
+    LCD_HEIGHT_DEFAULT,
+    0U,
+    1U,
+    0x2C00U,
+    0x2A00U,
+    0x2B00U
+};
+
+static uint16_t s_fg_color = LCD_COLOR_BLACK;
+static uint16_t s_bg_color = LCD_COLOR_WHITE;
+static uint8_t s_lcd_ready = 0U;
+
+static u8 last_water_level = 0xFFU;
+static u8 last_water_out_state = 0xFFU;
+static u8 last_hot_cold_mode = 0xFFU;
+static u16 last_temp_val = 0xFFFFU;
+static u16 last_dev_id = 0xFFFFU;
+static u8 oled_init_draw = 0U;
+
+#define LCD_BUS ((lcd_bus_t *)LCD_BASE_ADDR)
+
+static void lcd_write_reg(uint16_t reg)
+{
+    LCD_BUS->LCD_REG = reg;
 }
 
-//******************************************************************************
-// 函数说明：OLED写入指令
-//******************************************************************************
-void OLED_WR_REG(u8 reg)
+static void lcd_write_data(uint16_t data)
 {
-	OLED_DC_Clr();
-  OLED_WR_Bus(reg);
-  OLED_DC_Set();
+    LCD_BUS->LCD_RAM = data;
 }
 
-//******************************************************************************
-// 函数说明：OLED写入数据
-//******************************************************************************
-void OLED_WR_Byte(u8 dat)
+static uint16_t lcd_read_data(void)
 {
-  OLED_WR_Bus(dat);
+    return LCD_BUS->LCD_RAM;
 }
 
-//******************************************************************************
-// 函数说明：列地址设置
-//******************************************************************************
-void Column_Address(u8 a,u8 b)
+static void lcd_write_reg_value(uint16_t reg, uint16_t value)
 {
-	if(USE_HORIZONTAL==0)
-	{
-	 OLED_WR_REG(0x15);
-	 OLED_WR_Byte(0x20+a);
-	 OLED_WR_Byte(0x20+b);
-	}
-	else
-	{
-	 OLED_WR_REG(0x15);
-	 OLED_WR_Byte(0x18+a);
-	 OLED_WR_Byte(0x18+b);
-	}
+    lcd_write_reg(reg);
+    lcd_write_data(value);
 }
 
-//******************************************************************************
-// 函数说明：行地址设置
-//******************************************************************************
-void Row_Address(u8 a,u8 b)
+static void lcd_mpu_config(void)
 {
-	OLED_WR_REG(0x75);
-	OLED_WR_Byte(a);
-	OLED_WR_Byte(b);
-	OLED_WR_REG(0x5C);
+    MPU_Region_InitTypeDef region = {0};
+
+    HAL_MPU_Disable();
+    region.Enable = MPU_REGION_ENABLE;
+    region.Number = LCD_MPU_REGION;
+    region.BaseAddress = 0x60000000UL;
+    region.Size = MPU_REGION_SIZE_256MB;
+    region.SubRegionDisable = 0x00U;
+    region.TypeExtField = MPU_TEX_LEVEL0;
+    region.AccessPermission = MPU_REGION_FULL_ACCESS;
+    region.DisableExec = MPU_INSTRUCTION_ACCESS_ENABLE;
+    region.IsShareable = MPU_ACCESS_NOT_SHAREABLE;
+    region.IsCacheable = MPU_ACCESS_NOT_CACHEABLE;
+    region.IsBufferable = MPU_ACCESS_BUFFERABLE;
+    HAL_MPU_ConfigRegion(&region);
+    HAL_MPU_Enable(MPU_HFNMI_PRIVDEF);
 }
 
-//******************************************************************************
-// 函数说明：OLED填充
-//******************************************************************************
-void OLED_Fill(u16 xstr,u8 ystr,u16 xend,u8 yend,u8 color)
+static void lcd_backlight_init(void)
 {
-	u8 x,y;
-	xstr/=4;
-	xend/=4;
-	Column_Address(xstr,xend-1);
-	Row_Address(ystr,yend-1);
-	for(x=xstr;x<xend;x++)
-	{
-		for(y=ystr;y<yend;y++)
-		{
-			OLED_WR_Byte(color);
-			OLED_WR_Byte(color);
-    }
-  }
+    GPIO_InitTypeDef gpio = {0};
+
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+    gpio.Pin = LCD_BL_Pin;
+    gpio.Mode = GPIO_MODE_OUTPUT_PP;
+    gpio.Pull = GPIO_PULLUP;
+    gpio.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+    HAL_GPIO_Init(LCD_BL_GPIO_Port, &gpio);
+    HAL_GPIO_WritePin(LCD_BL_GPIO_Port, LCD_BL_Pin, GPIO_PIN_SET);
 }
 
-//******************************************************************************
-// 16x16汉字
-//******************************************************************************
-void OLED_ShowChinese16x16(u8 x, u8 y, const char *s, u8 sizey, u8 mode)
+static void lcd_fmc_gpio_init(void)
 {
-    u8 i,j,k,DATA=0;
-    u16 HZnum;
-    u16 TypefaceNum;
-    const typFNT_UTF8_16 *pFont = utf8_tfont16;
+    GPIO_InitTypeDef gpio = {0};
 
-    TypefaceNum=(sizey/8+((sizey%8)?1:0))*sizey;
-    HZnum=utf8_tfont16_len;
+    __HAL_RCC_FMC_CLK_ENABLE();
+    __HAL_RCC_GPIOD_CLK_ENABLE();
+    __HAL_RCC_GPIOE_CLK_ENABLE();
 
-    while(*s != '\0')
+    gpio.Mode = GPIO_MODE_AF_PP;
+    gpio.Pull = GPIO_PULLUP;
+    gpio.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+    gpio.Alternate = GPIO_AF12_FMC;
+
+    gpio.Pin = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_4 | GPIO_PIN_5 |
+               GPIO_PIN_7 | GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 |
+               GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15;
+    HAL_GPIO_Init(GPIOD, &gpio);
+
+    gpio.Pin = GPIO_PIN_7 | GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 |
+               GPIO_PIN_11 | GPIO_PIN_12 | GPIO_PIN_13 | GPIO_PIN_14 |
+               GPIO_PIN_15;
+    HAL_GPIO_Init(GPIOE, &gpio);
+}
+
+static void lcd_fmc_init(void)
+{
+    lcd_fmc_gpio_init();
+
+    FMC_Bank1_R->BTCR[0] = FMC_BCR1_FMCEN | FMC_BCR1_WFDIS |
+                           FMC_BCRx_EXTMOD | FMC_BCRx_WREN |
+                           FMC_BCRx_MWID_0 | FMC_BCRx_MBKEN;
+    FMC_Bank1_R->BTCR[1] = (85UL << FMC_BTRx_DATAST_Pos) |
+                           (17UL << FMC_BTRx_ADDSET_Pos);
+    FMC_Bank1E_R->BWTR[0] = (21UL << FMC_BWTRx_DATAST_Pos) |
+                            (21UL << FMC_BWTRx_ADDSET_Pos);
+    HAL_Delay(50U);
+}
+
+static uint16_t lcd_read_id(void)
+{
+    uint16_t id;
+
+    lcd_write_reg(0xD3U);
+    (void)lcd_read_data();
+    (void)lcd_read_data();
+    id = lcd_read_data();
+    id <<= 8;
+    id |= lcd_read_data();
+    if (id == 0x9341U)
     {
-        // 处理 UTF-8 编码的中文字符（固定占3字节）
-        uint8_t utf8[3] = {
-            (uint8_t)*s,
-            (uint8_t)*(s+1),
-            (uint8_t)*(s+2)
-        };
+        return id;
+    }
 
-        // 在 UTF-8 字库中查找汉字
-        for(k=0;k<HZnum;k++)
+    lcd_write_reg(0x04U);
+    (void)lcd_read_data();
+    id = lcd_read_data();
+    id <<= 8;
+    id |= lcd_read_data();
+    if (id == 0x8552U)
+    {
+        return 0x7789U;
+    }
+    if (id == 0x7789U)
+    {
+        return id;
+    }
+
+    lcd_write_reg(0xD4U);
+    (void)lcd_read_data();
+    (void)lcd_read_data();
+    id = lcd_read_data();
+    id <<= 8;
+    id |= lcd_read_data();
+    if (id == 0x5310U)
+    {
+        return id;
+    }
+
+    lcd_write_reg_value(0xF000U, 0x0055U);
+    lcd_write_reg_value(0xF001U, 0x00AAU);
+    lcd_write_reg_value(0xF002U, 0x0052U);
+    lcd_write_reg_value(0xF003U, 0x0008U);
+    lcd_write_reg_value(0xF004U, 0x0001U);
+    lcd_write_reg(0xC500U);
+    id = lcd_read_data();
+    id <<= 8;
+    lcd_write_reg(0xC501U);
+    id |= lcd_read_data();
+    HAL_Delay(5U);
+    return id;
+}
+
+static void lcd_init_nt35510(void)
+{
+    lcd_write_reg_value(0xF000U, 0x55U);
+    lcd_write_reg_value(0xF001U, 0xAAU);
+    lcd_write_reg_value(0xF002U, 0x52U);
+    lcd_write_reg_value(0xF003U, 0x08U);
+    lcd_write_reg_value(0xF004U, 0x01U);
+
+    lcd_write_reg_value(0xB000U, 0x0DU); lcd_write_reg_value(0xB001U, 0x0DU); lcd_write_reg_value(0xB002U, 0x0DU);
+    lcd_write_reg_value(0xB600U, 0x34U); lcd_write_reg_value(0xB601U, 0x34U); lcd_write_reg_value(0xB602U, 0x34U);
+    lcd_write_reg_value(0xB100U, 0x0DU); lcd_write_reg_value(0xB101U, 0x0DU); lcd_write_reg_value(0xB102U, 0x0DU);
+    lcd_write_reg_value(0xB700U, 0x34U); lcd_write_reg_value(0xB701U, 0x34U); lcd_write_reg_value(0xB702U, 0x34U);
+    lcd_write_reg_value(0xB200U, 0x00U); lcd_write_reg_value(0xB201U, 0x00U); lcd_write_reg_value(0xB202U, 0x00U);
+    lcd_write_reg_value(0xB800U, 0x24U); lcd_write_reg_value(0xB801U, 0x24U); lcd_write_reg_value(0xB802U, 0x24U);
+    lcd_write_reg_value(0xBF00U, 0x01U);
+    lcd_write_reg_value(0xB300U, 0x0FU); lcd_write_reg_value(0xB301U, 0x0FU); lcd_write_reg_value(0xB302U, 0x0FU);
+    lcd_write_reg_value(0xB900U, 0x34U); lcd_write_reg_value(0xB901U, 0x34U); lcd_write_reg_value(0xB902U, 0x34U);
+    lcd_write_reg_value(0xB500U, 0x08U); lcd_write_reg_value(0xB501U, 0x08U); lcd_write_reg_value(0xB502U, 0x08U);
+    lcd_write_reg_value(0xC200U, 0x03U);
+    lcd_write_reg_value(0xBA00U, 0x24U); lcd_write_reg_value(0xBA01U, 0x24U); lcd_write_reg_value(0xBA02U, 0x24U);
+    lcd_write_reg_value(0xBC00U, 0x00U); lcd_write_reg_value(0xBC01U, 0x78U); lcd_write_reg_value(0xBC02U, 0x00U);
+    lcd_write_reg_value(0xBD00U, 0x00U); lcd_write_reg_value(0xBD01U, 0x78U); lcd_write_reg_value(0xBD02U, 0x00U);
+    lcd_write_reg_value(0xBE00U, 0x00U); lcd_write_reg_value(0xBE01U, 0x64U);
+
+    lcd_write_reg_value(0xF000U, 0x0055U);
+    lcd_write_reg_value(0xF001U, 0x00AAU);
+    lcd_write_reg_value(0xF002U, 0x0052U);
+    lcd_write_reg_value(0xF003U, 0x0008U);
+    lcd_write_reg_value(0xF004U, 0x0000U);
+    lcd_write_reg_value(0xB100U, 0x00CCU);
+    lcd_write_reg_value(0xB101U, 0x0000U);
+    lcd_write_reg_value(0xB600U, 0x0005U);
+    lcd_write_reg_value(0xB700U, 0x0070U);
+    lcd_write_reg_value(0xB701U, 0x0070U);
+    lcd_write_reg_value(0xB800U, 0x0001U);
+    lcd_write_reg_value(0xB801U, 0x0003U);
+    lcd_write_reg_value(0xB802U, 0x0003U);
+    lcd_write_reg_value(0xB803U, 0x0003U);
+    lcd_write_reg_value(0xBC00U, 0x0002U);
+    lcd_write_reg_value(0xBC01U, 0x0000U);
+    lcd_write_reg_value(0xBC02U, 0x0000U);
+    lcd_write_reg_value(0xC900U, 0x00D0U);
+    lcd_write_reg_value(0xC901U, 0x0002U);
+    lcd_write_reg_value(0xC902U, 0x0050U);
+    lcd_write_reg_value(0xC903U, 0x0050U);
+    lcd_write_reg_value(0xC904U, 0x0050U);
+    lcd_write_reg(0x3500U);
+    lcd_write_data(0x00U);
+    lcd_write_reg(0x3A00U);
+    lcd_write_data(0x55U);
+    lcd_write_reg(0x1100U);
+    HAL_Delay(100U);
+    lcd_write_reg(0x2900U);
+
+    s_lcd.wramcmd = 0x2C00U;
+    s_lcd.setxcmd = 0x2A00U;
+    s_lcd.setycmd = 0x2B00U;
+    s_lcd.width = LCD_WIDTH_DEFAULT;
+    s_lcd.height = LCD_HEIGHT_DEFAULT;
+    s_lcd.dir = 1U;
+    lcd_write_reg_value(0x3600U, 0x28U);
+}
+
+static void lcd_set_window(uint16_t sx, uint16_t sy, uint16_t ex, uint16_t ey)
+{
+    if (sx >= s_lcd.width)
+    {
+        sx = (uint16_t)(s_lcd.width - 1U);
+    }
+    if (sy >= s_lcd.height)
+    {
+        sy = (uint16_t)(s_lcd.height - 1U);
+    }
+    if (ex >= s_lcd.width)
+    {
+        ex = (uint16_t)(s_lcd.width - 1U);
+    }
+    if (ey >= s_lcd.height)
+    {
+        ey = (uint16_t)(s_lcd.height - 1U);
+    }
+
+    if (s_lcd.id == 0x5510U)
+    {
+        lcd_write_reg(s_lcd.setxcmd);     lcd_write_data((uint16_t)(sx >> 8));
+        lcd_write_reg(s_lcd.setxcmd + 1U); lcd_write_data((uint16_t)(sx & 0xFFU));
+        lcd_write_reg(s_lcd.setxcmd + 2U); lcd_write_data((uint16_t)(ex >> 8));
+        lcd_write_reg(s_lcd.setxcmd + 3U); lcd_write_data((uint16_t)(ex & 0xFFU));
+        lcd_write_reg(s_lcd.setycmd);     lcd_write_data((uint16_t)(sy >> 8));
+        lcd_write_reg(s_lcd.setycmd + 1U); lcd_write_data((uint16_t)(sy & 0xFFU));
+        lcd_write_reg(s_lcd.setycmd + 2U); lcd_write_data((uint16_t)(ey >> 8));
+        lcd_write_reg(s_lcd.setycmd + 3U); lcd_write_data((uint16_t)(ey & 0xFFU));
+    }
+    else
+    {
+        lcd_write_reg(s_lcd.setxcmd);
+        lcd_write_data((uint16_t)(sx >> 8));
+        lcd_write_data((uint16_t)(sx & 0xFFU));
+        lcd_write_data((uint16_t)(ex >> 8));
+        lcd_write_data((uint16_t)(ex & 0xFFU));
+        lcd_write_reg(s_lcd.setycmd);
+        lcd_write_data((uint16_t)(sy >> 8));
+        lcd_write_data((uint16_t)(sy & 0xFFU));
+        lcd_write_data((uint16_t)(ey >> 8));
+        lcd_write_data((uint16_t)(ey & 0xFFU));
+    }
+}
+
+static void lcd_fill_rect(uint16_t sx, uint16_t sy, uint16_t ex, uint16_t ey, uint16_t color)
+{
+    uint32_t count;
+
+    if ((sx > ex) || (sy > ey))
+    {
+        return;
+    }
+
+    lcd_set_window(sx, sy, ex, ey);
+    lcd_write_reg(s_lcd.wramcmd);
+    count = ((uint32_t)(ex - sx + 1U)) * ((uint32_t)(ey - sy + 1U));
+    while (count-- != 0U)
+    {
+        lcd_write_data(color);
+    }
+}
+
+static void lcd_draw_pixel(uint16_t x, uint16_t y, uint16_t color)
+{
+    if ((x >= s_lcd.width) || (y >= s_lcd.height))
+    {
+        return;
+    }
+
+    lcd_set_window(x, y, x, y);
+    lcd_write_reg(s_lcd.wramcmd);
+    lcd_write_data(color);
+}
+
+static void lcd_draw_char_scaled(uint16_t x, uint16_t y, char ch,
+                                 uint8_t scale, uint16_t fg, uint16_t bg,
+                                 uint8_t transparent)
+{
+    uint8_t row;
+    uint8_t col;
+    uint8_t sx;
+    uint8_t sy;
+    const uint8_t *glyph;
+
+    if ((ch < ' ') || (ch > '~'))
+    {
+        ch = ' ';
+    }
+
+    if (scale == 0U)
+    {
+        scale = 1U;
+    }
+
+    glyph = ascii_1608[(uint8_t)ch - (uint8_t)' '];
+    for (row = 0U; row < 16U; row++)
+    {
+        uint8_t bits = glyph[row];
+        for (col = 0U; col < 8U; col++)
         {
-            if ((pFont[k].Utf8[0]==utf8[0]) &&
-                (pFont[k].Utf8[1]==utf8[1]) &&
-                (pFont[k].Utf8[2]==utf8[2]))
-            {
-                // 每个汉字单独设置地址
-                Column_Address(x/4, x/4+sizey/4-1);
-                Row_Address(y, y+sizey-1);
+            uint16_t color;
+            uint8_t on = ((bits & (0x80U >> col)) != 0U) ? 1U : 0U;
 
-                for(i=0;i<TypefaceNum;i++)
+            if ((on == 0U) && (transparent != 0U))
+            {
+                continue;
+            }
+            color = (on != 0U) ? fg : bg;
+            for (sy = 0U; sy < scale; sy++)
+            {
+                for (sx = 0U; sx < scale; sx++)
                 {
-                    for(j=0;j<4;j++)
-                    {
-                        DATA=0;
-                        if(pFont[k].Msk[i]&(0x01<<(j*2+0))) DATA=0xf0;
-                        if(pFont[k].Msk[i]&(0x01<<(j*2+1))) DATA|=0x0f;
-                        if(mode) OLED_WR_Byte(~DATA);
-                        else OLED_WR_Byte(DATA);
-                    }
+                    lcd_draw_pixel((uint16_t)(x + (col * scale) + sx),
+                                   (uint16_t)(y + (row * scale) + sy),
+                                   color);
                 }
-                x += sizey; // 下一个汉字右移16像素
-                break;
             }
         }
-        s += 3; // 移动指针，处理下一个UTF-8中文字符
     }
 }
-//******************************************************************************
-// 24x24汉字
-//******************************************************************************
-void OLED_ShowChinese24x24(u8 x,u8 y,u8 *s,u8 sizey,u8 mode)
+
+static void lcd_draw_text_scaled(uint16_t x, uint16_t y, const char *text,
+                                 uint8_t scale, uint16_t fg, uint16_t bg,
+                                 uint8_t transparent)
 {
-	u8 i,j,k,DATA=0;
-	u16 HZnum;
-	u16 TypefaceNum;
-	TypefaceNum=(sizey/8+((sizey%8)?1:0))*sizey;
-	HZnum=tfont24_len;
-	Column_Address(x/4,x/4+sizey/4-1);
-	Row_Address(y,y+sizey-1);
-	for(k=0;k<HZnum;k++)
-	{
-		if ((tfont24[k].Index[0]==*(s))&&(tfont24[k].Index[1]==*(s+1)))
-		{
-			for(i=0;i<TypefaceNum;i++)
-			{
-				for(j=0;j<4;j++)
-				{
-					if(tfont24[k].Msk[i]&(0x01<<(j*2+0))) DATA=0xf0;
-					if(tfont24[k].Msk[i]&(0x01<<(j*2+1))) DATA|=0x0f;
-					if(mode) OLED_WR_Byte(~DATA);
-					else OLED_WR_Byte(DATA);
-					DATA=0;
-				}
-			}
-		}
-		continue;
-	}
+    uint16_t cursor = x;
+
+    while ((text != NULL) && (*text != '\0'))
+    {
+        lcd_draw_char_scaled(cursor, y, *text, scale, fg, bg, transparent);
+        cursor = (uint16_t)(cursor + (8U * scale) + scale);
+        text++;
+    }
 }
 
-//******************************************************************************
-// 32x32汉字
-//******************************************************************************
-void OLED_ShowChinese32x32(u8 x,u8 y,u8 *s,u8 sizey,u8 mode)
+static void lcd_draw_num_fixed(uint16_t x, uint16_t y, uint32_t num,
+                               uint8_t width, uint8_t scale,
+                               uint16_t fg, uint16_t bg)
 {
-	u8 i,j,k,DATA=0;
-	u16 HZnum;
-	u16 TypefaceNum;
-	TypefaceNum=(sizey/8+((sizey%8)?1:0))*sizey;
-	HZnum=tfont32_len;
-	Column_Address(x/4,x/4+sizey/4-1);
-	Row_Address(y,y+sizey-1);
-	for(k=0;k<HZnum;k++)
-	{
-		if ((tfont32[k].Index[0]==*(s))&&(tfont32[k].Index[1]==*(s+1)))
-		{
-			for(i=0;i<TypefaceNum;i++)
-			{
-				for(j=0;j<4;j++)
-				{
-					if(tfont32[k].Msk[i]&(0x01<<(j*2+0))) DATA=0xf0;
-					if(tfont32[k].Msk[i]&(0x01<<(j*2+1))) DATA|=0x0f;
-					if(mode) OLED_WR_Byte(~DATA);
-					else OLED_WR_Byte(DATA);
-					DATA=0;
-				}
-			}
-		}
-		continue;
-	}
+    char buf[12];
+
+    (void)snprintf(buf, sizeof(buf), "%0*lu", (int)width, (unsigned long)num);
+    lcd_draw_text_scaled(x, y, buf, scale, fg, bg, 0U);
 }
 
-
-//******************************************************************************
-// 显示汉字串
-//******************************************************************************
-void OLED_ShowChinese(u8 x,u8 y,u8 *s,u8 sizey,u8 mode)
+static void lcd_draw_card(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
+                          const char *title)
 {
-	while(*s!=0)
-	{
-		if(sizey==16) OLED_ShowChinese16x16(x,y,(const char *)s,sizey,mode);
-		else if(sizey==24) OLED_ShowChinese24x24(x,y,s,sizey,mode);
-		else if(sizey==32) OLED_ShowChinese32x32(x,y,s,sizey,mode);
-		else return;
-		s+=2;
-		x+=sizey;
-	}
+    lcd_fill_rect(x, y, (uint16_t)(x + w - 1U), (uint16_t)(y + h - 1U), LCD_COLOR_PANEL);
+    lcd_fill_rect(x, y, (uint16_t)(x + w - 1U), (uint16_t)(y + 4U), LCD_COLOR_BLUE);
+    lcd_fill_rect(x, (uint16_t)(y + h - 5U), (uint16_t)(x + w - 1U),
+                  (uint16_t)(y + h - 1U), LCD_COLOR_BLUE);
+    lcd_fill_rect(x, y, (uint16_t)(x + 4U), (uint16_t)(y + h - 1U), LCD_COLOR_BLUE);
+    lcd_fill_rect((uint16_t)(x + w - 5U), y, (uint16_t)(x + w - 1U),
+                  (uint16_t)(y + h - 1U), LCD_COLOR_BLUE);
+    lcd_draw_text_scaled((uint16_t)(x + 18U), (uint16_t)(y + 16U), title,
+                         2U, LCD_COLOR_DARK, LCD_COLOR_PANEL, 1U);
 }
 
-//******************************************************************************
-// 显示字符
-//******************************************************************************
-void OLED_ShowChar(u8 x,u8 y,u8 chr,u8 sizey,u8 mode)
+void OLED_WR_REG(u8 reg)
 {
-	u8 c,i,k,m,t=4,size2,data1=0,DATA=0;
-	size2=(sizey/16+((sizey%16)?1:0))*sizey;
-	c=chr-' ';
-	Column_Address(x/4,x/4+sizey/8-1);
-	Row_Address(y,y+sizey-1);
-	for(i=0;i<size2;i++)
-	{
-		if(sizey==16)      data1=ascii_1608[c][i];
-		else if(sizey==24) data1=ascii_2412[c][i];
-		else if(sizey==32) data1=ascii_3216[c][i];
-
-		if(sizey%16)
-		{
-			m=sizey/16+1;
-			if(i%m) t=2; else t=4;
-		}
-		for(k=0;k<t;k++)
-		{
-			if(data1&(0x01<<(k*2+0))) DATA=0xf0;
-			if(data1&(0x01<<(k*2+1))) DATA|=0x0f;
-			if(mode) OLED_WR_Byte(~DATA);
-			else OLED_WR_Byte(DATA);
-			DATA=0;
-		}
-  }
+    lcd_write_reg((uint16_t)reg);
 }
 
-//******************************************************************************
-// 显示字符串
-//******************************************************************************
-void OLED_ShowString(u8 x,u8 y,u8 *dp,u8 sizey,u8 mode)
+void OLED_WR_Byte(u8 dat)
 {
-	while(*dp!='\0')
-	{
-	  OLED_ShowChar(x,y,*dp,sizey,mode);
-		dp++;
-		x+=sizey/2;
-	}
+    lcd_write_data((uint16_t)dat);
 }
 
-//******************************************************************************
-// 幂运算
-//******************************************************************************
-u32 oled_pow(u8 m,u8 n)
-{
-	u32 result=1;
-	while(n--)result*=m;
-	return result;
-}
-
-//******************************************************************************
-// 显示数字
-//******************************************************************************
-void OLED_ShowNum(u8 x,u8 y,u32 num,u8 len,u8 sizey,u8 mode)
-{
-	u8 t,temp;
-	u8 enshow=0;
-	for(t=0;t<len;t++)
-	{
-		temp=(num/oled_pow(10,len-t-1))%10;
-		if(enshow==0&&t<(len-1))
-		{
-			if(temp==0)
-			{
-				OLED_ShowChar(x+(sizey/2)*t,y,' ',sizey,mode);
-				continue;
-			}else enshow=1;
-		}
-	 	OLED_ShowChar(x+(sizey/2)*t,y,temp+'0',sizey,mode);
-	}
-}
-
-//******************************************************************************
-// 显示灰度图
-//******************************************************************************
-void OLED_DrawBMP(u8 x,u8 y,u16 length,u8 width,const u8 BMP[],u8 mode)
-{
-	u16 i,num;
-	length=(length/4+((length%4)?1:0))*4;
-	num=length/2*width;
-	x/=4;
-	length/=4;
-	Column_Address(x,x+length-1);
-	Row_Address(y,y+width-1);
-	for(i=0;i<num;i++)
-	{
-		if(mode) OLED_WR_Byte(~BMP[i]);
-		else OLED_WR_Byte(BMP[i]);
-	}
-}
-
-//******************************************************************************
-// 显示单色图
-//******************************************************************************
-void OLED_DrawSingleBMP(u8 x,u8 y,u16 length,u8 width,const u8 BMP[],u8 mode)
-{
-	u8 k,DATA=0;
-	u16 i,num;
-	length=(length/8+((length%8)?1:0))*8;
-	num=length*width/8;
-	x/=4;
-	length/=4;
-	Column_Address(x,x+length-1);
-	Row_Address(y,y+width-1);
-	for(i=0;i<num;i++)
-	{
-		for(k=0;k<4;k++)
-		{
-			if(BMP[i]&(0x01<<(k*2+0))) DATA=0xf0;
-			if(BMP[i]&(0x01<<(k*2+1))) DATA|=0x0f;
-			if(mode) OLED_WR_Byte(~DATA);
-			else OLED_WR_Byte(DATA);
-			DATA=0;
-		}
-	}
-}
-
-
-
-/* @brief 全屏清屏 屏幕256宽 × 64高
-/* @note 复用你现有 Column_Address、Row_Address、OLED_WR_Byte 底层接口
-/*/
-void OLED_Clear(void)
-{
-   // 整屏坐标：x起点0，x终点255；y起点0，y终点63
-   OLED_Fill(0, 0, 256, 64, 0x00);
-}
-
-//******************************************************************************
-// ====================== OLED初始化（HAL库版本）===============================
-// 完全删除了标准库、删除锁SWD代码
-//******************************************************************************
 void OLED_Init(void)
 {
-	// 复位OLED
-	OLED_RES_Clr();
-	HAL_Delay(10);
-	OLED_RES_Set();
-	HAL_Delay(10);
+    if (s_lcd_ready != 0U)
+    {
+        return;
+    }
 
-	OLED_WR_REG(0xfd);
-	OLED_WR_Byte(0x12);
+    lcd_mpu_config();
+    lcd_backlight_init();
+    lcd_fmc_init();
 
-	OLED_WR_REG(0xae);
+    s_lcd.id = lcd_read_id();
+    if (s_lcd.id == 0x5510U)
+    {
+        lcd_init_nt35510();
+    }
+    else
+    {
+        s_lcd.id = 0x5510U;
+        lcd_init_nt35510();
+    }
 
-	OLED_WR_REG(0x15);
-	OLED_WR_Byte(0x1C);
-	OLED_WR_Byte(0x5B);
-
-	OLED_WR_REG(0x75);
-	OLED_WR_Byte(0x00);
-	OLED_WR_Byte(0x3F);
-
-	OLED_WR_REG(0xa0);
-	if(USE_HORIZONTAL) OLED_WR_Byte(0x16);
-	else OLED_WR_Byte(0x04);
-
-	OLED_WR_REG(0xa1); OLED_WR_Byte(0x00);
-	OLED_WR_REG(0xa2); OLED_WR_Byte(0x00);
-	OLED_WR_REG(0xa6);
-	OLED_WR_REG(0xab); OLED_WR_Byte(0x01);
-	OLED_WR_REG(0xb1); OLED_WR_Byte(0x74);
-	OLED_WR_REG(0xb3); OLED_WR_Byte(0x91);
-	OLED_WR_REG(0xb4); OLED_WR_Byte(0xa0); OLED_WR_Byte(0xB5);
-	OLED_WR_REG(0xb6); OLED_WR_Byte(0x08);
-	OLED_WR_REG(0xbb); OLED_WR_Byte(0x17);
-	OLED_WR_REG(0xbe); OLED_WR_Byte(0x04);
-	OLED_WR_REG(0xc1); OLED_WR_Byte(0xff);
-	OLED_WR_REG(0xc7); OLED_WR_Byte(0x0f);
-	OLED_WR_REG(0xca); OLED_WR_Byte(0x3f);
-	OLED_WR_REG(0xd1); OLED_WR_Byte(0xA2); OLED_WR_Byte(0x20);
-  OLED_WR_REG(0xb9);
-  OLED_WR_REG(0x00);
-  OLED_WR_REG(0xB8);
-	OLED_WR_Byte(0x00);
-	OLED_WR_Byte(0x0C);
-	OLED_WR_Byte(0x18);
-	OLED_WR_Byte(0x24);
-	OLED_WR_Byte(0x30);
-	OLED_WR_Byte(0x3C);
-	OLED_WR_Byte(0x48);
-	OLED_WR_Byte(0x54);
-	OLED_WR_Byte(0x60);
-	OLED_WR_Byte(0x6C);
-	OLED_WR_Byte(0x78);
-	OLED_WR_Byte(0x84);
-	OLED_WR_Byte(0x90);
-	OLED_WR_Byte(0x9C);
-	OLED_WR_Byte(0xA8);
-
-	OLED_Fill(0,0,256,64,0x00);
-
-	OLED_WR_REG(0xaf);
+    s_lcd_ready = 1U;
+    printf("[LCD] id=0x%04X size=%ux%u\r\n",
+           (unsigned int)s_lcd.id,
+           (unsigned int)s_lcd.width,
+           (unsigned int)s_lcd.height);
+    OLED_Clear();
 }
 
-/**
- * @brief 绘制固定静态文字（上电仅执行一次，全部标题带冒号）
- */
+void OLED_Clear(void)
+{
+    if (s_lcd_ready == 0U)
+    {
+        return;
+    }
+    lcd_fill_rect(0U, 0U, (uint16_t)(s_lcd.width - 1U),
+                  (uint16_t)(s_lcd.height - 1U), LCD_COLOR_WHITE);
+}
+
+void OLED_Fill(u16 xstr, u8 ystr, u16 xend, u8 yend, u8 color)
+{
+    uint16_t rgb = (color == 0U) ? LCD_COLOR_BLACK : LCD_COLOR_WHITE;
+
+    if (s_lcd_ready == 0U)
+    {
+        return;
+    }
+
+    lcd_fill_rect(xstr, ystr, xend, yend, rgb);
+}
+
+void OLED_ShowChar(u8 x, u8 y, u8 chr, u8 sizey, u8 mode)
+{
+    uint8_t scale = (sizey >= 32U) ? 2U : 1U;
+    uint16_t fg = (mode != 0U) ? s_bg_color : s_fg_color;
+    uint16_t bg = (mode != 0U) ? s_fg_color : s_bg_color;
+
+    lcd_draw_char_scaled(x, y, (char)chr, scale, fg, bg, 0U);
+}
+
+void OLED_ShowString(u8 x, u8 y, u8 *dp, u8 sizey, u8 mode)
+{
+    uint8_t scale = (sizey >= 32U) ? 2U : 1U;
+    uint16_t fg = (mode != 0U) ? s_bg_color : s_fg_color;
+    uint16_t bg = (mode != 0U) ? s_fg_color : s_bg_color;
+
+    lcd_draw_text_scaled(x, y, (const char *)dp, scale, fg, bg, 0U);
+}
+
+static uint32_t oled_pow(u8 m, u8 n)
+{
+    uint32_t result = 1U;
+
+    while (n-- != 0U)
+    {
+        result *= m;
+    }
+    return result;
+}
+
+void OLED_ShowNum(u8 x, u8 y, u32 num, u8 len, u8 sizey, u8 mode)
+{
+    uint8_t scale = (sizey >= 32U) ? 2U : 1U;
+    uint8_t i;
+    uint16_t fg = (mode != 0U) ? s_bg_color : s_fg_color;
+    uint16_t bg = (mode != 0U) ? s_fg_color : s_bg_color;
+
+    for (i = 0U; i < len; i++)
+    {
+        uint8_t digit = (uint8_t)((num / oled_pow(10U, (u8)(len - i - 1U))) % 10U);
+        lcd_draw_char_scaled((uint16_t)(x + (i * (8U * scale + scale))), y,
+                             (char)('0' + digit), scale, fg, bg, 0U);
+    }
+}
+
+void OLED_ShowChinese(u8 x, u8 y, u8 *s, u8 sizey, u8 mode)
+{
+    (void)x;
+    (void)y;
+    (void)s;
+    (void)sizey;
+    (void)mode;
+}
+
+void OLED_DrawBMP(u8 x, u8 y, u16 length, u8 width, const u8 BMP[], u8 mode)
+{
+    (void)x;
+    (void)y;
+    (void)length;
+    (void)width;
+    (void)BMP;
+    (void)mode;
+}
+
+void OLED_DrawSingleBMP(u8 x, u8 y, u16 length, u8 width, const u8 BMP[], u8 mode)
+{
+    OLED_DrawBMP(x, y, length, width, BMP, mode);
+}
+
 void Disp_DrawStatic(void)
 {
-    OLED_Fill(0,0,256,64,0x00);
-    // 左上角固定ID标签 ID:
-    OLED_ShowString(0, 0, (u8 *)"ID:", 16, 0);
+    if (s_lcd_ready == 0U)
+    {
+        return;
+    }
 
-    // 右上角固定 温度: C
-    OLED_ShowChinese16x16(160, 0, "\xE6\xB8\xA9", 16, 0);
-    OLED_ShowChinese16x16(176, 0, "\xE5\xBA\xA6", 16, 0);
-    OLED_ShowString(192, 0, (u8 *)":", 16, 0);
-    OLED_ShowChinese16x16(228, 0,"\x10\x10\x10", 16, 0);
+    lcd_fill_rect(0U, 0U, 799U, 479U, LCD_COLOR_WHITE);
+    lcd_fill_rect(0U, 0U, 799U, 74U, LCD_COLOR_NAVY);
+    lcd_draw_text_scaled(28U, 18U, "SMART WATER DISPENSER", 3U,
+                         LCD_COLOR_WHITE, LCD_COLOR_NAVY, 1U);
 
-    // 左下角固定 水位:
-    OLED_ShowChinese16x16(0, 32, "\x02\x02\x02", 16, 0);  // 水
-    OLED_ShowChinese16x16(16, 32, "\x06\x06\x06", 16, 0);  // 位
-    OLED_ShowString(32, 32, (u8 *)":", 16, 0);
+    lcd_draw_card(28U, 102U, 350U, 120U, "USER ID");
+    lcd_draw_card(422U, 102U, 350U, 120U, "TEMPERATURE");
+    lcd_draw_card(28U, 260U, 350U, 150U, "WATER LEVEL");
+    lcd_draw_card(422U, 260U, 350U, 150U, "PUMP STATE");
 
-    // 右下角固定 状态:
-    OLED_ShowChinese16x16(128, 32, "\x03\x03\x03", 16, 0); // 状
-    OLED_ShowChinese16x16(144, 32, "\x04\x04\x04", 16, 0); // 态
-    OLED_ShowString(160, 32, (u8 *)":", 16, 0);
+    lcd_fill_rect(28U, 436U, 772U, 450U, LCD_COLOR_LIGHT_GRAY);
+    lcd_draw_text_scaled(30U, 455U, "Camera0: water level    Camera1: face ID", 1U,
+                         LCD_COLOR_GRAY, LCD_COLOR_WHITE, 1U);
 }
 
-/**
- * @brief 仅刷新变化的动态内容，无变化不刷新屏幕，彻底消除闪烁
- */
-void Disp_DrawDynamic(u8 water_level, u8 water_out_state, u16 temp_val, u8 hot_cold_mode, u16 dev_id)
+void Disp_DrawDynamic(u8 water_level, u8 water_out_state, u16 temp_val,
+                      u8 hot_cold_mode, u16 dev_id)
 {
-    // 1. ID数字区域更新（ID: 后面数字）
-    if(dev_id != last_dev_id)
+    const char *mode_text = (hot_cold_mode == 1U) ? "HOT" : "COLD";
+    const char *level_text = (water_level == 1U) ? "OK" : "LOW";
+    const char *state_text = "IDLE";
+    uint16_t level_color = (water_level == 1U) ? LCD_COLOR_GREEN : LCD_COLOR_ORANGE;
+    uint16_t state_color = LCD_COLOR_GRAY;
+
+    if (water_out_state == 1U)
     {
-        OLED_Fill(30, 0, 60, 16, 0x00);
-        OLED_ShowNum(30, 0, dev_id, 3, 16, 0);
+        state_text = "RUNNING";
+        state_color = LCD_COLOR_GREEN;
+    }
+    else if (water_out_state == 2U)
+    {
+        state_text = "ABNORMAL";
+        state_color = LCD_COLOR_RED;
+    }
+
+    if ((dev_id != last_dev_id) || (oled_init_draw == 0U))
+    {
+        lcd_fill_rect(70U, 150U, 336U, 198U, LCD_COLOR_PANEL);
+        lcd_draw_num_fixed(72U, 148U, dev_id, 3U, 3U, LCD_COLOR_BLACK, LCD_COLOR_PANEL);
         last_dev_id = dev_id;
     }
 
-    // 2. 冷热模式文字更新（热水:/冷水:）
-    if(hot_cold_mode != last_hot_cold_mode)
+    if ((temp_val != last_temp_val) ||
+        (hot_cold_mode != last_hot_cold_mode) ||
+        (oled_init_draw == 0U))
     {
-        OLED_Fill(100, 0, 148, 16, 0x00);
-        if(hot_cold_mode == 1)
-        {
-            OLED_ShowChinese16x16(100, 0, "\x05\x05\x05", 16, 0);
-            OLED_ShowChinese16x16(116, 0, "\x02\x02\x02", 16, 0);
-        }
-        else
-        {
-            OLED_ShowChinese16x16(100, 0, "\x0E\x0E\x0E", 16, 0);
-            OLED_ShowChinese16x16(116, 0, "\x02\x02\x02", 16, 0);
-        }
+        lcd_fill_rect(466U, 145U, 728U, 202U, LCD_COLOR_PANEL);
+        lcd_draw_num_fixed(466U, 148U, temp_val, 2U, 3U, LCD_COLOR_BLACK, LCD_COLOR_PANEL);
+        lcd_draw_text_scaled(580U, 148U, "C", 3U, LCD_COLOR_BLACK, LCD_COLOR_PANEL, 1U);
+        lcd_draw_text_scaled(654U, 162U, mode_text, 2U,
+                             (hot_cold_mode == 1U) ? LCD_COLOR_ORANGE : LCD_COLOR_BLUE,
+                             LCD_COLOR_PANEL, 1U);
+        last_temp_val = temp_val;
         last_hot_cold_mode = hot_cold_mode;
     }
 
-    // 3. 温度数字更新（温度: 后面数字）
-    if(temp_val != last_temp_val)
+    if ((water_level != last_water_level) || (oled_init_draw == 0U))
     {
-        OLED_Fill(212, 0, 228, 16, 0x00);
-        OLED_ShowNum(212, 0, temp_val, 2, 16, 0);
-        last_temp_val = temp_val;
-    }
-
-    // 4. 水位状态文字更新（水位: 后面文字）
-    if(water_level != last_water_level)
-    {
-        OLED_Fill(48, 32, 64, 48, 0x00);
-        if(water_level == 1)
-        {
-            OLED_ShowChinese16x16(48, 32, "\x09\x09\x09", 16, 0);
-            OLED_ShowChinese16x16(64, 32, "\x0A\x0A\x0A", 16, 0);
-        }
-        else
-        {
-            OLED_ShowChinese16x16(48, 32, "\x07\x07\x07", 16, 0);
-            OLED_ShowChinese16x16(64, 32, "\x08\x08\x08", 16, 0);
-        }
+        lcd_fill_rect(70U, 324U, 336U, 372U, LCD_COLOR_PANEL);
+        lcd_draw_text_scaled(72U, 320U, level_text, 3U, level_color, LCD_COLOR_PANEL, 1U);
         last_water_level = water_level;
     }
 
-    // 5. 出水状态文字更新（状态: 后面文字）
-    if(water_out_state != last_water_out_state)
+    if ((water_out_state != last_water_out_state) || (oled_init_draw == 0U))
     {
-        OLED_Fill(176, 32, 224, 48, 0x00);
-        switch(water_out_state)
-        {
-            case 0: // 出水结束
-                OLED_ShowChinese16x16(176, 32, "\x01\x01\x01", 16, 0);
-                OLED_ShowChinese16x16(192, 32, "\x02\x02\x02", 16, 0);
-                OLED_ShowChinese16x16(208, 32, "\x0C\x0C\x0C", 16, 0);
-                OLED_ShowChinese16x16(224, 32, "\x0D\x0D\x0D", 16, 0);
-                break;
-            case 1: // 出水中
-                OLED_ShowChinese16x16(176, 32, "\x01\x01\x01", 16, 0);
-                OLED_ShowChinese16x16(192, 32, "\x02\x02\x02", 16, 0);
-                OLED_ShowChinese16x16(208, 32, "\x0F\x0F\x0F", 16, 0);
-                break;
-            case 2: // 出水异常
-                OLED_ShowChinese16x16(176, 32, "\x01\x01\x01", 16, 0);
-                OLED_ShowChinese16x16(192, 32, "\x02\x02\x02", 16, 0);
-                OLED_ShowChinese16x16(208, 32, "\x0B\x0B\x0B", 16, 0);
-                OLED_ShowChinese16x16(224, 32, "\x0A\x0A\x0A", 16, 0);
-                break;
-        }
+        lcd_fill_rect(466U, 324U, 730U, 372U, LCD_COLOR_PANEL);
+        lcd_draw_text_scaled(466U, 320U, state_text, 3U, state_color, LCD_COLOR_PANEL, 1U);
         last_water_out_state = water_out_state;
     }
 }
 
-/**
- * @brief 饮水机UI总刷新入口，对外调用接口
- * @param water_level: 水位 0=过低 1=正常
- * @param water_out_state: 出水状态 0=出水结束 1=出水中 2=出水异常
- * @param hot_cold_mode: 冷热模式 0=冷水 1=热水
- * @param temp_val: 实时水温
- * @param dev_id: 设备ID
- */
-void Disp_DrinkerUI(u8 water_level, u8 water_out_state, u16 temp_val, u8 hot_cold_mode, u16 dev_id)
+void Disp_DrinkerUI(u8 water_level, u8 water_out_state, u16 temp_val,
+                    u8 hot_cold_mode, u16 dev_id)
 {
-    // 上电首次运行绘制全部静态固定文字，之后不再执行
-    if(oled_init_draw == 0)
+    if (oled_init_draw == 0U)
     {
         Disp_DrawStatic();
-        oled_init_draw = 1;
+        Disp_DrawDynamic(water_level, water_out_state, temp_val, hot_cold_mode, dev_id);
+        oled_init_draw = 1U;
+        return;
     }
-    // 仅更新发生变化的区域
+
     Disp_DrawDynamic(water_level, water_out_state, temp_val, hot_cold_mode, dev_id);
 }

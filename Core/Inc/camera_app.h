@@ -20,7 +20,7 @@ extern "C" {
 #define APP_MODE_QSPI_PROGRAM 10U
 #define APP_MODE_FACE_AI_VISUAL 11U
 #ifndef APP_MODE
-#define APP_MODE  APP_MODE_FACE_AI_VISUAL
+#define APP_MODE  APP_MODE_PUMP_CTRL
 #endif
 
 #ifndef CAMERA_APP_ACTIVE_CAMERA
@@ -32,7 +32,21 @@ extern "C" {
 #endif
 
 #ifndef CAMERA_FACE_IDENTITY_ENABLE
-#define CAMERA_FACE_IDENTITY_ENABLE 0U
+#define CAMERA_FACE_IDENTITY_ENABLE 1U
+#endif
+
+/* AS608 driver files are kept as backup, but excluded from the active product flow. */
+#ifndef CAMERA_FINGERPRINT_ENABLE
+#define CAMERA_FINGERPRINT_ENABLE 0U
+#endif
+
+/* Child lock is profile-based: mark a registered face ID, not an estimated age. */
+#ifndef CAMERA_FACE_CHILD_LOCK_ENABLE
+#define CAMERA_FACE_CHILD_LOCK_ENABLE 0U
+#endif
+
+#ifndef CAMERA_FACE_CHILD_USER_ID
+#define CAMERA_FACE_CHILD_USER_ID 0U
 #endif
 
 /* Camera-independent fallback used only by the timed demonstration branch. */
@@ -53,6 +67,8 @@ extern "C" {
 
 void CameraApp_Init(void);
 void CameraApp_Run(void);
+void CameraApp_LcdHotPressed(void);
+void CameraApp_LcdColdPressed(void);
 
 /* ISR 回调 —— 由 HAL_DCMI_FrameEventCallback 调用 */
 void CameraApp_SignalFrameDone(void);

@@ -59,31 +59,24 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define AS608_WAK_Pin GPIO_PIN_6
 #define AS608_WAK_GPIO_Port GPIOE
-#define OLED_CS_Pin GPIO_PIN_1
-#define OLED_CS_GPIO_Port GPIOC
 #define AMBIENT_LED2_Pin GPIO_PIN_2
 #define AMBIENT_LED2_GPIO_Port GPIOH
 #define AMBIENT_LED1_Pin GPIO_PIN_5
 #define AMBIENT_LED1_GPIO_Port GPIOH
-#define OLED_RES_Pin GPIO_PIN_4
-#define OLED_RES_GPIO_Port GPIOC
-#define OLED_DC_Pin GPIO_PIN_5
-#define OLED_DC_GPIO_Port GPIOC
-#define OLED_SCL_Pin GPIO_PIN_13
-#define OLED_SCL_GPIO_Port GPIOB
-#define OLED_SDA_Pin GPIO_PIN_15
-#define OLED_SDA_GPIO_Port GPIOB
+#define LCD_BL_Pin GPIO_PIN_5
+#define LCD_BL_GPIO_Port GPIOB
 #define PUMP_PWM_Pin GPIO_PIN_0
 #define PUMP_PWM_GPIO_Port GPIOI
 #define TANK_LEVEL_Pin GPIO_PIN_1
 #define TANK_LEVEL_GPIO_Port GPIOI
 
 /* USER CODE BEGIN Private defines */
+#ifndef CAMERA_FINGERPRINT_ENABLE
+#define CAMERA_FINGERPRINT_ENABLE 0U
+#endif
+
 #define SDRAM_OFFICIAL_CLOCK_DIAG 1U
 #define SDRAM_50MHZ_DIAG 0U
-
-#define AS608_WAK_Pin GPIO_PIN_6
-#define AS608_WAK_GPIO_Port GPIOE
 
 /* USER CODE END Private defines */
 

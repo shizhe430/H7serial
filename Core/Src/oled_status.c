@@ -1,5 +1,5 @@
 #include "oled_status.h"
-#include "oled_1.h"
+#include "lcd_ui.h"
 #include "main.h"
 
 #define OLED_STATUS_REFRESH_MS 150U
@@ -19,9 +19,16 @@ void OLED_Status_Init(void)
         return;
     }
 
-    OLED_Init();
-    OLED_Clear();
+    LCD_UI_Init();
     s_oled_ready = 1U;
+}
+
+void OLED_Status_Poll(void)
+{
+    if (s_oled_ready != 0U)
+    {
+        LCD_UI_Poll();
+    }
 }
 
 void OLED_Status_Show(uint8_t water_level,
@@ -50,7 +57,7 @@ void OLED_Status_Show(uint8_t water_level,
         return;
     }
 
-    Disp_DrinkerUI(water_level, water_out_state, temp_val, hot_cold_mode, dev_id);
+    LCD_UI_ShowStatus(water_level, water_out_state, temp_val, hot_cold_mode, dev_id);
 
     s_last_water_level = water_level;
     s_last_water_out_state = water_out_state;

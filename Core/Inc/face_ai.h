@@ -35,6 +35,7 @@ typedef struct
 uint8_t FaceAI_RunJpeg(const uint8_t *jpg, uint32_t jpg_len, face_ai_result_t *result);
 uint8_t FaceAI_RunJpegDiag(const uint8_t *jpg, uint32_t jpg_len);
 uint8_t FaceAI_LoadWeights(void);
+uint8_t FaceAI_InitNetworks(void);
 uint8_t FaceAI_LoadEnrollment(void);
 uint8_t FaceAI_HasEnrollment(void);
 uint8_t FaceAI_EnrollReference(uint16_t user_id, const face_ai_result_t *result);

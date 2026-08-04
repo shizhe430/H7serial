@@ -19,8 +19,9 @@ extern UART_HandleTypeDef huart1;
 #define FACE_AI_DET_SIZE           320U
 #define FACE_AI_ID_SIZE            112U
 #define FACE_AI_PAD_TOP            ((FACE_AI_DET_SIZE - FACE_AI_IMG_H) / 2U)
-#define FACE_AI_ACT_BASE           0xC0000000UL
-#define FACE_AI_RGB_BASE           0xC0400000UL
+#define FACE_AI_YUNET_ACT_BASE     0xC0000000UL
+#define FACE_AI_SFACE_ACT_BASE     0xC0100000UL
+#define FACE_AI_RGB_BASE           0xC0500000UL
 #define FACE_AI_RGB_BYTES          (FACE_AI_IMG_W * FACE_AI_IMG_H * 3U)
 #define FACE_AI_DET_WEIGHT_QSPI    0x90000000UL
 #define FACE_AI_ID_WEIGHT_QSPI     0x90400000UL
@@ -37,9 +38,6 @@ extern UART_HandleTypeDef huart1;
 
 #define FACE_AI_SDRAM_BASE         0xC0000000UL
 #define FACE_AI_SDRAM_BYTES        (32UL * 1024UL * 1024UL)
-#define FACE_AI_ACT_BYTES          ((AI_YUNET_DATA_ACTIVATIONS_SIZE > AI_SFACE_DATA_ACTIVATIONS_SIZE) ? \
-                                    AI_YUNET_DATA_ACTIVATIONS_SIZE : AI_SFACE_DATA_ACTIVATIONS_SIZE)
-
 typedef struct __attribute__((packed))
 {
     uint32_t magic;
@@ -55,8 +53,9 @@ typedef struct __attribute__((packed))
 #error "SFace output size does not match the face enrollment database"
 #endif
 
-#if ((FACE_AI_ACT_BASE < FACE_AI_SDRAM_BASE) || \
-     ((FACE_AI_ACT_BASE + FACE_AI_ACT_BYTES) > FACE_AI_RGB_BASE) || \
+#if ((FACE_AI_YUNET_ACT_BASE < FACE_AI_SDRAM_BASE) || \
+     ((FACE_AI_YUNET_ACT_BASE + AI_YUNET_DATA_ACTIVATIONS_SIZE) > FACE_AI_SFACE_ACT_BASE) || \
+     ((FACE_AI_SFACE_ACT_BASE + AI_SFACE_DATA_ACTIVATIONS_SIZE) > FACE_AI_RGB_BASE) || \
      ((FACE_AI_RGB_BASE + FACE_AI_RGB_BYTES) > FACE_AI_DET_WEIGHT_RAM) || \
      ((FACE_AI_DET_WEIGHT_RAM + AI_YUNET_DATA_WEIGHTS_SIZE) > FACE_AI_ID_WEIGHT_RAM) || \
      ((FACE_AI_ID_WEIGHT_RAM + AI_SFACE_DATA_WEIGHTS_SIZE) > (FACE_AI_SDRAM_BASE + FACE_AI_SDRAM_BYTES)))
@@ -71,6 +70,12 @@ typedef struct __attribute__((packed))
 
 static face_ai_enrollment_record_t *const s_face_db =
     (face_ai_enrollment_record_t *)FACE_AI_DB_BASE;
+static ai_handle s_yunet_network = AI_HANDLE_NULL;
+static ai_buffer *s_yunet_input = NULL;
+static ai_buffer *s_yunet_output = NULL;
+static ai_handle s_sface_network = AI_HANDLE_NULL;
+static ai_buffer *s_sface_input = NULL;
+static ai_buffer *s_sface_output = NULL;
 
 typedef struct
 {
@@ -287,45 +292,82 @@ static face_ai_detection_t face_ai_best_detection(ai_buffer *outputs)
     return best;
 }
 
-static uint8_t face_ai_run_yunet(const uint8_t *rgb,
-                                 face_ai_detection_t *detection,
-                                 uint32_t *infer_ms)
+static uint8_t face_ai_init_yunet(void)
 {
-    ai_handle network = AI_HANDLE_NULL;
-    ai_handle activations[AI_YUNET_DATA_ACTIVATIONS_COUNT] = {AI_HANDLE_PTR(FACE_AI_ACT_BASE)};
+    ai_handle activations[AI_YUNET_DATA_ACTIVATIONS_COUNT] = {
+        AI_HANDLE_PTR(FACE_AI_YUNET_ACT_BASE)
+    };
     ai_error err;
-    ai_buffer *input;
-    ai_buffer *output;
-    ai_i32 batch;
     uint32_t start_ms;
+    char msg[96];
+    int len;
 
-    face_ai_log("[FACE_AI] yunet create begin\r\n");
-    err = ai_yunet_create_and_init(&network, activations, NULL);
+    if (s_yunet_network != AI_HANDLE_NULL)
+    {
+        return 0U;
+    }
+
+    face_ai_log("[FACE_AI] yunet init begin\r\n");
+    start_ms = HAL_GetTick();
+    err = ai_yunet_create_and_init(&s_yunet_network, activations, NULL);
     if (err.type != AI_ERROR_NONE)
     {
-        char msg[96];
-        int len = snprintf(msg, sizeof(msg), "[FACE_AI] yunet init err type=%d code=%d\r\n",
-                           err.type, err.code);
+        len = snprintf(msg, sizeof(msg),
+                       "[FACE_AI] yunet init err type=%d code=%d\r\n",
+                       err.type,
+                       err.code);
         if (len > 0)
         {
             face_ai_log(msg);
         }
+        s_yunet_network = AI_HANDLE_NULL;
         return 1U;
     }
 
-    input = ai_yunet_inputs_get(network, NULL);
-    output = ai_yunet_outputs_get(network, NULL);
-    if ((input == NULL) || (output == NULL) || (input[0].data == NULL))
+    s_yunet_input = ai_yunet_inputs_get(s_yunet_network, NULL);
+    s_yunet_output = ai_yunet_outputs_get(s_yunet_network, NULL);
+    if ((s_yunet_input == NULL) || (s_yunet_output == NULL) ||
+        (s_yunet_input[0].data == NULL))
     {
-        (void)ai_yunet_destroy(network);
+        (void)ai_yunet_destroy(s_yunet_network);
+        s_yunet_network = AI_HANDLE_NULL;
+        s_yunet_input = NULL;
+        s_yunet_output = NULL;
+        face_ai_log("[FACE_AI] yunet init buffers fail\r\n");
         return 2U;
     }
 
-    face_ai_fill_yunet_input((int8_t *)input[0].data, rgb);
+    len = snprintf(msg, sizeof(msg),
+                   "[FACE_AI] yunet init ok ms=%lu act=0x%08lX\r\n",
+                   (unsigned long)(HAL_GetTick() - start_ms),
+                   (unsigned long)FACE_AI_YUNET_ACT_BASE);
+    if (len > 0)
+    {
+        face_ai_log(msg);
+    }
+    return 0U;
+}
+
+static uint8_t face_ai_run_yunet(const uint8_t *rgb,
+                                 face_ai_detection_t *detection,
+                                 uint32_t *infer_ms)
+{
+    ai_error err;
+    ai_i32 batch;
+    uint32_t start_ms;
+    uint8_t init_status;
+
+    init_status = face_ai_init_yunet();
+    if (init_status != 0U)
+    {
+        return init_status;
+    }
+
+    face_ai_fill_yunet_input((int8_t *)s_yunet_input[0].data, rgb);
     SCB_CleanInvalidateDCache();
     face_ai_log("[FACE_AI] yunet run begin\r\n");
     start_ms = HAL_GetTick();
-    batch = ai_yunet_run(network, input, output);
+    batch = ai_yunet_run(s_yunet_network, s_yunet_input, s_yunet_output);
     if (infer_ms != NULL)
     {
         *infer_ms = HAL_GetTick() - start_ms;
@@ -335,8 +377,7 @@ static uint8_t face_ai_run_yunet(const uint8_t *rgb,
 
     if (batch != 1)
     {
-        err = ai_yunet_get_error(network);
-        (void)ai_yunet_destroy(network);
+        err = ai_yunet_get_error(s_yunet_network);
         {
             char msg[96];
             int len = snprintf(msg, sizeof(msg), "[FACE_AI] yunet run err batch=%ld type=%d code=%d\r\n",
@@ -349,8 +390,7 @@ static uint8_t face_ai_run_yunet(const uint8_t *rgb,
         return 3U;
     }
 
-    *detection = face_ai_best_detection(output);
-    (void)ai_yunet_destroy(network);
+    *detection = face_ai_best_detection(s_yunet_output);
     return 0U;
 }
 
@@ -460,6 +500,82 @@ static uint8_t face_ai_fill_sface_input(float *input,
     return 0U;
 }
 
+static uint8_t face_ai_init_sface(void)
+{
+    ai_handle activations[AI_SFACE_DATA_ACTIVATIONS_COUNT] = {
+        AI_HANDLE_PTR(FACE_AI_SFACE_ACT_BASE)
+    };
+    ai_error err;
+    uint32_t start_ms;
+    char msg[96];
+    int len;
+
+    if (s_sface_network != AI_HANDLE_NULL)
+    {
+        return 0U;
+    }
+
+    face_ai_log("[FACE_AI] sface init begin\r\n");
+    start_ms = HAL_GetTick();
+    err = ai_sface_create_and_init(&s_sface_network, activations, NULL);
+    if (err.type != AI_ERROR_NONE)
+    {
+        len = snprintf(msg, sizeof(msg),
+                       "[FACE_AI] sface init err type=%d code=%d\r\n",
+                       err.type,
+                       err.code);
+        if (len > 0)
+        {
+            face_ai_log(msg);
+        }
+        s_sface_network = AI_HANDLE_NULL;
+        return 1U;
+    }
+
+    s_sface_input = ai_sface_inputs_get(s_sface_network, NULL);
+    s_sface_output = ai_sface_outputs_get(s_sface_network, NULL);
+    if ((s_sface_input == NULL) || (s_sface_output == NULL) ||
+        (s_sface_input[0].data == NULL))
+    {
+        (void)ai_sface_destroy(s_sface_network);
+        s_sface_network = AI_HANDLE_NULL;
+        s_sface_input = NULL;
+        s_sface_output = NULL;
+        face_ai_log("[FACE_AI] sface init buffers fail\r\n");
+        return 2U;
+    }
+
+    len = snprintf(msg, sizeof(msg),
+                   "[FACE_AI] sface init ok ms=%lu act=0x%08lX\r\n",
+                   (unsigned long)(HAL_GetTick() - start_ms),
+                   (unsigned long)FACE_AI_SFACE_ACT_BASE);
+    if (len > 0)
+    {
+        face_ai_log(msg);
+    }
+    return 0U;
+}
+
+uint8_t FaceAI_InitNetworks(void)
+{
+    uint8_t status;
+
+    status = face_ai_init_yunet();
+    if (status != 0U)
+    {
+        return status;
+    }
+
+    status = face_ai_init_sface();
+    if (status != 0U)
+    {
+        return (uint8_t)(10U + status);
+    }
+
+    face_ai_log("[FACE_AI] networks ready persistent=1\r\n");
+    return 0U;
+}
+
 static uint8_t face_ai_run_sface(const uint8_t *rgb,
                                  const face_ai_detection_t *detection,
                                  float *sum_sq,
@@ -467,49 +583,29 @@ static uint8_t face_ai_run_sface(const uint8_t *rgb,
                                  float embedding[FACE_AI_EMBEDDING_SIZE],
                                  uint32_t *infer_ms)
 {
-    ai_handle network = AI_HANDLE_NULL;
-    ai_handle activations[AI_SFACE_DATA_ACTIVATIONS_COUNT] = {AI_HANDLE_PTR(FACE_AI_ACT_BASE)};
     ai_error err;
-    ai_buffer *input;
-    ai_buffer *output;
     ai_i32 batch;
     uint32_t start_ms;
     uint32_t i;
     uint8_t align_status;
+    uint8_t init_status;
 
-    face_ai_log("[FACE_AI] sface create begin\r\n");
-    err = ai_sface_create_and_init(&network, activations, NULL);
-    if (err.type != AI_ERROR_NONE)
+    init_status = face_ai_init_sface();
+    if (init_status != 0U)
     {
-        char msg[96];
-        int len = snprintf(msg, sizeof(msg), "[FACE_AI] sface init err type=%d code=%d\r\n",
-                           err.type, err.code);
-        if (len > 0)
-        {
-            face_ai_log(msg);
-        }
-        return 1U;
+        return init_status;
     }
 
-    input = ai_sface_inputs_get(network, NULL);
-    output = ai_sface_outputs_get(network, NULL);
-    if ((input == NULL) || (output == NULL) || (input[0].data == NULL))
-    {
-        (void)ai_sface_destroy(network);
-        return 2U;
-    }
-
-    align_status = face_ai_fill_sface_input((float *)input[0].data, rgb, detection);
+    align_status = face_ai_fill_sface_input((float *)s_sface_input[0].data, rgb, detection);
     if (align_status != 0U)
     {
-        (void)ai_sface_destroy(network);
         return (uint8_t)(3U + align_status);
     }
 
     SCB_CleanInvalidateDCache();
     face_ai_log("[FACE_AI] sface run begin\r\n");
     start_ms = HAL_GetTick();
-    batch = ai_sface_run(network, input, output);
+    batch = ai_sface_run(s_sface_network, s_sface_input, s_sface_output);
     if (infer_ms != NULL)
     {
         *infer_ms = HAL_GetTick() - start_ms;
@@ -519,8 +615,7 @@ static uint8_t face_ai_run_sface(const uint8_t *rgb,
 
     if (batch != 1)
     {
-        err = ai_sface_get_error(network);
-        (void)ai_sface_destroy(network);
+        err = ai_sface_get_error(s_sface_network);
         {
             char msg[96];
             int len = snprintf(msg, sizeof(msg), "[FACE_AI] sface run err batch=%ld type=%d code=%d\r\n",
@@ -536,7 +631,7 @@ static uint8_t face_ai_run_sface(const uint8_t *rgb,
     *sum_sq = 0.0f;
     for (i = 0U; i < AI_SFACE_OUT_1_SIZE; i++)
     {
-        float value = ((float *)output[0].data)[i];
+        float value = ((float *)s_sface_output[0].data)[i];
 
         if (i < 4U)
         {
@@ -546,7 +641,6 @@ static uint8_t face_ai_run_sface(const uint8_t *rgb,
         *sum_sq += value * value;
     }
 
-    (void)ai_sface_destroy(network);
     return 0U;
 }
 
