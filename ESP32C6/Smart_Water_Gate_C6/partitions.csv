@@ -1,0 +1,6 @@
+# Name,   Type, SubType, Offset,  Size,     Flags
+# Note: bootloader at 0x0, partition table at 0x8000
+nvs,      data, nvs,     ,        0x6000,
+phy_init, data, phy,     ,        0x1000,
+fctry,    data, nvs,     ,        0x6000,
+factory,  app,  factory, ,        2M,

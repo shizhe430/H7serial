@@ -1,0 +1,25 @@
+# ESP RainMaker App Network provisioning config
+# Additional configuration can be set via idf.py menuconfig
+# under "ESP RainMaker App Wi-Fi Provisioning"
+
+menu "Smart Water Dispenser"
+
+config WATER_WEB_SERVER_URL
+    string "WaterDispenserWeb server URL"
+    default "http://10.82.240.116:5000"
+    help
+        LAN URL of the ASP.NET WaterDispenserWeb service. The computer and
+        ESP32-C6 must be connected to the same network.
+
+config WATER_WEB_SERVER_HOST
+    string "WaterDispenserWeb server host"
+    default "10.82.240.116"
+    help
+        Host name or IPv4 address used by the low-memory AI proxy client.
+
+config WATER_WEB_SERVER_PORT
+    int "WaterDispenserWeb server port"
+    range 1 65535
+    default 5000
+
+endmenu

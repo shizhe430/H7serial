@@ -1,0 +1,367 @@
+@{
+    ViewData["Title"] = "家庭板块";
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>家庭板块 - 智能饮水机</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <style>
+        body {
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+            /* 温馨童趣的清新天空背景 */
+            background: linear-gradient(180deg, #c9e8ff 0%, #e8f7ff 40%, #fff9e8 80%, #e8f7d8 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* 太阳 */
+        .sun {
+            position: absolute;
+            top: 6%;
+            right: 8%;
+            width: 90px;
+            height: 90px;
+            background: radial-gradient(circle, #ffe08a 40%, #ffd45e 70%, transparent 72%);
+            border-radius: 50%;
+            box-shadow: 0 0 60px rgba(255, 214, 94, 0.6);
+            animation: sunGlow 4s ease-in-out infinite;
+        }
+        @@keyframes sunGlow {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.08); }
+        }
+
+        /* 彩虹 */
+        .rainbow {
+            position: absolute;
+            top: 4%;
+            left: 8%;
+            width: 160px;
+            height: 80px;
+            border-radius: 160px 160px 0 0;
+            background: linear-gradient(180deg,
+                #ff6b6b 0%, #ff6b6b 14%,
+                #ffa94d 14%, #ffa94d 28%,
+                #ffd43b 28%, #ffd43b 42%,
+                #69db7c 42%, #69db7c 56%,
+                #4dabf7 56%, #4dabf7 70%,
+                #9775fa 70%, #9775fa 85%);
+            opacity: 0.8;
+            transform: rotate(-8deg);
+        }
+
+        /* 云朵 */
+        .cloud {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 50px;
+            box-shadow: 0 5px 15px rgba(150, 190, 220, 0.3);
+        }
+        .cloud1 { width: 110px; height: 36px; top: 12%; left: 15%; animation: float 7s ease-in-out infinite; }
+        .cloud2 { width: 80px; height: 28px; top: 8%; right: 22%; animation: float 9s ease-in-out infinite 1s; }
+        .cloud3 { width: 60px; height: 22px; bottom: 22%; left: 18%; animation: float 8s ease-in-out infinite 2s; }
+        .cloud::before, .cloud::after {
+            content: '';
+            position: absolute;
+            background: inherit;
+            border-radius: 50%;
+        }
+        .cloud::before { width: 50%; height: 130%; top: -60%; left: 20%; }
+        .cloud::after { width: 35%; height: 100%; top: -40%; right: 15%; }
+        @@keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-12px); }
+        }
+
+        /* 卡通气球 */
+        .balloon {
+            position: absolute;
+            width: 34px;
+            height: 42px;
+            border-radius: 50% 50% 50% 50% / 55% 55% 45% 45%;
+            opacity: 0.85;
+            animation: balloonFloat 6s ease-in-out infinite;
+        }
+        .balloon::after {
+            content: '';
+            position: absolute;
+            bottom: -18px;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-left: 4px solid transparent;
+            border-right: 4px solid transparent;
+            border-top: 18px solid inherit;
+        }
+        .balloon1 { background: #ff8787; top: 16%; left: 40%; animation-delay: 0.5s; }
+        .balloon2 { background: #74c0fc; top: 20%; right: 30%; animation-delay: 1.5s; }
+        .balloon3 { background: #ffd43b; bottom: 28%; right: 12%; animation-delay: 2.5s; }
+        @@keyframes balloonFloat {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-18px); }
+        }
+
+        /* 闪烁星星 */
+        .star {
+            position: absolute;
+            color: #ffd43b;
+            font-size: 1.4rem;
+            animation: twinkle 2s ease-in-out infinite;
+        }
+        .star1 { top: 14%; right: 15%; }
+        .star2 { top: 22%; left: 12%; animation-delay: 0.7s; }
+        .star3 { bottom: 18%; left: 30%; animation-delay: 1.3s; }
+        @@keyframes twinkle {
+            0%, 100% { opacity: 0.3; transform: scale(0.8); }
+            50% { opacity: 1; transform: scale(1.1); }
+        }
+
+        /* 底部草地 */
+        .ground {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background: linear-gradient(180deg, #b2e39a 0%, #8fd06f 100%);
+            border-radius: 60% 40% 0 0 / 30px 20px 0 0;
+        }
+        .ground::before {
+            content: '🌷🌼🌻🌷🌼🌻🌷🌼🌻';
+            position: absolute;
+            top: -28px;
+            left: 5%;
+            font-size: 1.6rem;
+            letter-spacing: 12px;
+        }
+
+        /* 主卡片 */
+        .card {
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(10px);
+            border-radius: 28px;
+            padding: 50px 45px;
+            text-align: center;
+            box-shadow: 0 15px 40px rgba(120, 160, 190, 0.25);
+            max-width: 520px;
+            position: relative;
+            z-index: 3;
+            border: 3px solid rgba(255, 255, 255, 0.7);
+            margin-top: 80px; /* 避开顶部品牌栏 */
+        }
+        .card .icon {
+            font-size: 4.5rem;
+            margin-bottom: 18px;
+            display: inline-block;
+            background: linear-gradient(135deg, #fff7e8, #e8f7ff);
+            border-radius: 50%;
+            width: 110px;
+            height: 110px;
+            line-height: 110px;
+            box-shadow: 0 6px 20px rgba(150, 190, 220, 0.3);
+        }
+        .card h1 {
+            font-size: 2rem;
+            color: #5a8a5a;
+            font-weight: 800;
+            margin-bottom: 12px;
+            letter-spacing: 2px;
+        }
+        .card p {
+            color: #8a9a8a;
+            margin-bottom: 35px;
+            font-size: 1.1rem;
+        }
+        .btn-back {
+            background: linear-gradient(135deg, #ffd43b, #ffb84d);
+            border: none;
+            color: #6a4a10;
+            padding: 14px 48px;
+            border-radius: 50px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            text-decoration: none;
+            display: inline-block;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 8px 25px rgba(255, 184, 77, 0.5);
+        }
+        .btn-back:hover {
+            transform: translateY(-3px) rotate(-1deg);
+            box-shadow: 0 12px 30px rgba(255, 184, 77, 0.6);
+            color: #6a4a10;
+        }
+        /* 卡通水滴点缀 */
+        .droplet {
+            position: absolute;
+            color: #74c0fc;
+            font-size: 1.2rem;
+            opacity: 0.7;
+            animation: dropletDrop 3s ease-in-out infinite;
+        }
+        .droplet1 { top: 30%; right: 20%; }
+        .droplet2 { top: 45%; left: 14%; animation-delay: 1s; }
+        .droplet3 { bottom: 35%; left: 40%; animation-delay: 2s; }
+        @@keyframes dropletDrop {
+            0%, 100% { transform: translateY(0); opacity: 0.4; }
+            50% { transform: translateY(8px); opacity: 0.9; }
+        }
+        /* 顶部品牌栏：logo在左上角，标语和它放一起 */
+        .brand-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 14px;
+            background: linear-gradient(180deg, #a8dcff 0%, #c9e8ff 100%);
+            padding: 10px 24px;
+            box-shadow: none;
+            border-bottom: 1px solid rgba(255,255,255,0.3);
+            z-index: 999;
+        }
+        .brand-bar-logo {
+            width: 44px;
+            height: 44px;
+            object-fit: contain;
+            border-radius: 8px;
+            background: rgba(255,255,255,0.2);
+            padding: 2px;
+        }
+        .brand-bar-title {
+            color: #3a6a8a;
+            font-size: 1.2rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-shadow: 0 1px 2px rgba(255,255,255,0.5);
+            white-space: nowrap;
+        }
+        .brand-bar-slogan {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #3a6a8a;
+            font-size: 1.15rem;
+            font-weight: 600;
+            letter-spacing: 6px;
+            text-shadow: 0 1px 2px rgba(255,255,255,0.5);
+            white-space: nowrap;
+        }
+        .brand-bar-right {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+        }
+        .login-dropdown {
+            position: relative;
+        }
+        .brand-bar-login {
+            background: rgba(255,255,255,0.55);
+            border: 1px solid rgba(58,106,138,0.3);
+            color: #3a6a8a;
+            padding: 6px 18px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+            text-decoration: none;
+        }
+        .brand-bar-login:hover {
+            background: #fff;
+            color: #3a6a8a;
+        }
+        .login-menu {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: calc(100% + 8px);
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+            padding: 6px;
+            min-width: 170px;
+            z-index: 1000;
+        }
+        .login-menu a {
+            display: block;
+            padding: 9px 14px;
+            border-radius: 8px;
+            color: #333;
+            text-decoration: none;
+            font-size: 0.9rem;
+            white-space: nowrap;
+        }
+        .login-menu a:hover {
+            background: #e8f4ff;
+            color: #3a6a8a;
+        }
+        .login-dropdown:hover .login-menu,
+        .login-dropdown.open .login-menu {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <!-- 顶部品牌栏：Logo + 标语 + 右上角登录 -->
+    <div class="brand-bar">
+        <img src="~/images/logo.png" alt="logo" class="brand-bar-logo" />
+        <span class="brand-bar-title">智能饮水机管理</span>
+        <span class="brand-bar-slogan">智慧饮水，净润朝夕</span>
+        <div class="brand-bar-right">
+            <div class="login-dropdown">
+                <a class="brand-bar-login" href="javascript:void(0)">🔐 登录 ▾</a>
+                <div class="login-menu">
+                    <a href="/Account/Login?section=elderly">🏥 养老院板块</a>
+                    <a href="/Account/Login?section=billing">💰 个人计费板块</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 天空元素 -->
+    <div class="sun"></div>
+    <div class="rainbow"></div>
+    <div class="cloud cloud1"></div>
+    <div class="cloud cloud2"></div>
+    <div class="cloud cloud3"></div>
+
+    <!-- 气球和星星 -->
+    <div class="balloon balloon1"></div>
+    <div class="balloon balloon2"></div>
+    <div class="balloon balloon3"></div>
+    <span class="star star1">⭐</span>
+    <span class="star star2">✨</span>
+    <span class="star star3">🌟</span>
+
+    <!-- 卡通水滴 -->
+    <span class="droplet droplet1">💧</span>
+    <span class="droplet droplet2">💧</span>
+    <span class="droplet droplet3">💧</span>
+
+    <!-- 草地 -->
+    <div class="ground"></div>
+
+    <div class="card">
+        <div class="icon">🏠</div>
+        <h1>家庭板块</h1>
+        <p>温馨的家庭饮水管理，正在开发中，敬请期待！</p>
+        <a class="btn-back" href="/">🏠 返回首页</a>
+    </div>
+</body>
+</html>

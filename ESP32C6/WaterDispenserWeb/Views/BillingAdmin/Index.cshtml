@@ -1,0 +1,49 @@
+@model List<BillingUserOverview>
+@{
+    ViewData["Title"] = "计费管理仪表盘";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>📊 计费管理仪表盘</h2>
+    <span class="text-muted">@DateTime.Now.ToString("yyyy年MM月dd日 HH:mm")</span>
+</div>
+
+@if (!Model.Any())
+{
+    <div class="alert alert-info">
+        还没有普通用户。请先 <a asp-action="AddUser" class="alert-link">添加用户</a>。
+    </div>
+}
+else
+{
+    <div class="row">
+        @foreach (var item in Model)
+        {
+            <div class="col-md-6 col-lg-4 mb-4">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <h5 class="card-title">@item.Name</h5>
+                            <span class="badge bg-secondary">@item.Username</span>
+                        </div>
+                        <div class="row text-center my-3">
+                            <div class="col-6">
+                                <div class="fs-4 fw-bold text-primary">@item.Balance.ToString("F2")</div>
+                                <div class="text-muted small">余额(元)</div>
+                            </div>
+                            <div class="col-6">
+                                <div class="fs-4 fw-bold text-info">@item.TodayMl</div>
+                                <div class="text-muted small">今日饮水(ml)</div>
+                            </div>
+                        </div>
+                        @if (!string.IsNullOrEmpty(item.Advice))
+                        {
+                            <p class="small text-muted mb-1">@item.Advice</p>
+                        }
+                        <a asp-action="Users" class="btn btn-outline-primary btn-sm w-100">管理</a>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}

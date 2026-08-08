@@ -1,0 +1,173 @@
+@{
+    ViewData["Title"] = "家庭成员详情";
+
+    var detail = ViewBag.Detail as User;
+    var summary = ViewBag.Summary as DailySummary;
+    var recentRecords = ViewBag.RecentRecords as List<Record>;
+    var weekData = ViewBag.WeekData as List<DailySummaryItem>;
+}
+
+<div class="mb-4">
+    <a asp-action="Index" class="btn btn-outline-secondary btn-sm">← 返回家庭成员饮水概况</a>
+</div>
+
+<div class="row">
+    <!-- 个人信息卡片 -->
+    <div class="col-md-4 mb-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">👤 个人信息</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr><th>编号</th><td>@detail?.Username</td></tr>
+                    <tr><th>姓名</th><td>@detail?.Name</td></tr>
+                    <tr><th>身份</th><td>@(detail?.Role == 0 ? "家长" : "孩子")</td></tr>
+                    <tr><th>性别</th><td>@(detail?.Gender == 1 ? "男" : detail?.Gender == 2 ? "女" : "未知")</td></tr>
+                    <tr><th>年龄</th><td>@(detail?.Age > 0 ? $"{detail.Age}岁" : "未设置")</td></tr>
+                    <tr><th>身高</th><td>@(detail?.HeightCm > 0 ? $"{detail.HeightCm}cm" : "未设置")</td></tr>
+                    <tr><th>体重</th><td>@(detail?.WeightKg > 0 ? $"{detail.WeightKg}kg" : "未设置")</td></tr>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 今日饮水数据 -->
+    <div class="col-md-4 mb-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">💧 今日饮水</h5>
+            </div>
+            <div class="card-body">
+                <div class="text-center mb-3">
+                    <div class="display-4 fw-bold text-info">@(summary?.TotalMl ?? 0)</div>
+                    <div class="text-muted">今日总饮水 (ml)</div>
+                </div>
+
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between small">
+                        <span>进度 @(summary?.TargetMl > 0 ? $"{(double)(summary?.TotalMl ?? 0) / summary.TargetMl * 100:F0}%" : "0%")</span>
+                        <span>目标 @(summary?.TargetMl ?? 0) ml</span>
+                    </div>
+                    <div class="progress" style="height: 12px;">
+                        @{
+                            var progress = summary?.TargetMl > 0 ? Math.Min(100.0, (double)(summary?.TotalMl ?? 0) / summary.TargetMl * 100) : 0;
+                        }
+                        <div class="progress-bar @(progress >= 100 ? "bg-success" : progress >= 50 ? "bg-info" : "bg-warning")"
+                             role="progressbar" style="width: @(progress)%">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row text-center">
+                    <div class="col">
+                        <div class="fw-bold fs-5">@(summary?.UseCount ?? 0)</div>
+                        <div class="text-muted small">饮水次数</div>
+                    </div>
+                    <div class="col">
+                        <div class="fw-bold fs-5 text-danger">@(summary?.NeededMl ?? 0)</div>
+                        <div class="text-muted small">还需(ml)</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 近7天趋势 -->
+    <div class="col-md-4 mb-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">📈 近7天趋势</h5>
+            </div>
+            <div class="card-body">
+                @if (weekData != null && weekData.Any())
+                {
+                    var maxMl = weekData.Max(w => w.TargetMl);
+                    if (maxMl == 0) maxMl = 1;
+                    <div style="height: 200px; display: flex; align-items: flex-end; gap: 5px;">
+                        @foreach (var day in weekData)
+                        {
+                            var barHeight = Math.Max(5, (double)day.TotalMl / maxMl * 180);
+                            var targetHeight = Math.Max(5, (double)day.TargetMl / maxMl * 180);
+                            <div class="flex-fill text-center" title="@day.DateStr: @day.TotalMl ml / @day.TargetMl ml">
+                                <div style="position: relative; height: 180px; display: flex; align-items: flex-end; justify-content: center; gap: 2px;">
+                                    <div style="width: 30%; background: #e9ecef; border-radius: 4px 4px 0 0; height: @(targetHeight)px;"></div>
+                                    <div style="width: 30%; background: @(day.TotalMl >= day.TargetMl ? "#28a745" : "#17a2b8"); border-radius: 4px 4px 0 0; height: @(barHeight)px;"></div>
+                                </div>
+                                <small class="text-muted">@day.DateStr</small>
+                            </div>
+                        }
+                    </div>
+                    <div class="mt-2 text-center small text-muted">
+                        <span style="display:inline-block; width:12px; height:12px; background:#e9ecef; border-radius:2px;"></span> 目标
+                        <span style="display:inline-block; width:12px; height:12px; background:#17a2b8; border-radius:2px; margin-left:10px;"></span> 实际
+                    </div>
+                }
+                else
+                {
+                    <p class="text-muted text-center">暂无数据</p>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 饮水记录列表 -->
+<div class="card shadow-sm mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">📋 今日饮水记录</h5>
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr><th>时间</th><th>饮水量(ml)</th></tr>
+            </thead>
+            <tbody>
+                @if (recentRecords != null && recentRecords.Any())
+                {
+                    @foreach (var r in recentRecords)
+                    {
+                        <tr>
+                            <td>@r.RecordedAt.ToString("HH:mm:ss")</td>
+                            <td>@r.VolumeMl</td>
+                        </tr>
+                    }
+                }
+                else
+                {
+                    <tr><td colspan="2" class="text-center text-muted py-3">今日暂无饮水记录</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- 个性化建议 -->
+@if (!string.IsNullOrEmpty(summary?.Advice))
+{
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <h5 class="card-title">💡 饮水建议</h5>
+            <p class="card-text">@summary.Advice</p>
+        </div>
+    </div>
+}
+
+<!-- AI 智能建议 -->
+@if (!string.IsNullOrEmpty(summary?.AiAdvice))
+{
+    <div class="card shadow-sm border-info">
+        <div class="card-body">
+            <h5 class="card-title text-info">🤖 AI 智能建议 <span class="badge bg-info text-dark">DeepSeek</span></h5>
+            <p class="card-text">@summary.AiAdvice</p>
+        </div>
+    </div>
+}
+
+<!-- AI 交互问答 -->
+@{
+    ViewData["ChatUserId"] = detail?.Id ?? 0;
+    ViewData["ChatUserName"] = detail?.Name ?? "该家庭成员";
+    ViewData["AskAIUrl"] = Url.Action("AskAI", "Family");
+}
+@await Html.PartialAsync("_AIChat")

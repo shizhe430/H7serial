@@ -1,0 +1,78 @@
+@model List<DrinkerOverview>
+@{
+    ViewData["Title"] = "家庭成员饮水概况";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>🏠 家庭成员饮水概况</h2>
+    <span class="text-muted">@DateTime.Now.ToString("yyyy年MM月dd日 HH:mm")</span>
+</div>
+
+@if (!Model.Any())
+{
+    <div class="alert alert-info">
+        还没有家庭成员。请家长或管理员先 <a asp-action="AddUser" class="alert-link">添加家庭成员</a>。
+    </div>
+}
+else
+{
+    <div class="row">
+        @foreach (var item in Model)
+        {
+            <div class="col-md-6 col-lg-4 mb-4">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <h5 class="card-title">@item.Name</h5>
+                            <span class="badge bg-secondary">@item.Username</span>
+                        </div>
+                        <p class="text-muted small mb-2">
+                            性别: @(item.Gender == 1 ? "男" : item.Gender == 2 ? "女" : "未知")
+                            | 年龄: @(item.Age > 0 ? $"{item.Age}岁" : "未知")
+                            | 身高: @(item.HeightCm > 0 ? $"{item.HeightCm}cm" : "未知")
+                            | 体重: @(item.WeightKg > 0 ? $"{item.WeightKg}kg" : "未知")
+                        </p>
+
+                        <div class="mb-2">
+                            <div class="d-flex justify-content-between">
+                                <span>今日饮水</span>
+                                <span>@item.TodayTotalMl ml / @item.TargetMl ml</span>
+                            </div>
+                            <div class="progress" style="height: 10px;">
+                                <div class="progress-bar @(item.ProgressPercent >= 100 ? "bg-success" : item.ProgressPercent >= 50 ? "bg-info" : "bg-warning")"
+                                     role="progressbar"
+                                     style="width: @(item.ProgressPercent)%"
+                                     aria-valuenow="@item.ProgressPercent" aria-valuemin="0" aria-valuemax="100">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row text-center small mb-3">
+                            <div class="col">
+                                <div class="fw-bold">@item.TodayUseCount</div>
+                                <div class="text-muted">次数</div>
+                            </div>
+                            <div class="col">
+                                <div class="fw-bold @(item.NeededMl > 0 ? "text-danger" : "text-success")">@item.NeededMl</div>
+                                <div class="text-muted">还需(ml)</div>
+                            </div>
+                            <div class="col">
+                                <div class="fw-bold">@(item.ProgressPercent.ToString("F0"))%</div>
+                                <div class="text-muted">完成度</div>
+                            </div>
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(item.Advice))
+                        {
+                            <p class="small text-muted mb-2">@item.Advice</p>
+                        }
+
+                        <a asp-action="Detail" asp-route-id="@item.UserId" class="btn btn-outline-primary btn-sm w-100">
+                            查看详情
+                        </a>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}

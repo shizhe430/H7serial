@@ -1,0 +1,148 @@
+@model BillingDashboardViewModel
+@{
+    ViewData["Title"] = "我的饮水";
+}
+
+<div class="mb-4">
+    <h2>💧 欢迎回来，@Model.Name</h2>
+    <p class="text-muted">@DateTime.Now.ToString("yyyy年MM月dd日")</p>
+</div>
+
+<!-- 余额卡片 -->
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <div class="card shadow-sm h-100 @(Model.Balance < 1 ? "border-danger" : "border-success")">
+            <div class="card-body text-center">
+                <div class="text-muted small">当前余额</div>
+                <div class="display-3 fw-bold @(Model.Balance < 0.08m ? "text-danger" : Model.Balance < 1 ? "text-warning" : "text-success")">
+                    @Model.Balance.ToString("F2")
+                </div>
+                <div class="text-muted">元</div>
+
+                @if (!Model.CanDispense)
+                {
+                    <div class="alert alert-danger mt-2 py-2">❌ 余额不足，无法出水</div>
+                }
+                else if (Model.Balance < 1)
+                {
+                    <div class="alert alert-warning mt-2 py-2">⚠️ 余额不足1元，请及时充值</div>
+                }
+
+                <div class="mt-2">
+                    <small class="text-muted">单价: @Model.RatePerMl.ToString("F4")元/ml | 可饮约 @Model.RemainingMl ml</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 今日饮水 -->
+    <div class="col-md-6 mb-4">
+        <div class="card shadow-sm h-100 border-info">
+            <div class="card-body text-center">
+                <div class="text-muted small">今日饮水</div>
+                <div class="display-4 fw-bold text-info">@Model.TodayMl <small class="fs-6 text-muted">ml</small></div>
+                <div class="mt-2">
+                    <div class="d-flex justify-content-between small">
+                        <span>目标 @Model.TargetMl ml</span>
+                        <span>完成 @(Model.ProgressPercent.ToString("F0"))%</span>
+                    </div>
+                    <div class="progress" style="height:12px;">
+                        <div class="progress-bar @(Model.ProgressPercent >= 100 ? "bg-success" : "bg-info")"
+                             role="progressbar" style="width:@(Model.ProgressPercent)%"></div>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col"><span class="fw-bold">@Model.TodayCount</span><br><small class="text-muted">次数</small></div>
+                    <div class="col"><span class="fw-bold text-danger">@Model.NeededMl</span><br><small class="text-muted">还需(ml)</small></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 余额建议 -->
+<div class="card shadow-sm mb-4 @(Model.Balance < 1 ? "border-warning" : "border-info")">
+    <div class="card-body">
+        <h5 class="card-title @(Model.Balance < 1 ? "text-warning" : "text-info")">💰 余额建议</h5>
+        <p class="card-text fs-5">@Model.BalanceAdvice</p>
+    </div>
+</div>
+
+<!-- 饮水建议 -->
+@if (!string.IsNullOrEmpty(Model.Advice))
+{
+    <div class="card shadow-sm mb-4 border-success">
+        <div class="card-body">
+            <h5 class="card-title text-success">💡 饮水建议</h5>
+            <p class="card-text">@Model.Advice</p>
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(Model.AiAdvice))
+{
+    <div class="card shadow-sm mb-4 border-info">
+        <div class="card-body">
+            <h5 class="card-title text-info">🤖 AI 智能建议 <span class="badge bg-info text-dark">DeepSeek</span></h5>
+            <p class="card-text">@Model.AiAdvice</p>
+        </div>
+    </div>
+}
+
+<!-- 近7天 -->
+<div class="card shadow-sm mb-4">
+    <div class="card-header"><h5 class="mb-0">📈 近7天趋势</h5></div>
+    <div class="card-body">
+        @if (Model.RecentWeek.Any())
+        {
+            var maxMl = Model.RecentWeek.Max(w => w.TargetMl); if (maxMl == 0) maxMl = 1;
+            <div style="height:200px;display:flex;align-items:flex-end;gap:8px;padding:0 10px;">
+                @foreach (var day in Model.RecentWeek)
+                {
+                    var barHeight = Math.Max(5, (double)day.TotalMl / maxMl * 160);
+                    <div class="flex-fill text-center">
+                        <div style="height:160px;display:flex;align-items:flex-end;justify-content:center;gap:3px;">
+                            <div style="width:40%;background:#e9ecef;border-radius:4px 4px 0 0;height:@(Math.Max(5,(double)day.TargetMl/maxMl*160))px;"></div>
+                            <div style="width:40%;background:@(day.TotalMl>=day.TargetMl?"#28a745":"#17a2b8");border-radius:4px 4px 0 0;height:@(barHeight)px;"></div>
+                        </div>
+                        <small class="text-muted">@day.DateStr</small>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+<!-- 今日记录 + 操作 -->
+<div class="card shadow-sm">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">📋 今日饮水记录</h5>
+        <a asp-action="ChangePassword" class="btn btn-sm btn-outline-secondary">🔑 修改密码</a>
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+            <thead class="table-light"><tr><th>时间</th><th>饮水量(ml)</th></tr></thead>
+            <tbody>
+                @if (Model.TodayRecords.Any())
+                {
+                    @foreach (var r in Model.TodayRecords)
+                    {
+                        <tr><td>@r.DateStr</td><td>@r.TotalMl</td></tr>
+                    }
+                }
+                else
+                {
+                    <tr><td colspan="2" class="text-center text-muted py-3">今日暂无饮水记录</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- AI 交互问答 -->
+@{
+    ViewData["ChatUserId"] = Model.UserId;
+    ViewData["ChatUserName"] = Model.Name;
+    ViewData["AskAIUrl"] = Url.Action("AskAI", "BillingUser");
+}
+@await Html.PartialAsync("_AIChat")

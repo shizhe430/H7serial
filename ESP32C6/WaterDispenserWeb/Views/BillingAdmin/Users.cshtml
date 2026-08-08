@@ -1,0 +1,103 @@
+@using WaterDispenserWeb.Models
+@model List<User>
+@{
+    ViewData["Title"] = "计费用户管理";
+    var accounts = ViewBag.Accounts as Dictionary<int, BillingAccount>;
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>👥 计费用户管理</h2>
+    <a asp-action="AddUser" class="btn btn-primary">➕ 添加用户</a>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>编号</th>
+                    <th>姓名</th>
+                    <th>余额(元)</th>
+                    <th>单价(元/ml)</th>
+                    <th>年龄</th>
+                    <th>微信推送</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var u in Model.Where(u => u.Role == 3))
+                {
+                    var acc = accounts != null && accounts.ContainsKey(u.Id) ? accounts[u.Id] : null;
+                    <tr>
+                        <td>@u.Username</td>
+                        <td>@u.Name</td>
+                        <td>
+                            <span class="fw-bold @(acc?.Balance < 1 ? "text-danger" : "text-success")">
+                                @(acc?.Balance.ToString("F2") ?? "0.00")
+                            </span>
+                        </td>
+                        <td>@(acc?.RatePerMl.ToString("F4") ?? "0.0050")</td>
+                        <td>@(u.Age > 0 ? u.Age.ToString() : "-")</td>
+                        <td>
+                            @if (!string.IsNullOrEmpty(u.Phone))
+                            {
+                                <span class="badge bg-success">已绑定</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary">未绑定</span>
+                            }
+                        </td>
+                        <td>
+                            <a asp-action="EditUser" asp-route-id="@u.Id" class="btn btn-sm btn-outline-primary">编辑</a>
+                            <form asp-action="DeleteUser" asp-route-id="@u.Id" method="post" style="display:inline"
+                                  onsubmit="return confirm('确定删除【@u.Name】吗？')">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">删除</button>
+                            </form>
+                            <button class="btn btn-sm btn-outline-success" onclick="showRecharge(@u.Id, '@u.Name')">充值</button>
+                        </td>
+                    </tr>
+                }
+                @if (!Model.Any(u => u.Role == 3))
+                {
+                    <tr><td colspan="7" class="text-center text-muted py-4">暂无计费用户</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- 充值弹窗 -->
+<div class="modal fade" id="rechargeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form asp-action="Recharge" method="post">
+                <div class="modal-header">
+                    <h5 class="modal-title">💰 充值</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="userId" id="rechargeUserId" />
+                    <p id="rechargeUserName" class="text-muted"></p>
+                    <div class="mb-3">
+                        <label class="form-label">充值金额(元)</label>
+                        <input type="number" name="amount" class="form-control" step="0.01" min="0.01" required />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">确认充值</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+function showRecharge(id, name) {
+    document.getElementById('rechargeUserId').value = id;
+    document.getElementById('rechargeUserName').textContent = '用户：' + name;
+    new bootstrap.Modal(document.getElementById('rechargeModal')).show();
+}
+</script>
+}

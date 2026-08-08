@@ -1,0 +1,133 @@
+@{
+    // 使用说明：引入本局部视图前需设置以下 ViewData
+    // ChatUserId   : 被询问的用户ID（饮水者ID）
+    // ChatUserName : 被询问的用户姓名（显示用）
+    // AskAIUrl     : 提交问答的接口地址（Url.Action("AskAI", "控制器名")）
+    var chatUserId = ViewData["ChatUserId"] as int? ?? 0;
+    var chatUserName = ViewData["ChatUserName"] as string ?? "该用户";
+    var askAIUrl = ViewData["AskAIUrl"] as string ?? "#";
+}
+<div class="card shadow-sm mt-4 border-info" id="aiChatCard">
+    <div class="card-header bg-primary text-white d-flex align-items-center justify-content-between">
+        <h5 class="mb-0">🤖 智能饮水助手</h5>
+        <span class="badge bg-light text-dark">DeepSeek</span>
+    </div>
+    <div class="card-body">
+        <div id="aiChatHistory" class="mb-3 ai-chat-history">
+            <div class="text-muted small text-center py-2">
+                向 AI 助手提问关于 @chatUserName 的饮水健康问题吧，例如「我今天喝水够了吗？」
+            </div>
+        </div>
+        <div class="input-group">
+            <input type="text" id="aiQuestion" class="form-control" placeholder="输入你的问题…"
+                   onkeydown="if(event.key==='Enter'){sendAIQuestion();}" />
+            <button class="btn btn-primary" type="button" onclick="sendAIQuestion()">发送</button>
+        </div>
+    </div>
+</div>
+
+<style>
+    .ai-chat-history {
+        max-height: 320px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 4px 2px;
+    }
+    .ai-chat-item {
+        max-width: 85%;
+        padding: 8px 12px;
+        border-radius: 12px;
+        font-size: 0.92rem;
+        line-height: 1.5;
+        word-break: break-word;
+        white-space: pre-wrap;
+    }
+    .ai-chat-item .ai-chat-label {
+        font-size: 0.72rem;
+        font-weight: 700;
+        display: block;
+        margin-bottom: 2px;
+    }
+    .ai-chat-q {
+        align-self: flex-end;
+        background: #d6e4ff;
+        border-top-right-radius: 3px;
+    }
+    .ai-chat-q .ai-chat-label { color: #3f6a9a; }
+    .ai-chat-a {
+        align-self: flex-start;
+        background: #f0f6ec;
+        border: 1px solid #dde8d5;
+        border-top-left-radius: 3px;
+    }
+    .ai-chat-a .ai-chat-label { color: #5a8a55; }
+</style>
+
+<script>
+    (function () {
+        var chatUserId = @chatUserId;
+        var askAIUrl = '@Html.Raw(askAIUrl)';
+        var chatHistory = [];   // [{role:'user'|'assistant', content:...}] 多轮对话记忆
+        var thinking = null;    // 当前"思考中"气泡
+
+        window.sendAIQuestion = function () {
+            var input = document.getElementById('aiQuestion');
+            var q = input.value.trim();
+            if (!q || thinking) return;   // 上一条未答完时禁用
+            input.value = '';
+
+            var history = document.getElementById('aiChatHistory');
+            // 移除初始提示
+            var placeholder = history.querySelector('.text-center');
+            if (placeholder) placeholder.remove();
+
+            history.appendChild(makeItem('q', q));
+            chatHistory.push({ role: 'user', content: q });
+
+            thinking = makeItem('a', '🤔 正在思考中…');
+            history.appendChild(thinking);
+            history.scrollTop = history.scrollHeight;
+
+            var params = new URLSearchParams();
+            params.append('userId', chatUserId);
+            params.append('messages', JSON.stringify(chatHistory));
+
+            fetch(askAIUrl, {
+                method: 'POST',
+                body: params
+            })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                var ans = (d && d.answer) ? d.answer : 'AI 暂时无法回答，请稍后再试';
+                chatHistory.push({ role: 'assistant', content: ans });
+                replaceThinking(makeItem('a', ans));
+            })
+            .catch(function () {
+                replaceThinking(makeItem('a', '😵 网络错误，请稍后再试'));
+            })
+            .finally(function () { thinking = null; });
+        };
+
+        function replaceThinking(item) {
+            var history = document.getElementById('aiChatHistory');
+            if (thinking && thinking.parentNode) thinking.parentNode.replaceChild(item, thinking);
+            else history.appendChild(item);
+            history.scrollTop = history.scrollHeight;
+        }
+
+        function makeItem(type, text) {
+            var div = document.createElement('div');
+            div.className = 'ai-chat-item ' + (type === 'q' ? 'ai-chat-q' : 'ai-chat-a');
+            var label = document.createElement('span');
+            label.className = 'ai-chat-label';
+            label.textContent = type === 'q' ? '我' : 'AI';
+            var txt = document.createElement('span');
+            txt.textContent = text;
+            div.appendChild(label);
+            div.appendChild(txt);
+            return div;
+        }
+    })();
+</script>

@@ -1,0 +1,312 @@
+@model LoginViewModel
+@{
+    ViewData["Title"] = "登录";
+    Layout = null; // 登录页不使用主布局
+}
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>登录 - 智能饮水机</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <style>
+        body {
+            background: linear-gradient(160deg, #1a1f36 0%, #2d3561 40%, #4a5580 100%);
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            position: relative;
+            overflow: hidden;
+        }
+        /* 神秘星空光斑 */
+        body::before {
+            content: '';
+            position: absolute;
+            top: -30%;
+            left: -10%;
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(90, 120, 220, 0.15), transparent 60%);
+            border-radius: 50%;
+        }
+        body::after {
+            content: '';
+            position: absolute;
+            bottom: -20%;
+            right: -5%;
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, rgba(120, 100, 200, 0.12), transparent 60%);
+            border-radius: 50%;
+        }
+        .login-card {
+            background: rgba(20, 24, 42, 0.9);
+            border: 1px solid rgba(120, 140, 220, 0.25);
+            border-radius: 22px;
+            padding: 40px 38px;
+            width: 420px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 40px rgba(80, 110, 220, 0.1);
+            position: relative;
+            z-index: 2;
+            backdrop-filter: blur(8px);
+            margin-top: 80px;
+        }
+        .login-card h1 {
+            text-align: center;
+            color: #e8ecff;
+            margin-bottom: 10px;
+            font-size: 1.7rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+        }
+        .login-card .subtitle {
+            text-align: center;
+            color: #8a93c0;
+            margin-bottom: 28px;
+            font-size: 0.9rem;
+        }
+        .login-card .water-icon {
+            text-align: center;
+            font-size: 3.2rem;
+            margin-bottom: 15px;
+        }
+        .section-badge {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: fit-content;
+            margin: 0 auto 8px auto;
+            background: rgba(120, 140, 220, 0.15);
+            border: 1px solid rgba(120, 140, 220, 0.3);
+            padding: 6px 16px;
+            border-radius: 20px;
+            color: #aab6e8;
+            font-size: 0.9rem;
+            text-align: center;
+        }
+        .form-group {
+            margin-bottom: 22px;
+        }
+        .form-group label {
+            color: #aab6e8;
+            font-size: 0.85rem;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        /* 登录编号输入框 */
+        .form-control {
+            background: rgba(30, 35, 60, 0.8);
+            border: 1px solid rgba(120, 140, 220, 0.2);
+            border-radius: 10px;
+            padding: 12px 15px;
+            color: #e8ecff;
+            transition: border-color 0.3s, box-shadow 0.3s;
+        }
+        .form-control::placeholder {
+            color: #5a6390;
+        }
+        .form-control:focus {
+            background: rgba(30, 35, 60, 0.95);
+            border-color: #7a8fe0;
+            box-shadow: 0 0 0 3px rgba(122, 143, 224, 0.15);
+            color: #fff;
+        }
+        /* 密码框 - 高级神秘风 */
+        .password-wrapper {
+            position: relative;
+        }
+        .password-wrapper .form-control {
+            padding-left: 42px;
+            padding-right: 42px;
+        }
+        .password-wrapper .lock-icon {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #6a74a5;
+            font-size: 1rem;
+            pointer-events: none;
+        }
+        .password-wrapper .eye-toggle {
+            position: absolute;
+            right: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: #6a74a5;
+            cursor: pointer;
+            font-size: 1rem;
+            padding: 0;
+        }
+        .password-wrapper .eye-toggle:hover {
+            color: #aab6e8;
+        }
+        /* 安全徽章 */
+        .security-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 14px;
+            padding: 8px 12px;
+            background: rgba(50, 180, 120, 0.1);
+            border: 1px solid rgba(50, 180, 120, 0.2);
+            border-radius: 8px;
+            color: #6ad4a0;
+            font-size: 0.75rem;
+        }
+        .security-badge .shield {
+            font-size: 0.9rem;
+        }
+        .btn-login {
+            background: linear-gradient(135deg, #5a6fd0 0%, #4250a8 100%);
+            border: 1px solid rgba(122, 143, 224, 0.3);
+            color: white;
+            padding: 12px;
+            font-size: 1.05rem;
+            font-weight: 600;
+            border-radius: 50px;
+            width: 100%;
+            transition: transform 0.2s, box-shadow 0.2s;
+            letter-spacing: 3px;
+            box-shadow: 0 6px 20px rgba(66, 80, 168, 0.4);
+        }
+        .btn-login:hover {
+            transform: scale(1.02);
+            box-shadow: 0 8px 25px rgba(66, 80, 168, 0.55);
+            color: white;
+        }
+        .validation-summary-errors {
+            color: #ff8a8a;
+            margin-bottom: 15px;
+        }
+        .back-link {
+            text-align: center;
+            margin-top: 18px;
+        }
+        .back-link a {
+            color: #6a74a5;
+            font-size: 0.85rem;
+            text-decoration: none;
+        }
+        .back-link a:hover {
+            color: #aab6e8;
+        }
+        .admin-hint {
+            text-align: center;
+            margin-top: 14px;
+            color: #5a6390;
+            font-size: 0.75rem;
+        }
+        /* 顶部品牌栏：logo在左上角，标语和它放一起 */
+        .brand-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 14px;
+            background: linear-gradient(160deg, #1a1f36 0%, #2d3561 40%, #4a5580 100%);
+            padding: 10px 24px;
+            box-shadow: 0 2px 12px rgba(20,25,60,0.4);
+            z-index: 999;
+        }
+        .brand-bar-logo {
+            width: 44px;
+            height: 44px;
+            object-fit: contain;
+            border-radius: 8px;
+            background: rgba(255,255,255,0.15);
+            padding: 2px;
+        }
+        .brand-bar-title {
+            color: #fff;
+            font-size: 1.2rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-shadow: 0 1px 4px rgba(0,0,0,0.2);
+            white-space: nowrap;
+        }
+        .brand-bar-slogan {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #fff;
+            font-size: 1.15rem;
+            font-weight: 600;
+            letter-spacing: 6px;
+            text-shadow: 0 1px 4px rgba(0,0,0,0.25);
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+    <!-- 顶部品牌栏：Logo + 标语 -->
+    <div class="brand-bar">
+        <img src="~/images/logo.png" alt="logo" class="brand-bar-logo" />
+        <span class="brand-bar-title">智能饮水机管理</span>
+        <span class="brand-bar-slogan">智慧饮水，净润朝夕</span>
+    </div>
+
+    <div class="login-card">
+        <div class="water-icon">🚰</div>
+        <h1>智能饮水机</h1>
+        <div class="section-badge">@ViewBag.SectionName</div>
+        <p class="subtitle">请使用编号和密码登录</p>
+
+        <form asp-action="Login" method="post">
+            <input type="hidden" name="section" value="@ViewBag.Section" />
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+
+            <div class="form-group">
+                <label asp-for="Username" class="form-label">登录编号</label>
+                <input asp-for="Username" class="form-control" placeholder="请输入编号" />
+                <span asp-validation-for="Username" class="text-danger"></span>
+            </div>
+
+            <div class="form-group">
+                <label asp-for="Password" class="form-label">密码</label>
+                <div class="password-wrapper">
+                    <span class="lock-icon">🔒</span>
+                    <input asp-for="Password" class="form-control" id="passwordInput" placeholder="请输入密码" />
+                    <button type="button" class="eye-toggle" id="eyeToggle" onclick="togglePassword()">👁</button>
+                </div>
+                <span asp-validation-for="Password" class="text-danger"></span>
+                <div class="security-badge">
+                    <span class="shield">🛡️</span>
+                    <span>连接已加密 · 256位安全传输 · 您的信息受到保护</span>
+                </div>
+            </div>
+
+            <button type="submit" class="btn-login">登 录</button>
+        </form>
+
+        <div class="back-link">
+            <a href="/">← 返回选择板块</a>
+        </div>
+    </div>
+
+    <script>
+        function togglePassword() {
+            var input = document.getElementById('passwordInput');
+            var eye = document.getElementById('eyeToggle');
+            if (input.type === 'password') {
+                input.type = 'text';
+                eye.textContent = '🙈';
+            } else {
+                input.type = 'password';
+                eye.textContent = '👁';
+            }
+        }
+    </script>
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

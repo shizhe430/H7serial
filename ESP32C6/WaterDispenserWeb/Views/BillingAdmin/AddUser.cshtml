@@ -1,0 +1,56 @@
+@model User
+@{ ViewData["Title"] = "添加计费用户"; }
+
+<h2 class="mb-4">➕ 添加计费用户</h2>
+<div class="card shadow-sm">
+    <div class="card-body">
+        <form asp-action="AddUser" method="post">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label asp-for="Username" class="form-label">登录编号 *</label>
+                    <input asp-for="Username" class="form-control" />
+                    <span asp-validation-for="Username" class="text-danger"></span>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label asp-for="Password" class="form-label">密码 *</label>
+                    <input asp-for="Password" class="form-control" type="text" />
+                    <span asp-validation-for="Password" class="text-danger"></span>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label asp-for="Name" class="form-label">姓名 *</label>
+                    <input asp-for="Name" class="form-control" />
+                    <span asp-validation-for="Name" class="text-danger"></span>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">初始余额(元)</label>
+                    <input name="initialBalance" class="form-control" type="number" step="0.01" value="0" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label asp-for="Gender" class="form-label">性别</label>
+                    <select asp-for="Gender" class="form-select"><option value="0">未知</option><option value="1">男</option><option value="2">女</option></select>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label asp-for="Age" class="form-label">年龄</label>
+                    <input asp-for="Age" class="form-control" type="number" />
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label asp-for="WeightKg" class="form-label">体重(kg)</label>
+                    <input asp-for="WeightKg" class="form-control" type="number" step="0.1" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-12 mb-3">
+                    <label asp-for="Phone" class="form-label">信息推送Token（选填）</label>
+                    <input asp-for="Phone" class="form-control" placeholder="PushPlus微信token，填写后每次更新数据会推送扣费/余额提醒到该用户微信；不填则不推送" />
+                    <span class="form-text text-muted">在 pushplus.plus 微信扫码注册获取token，可留空</span>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary">保存</button>
+            <a asp-action="Users" class="btn btn-secondary">取消</a>
+        </form>
+    </div>
+</div>

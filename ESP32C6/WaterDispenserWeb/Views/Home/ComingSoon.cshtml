@@ -1,0 +1,183 @@
+@{
+    ViewData["Title"] = "敬请期待";
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>敬请期待 - 智能饮水机</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <style>
+        body {
+            background: linear-gradient(135deg, #e8c8a0 0%, #d4946a 50%, #b8774f 100%);
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 60px 40px;
+            text-align: center;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+            max-width: 500px;
+            margin-top: 80px;
+        }
+        .card .icon {
+            font-size: 5rem;
+            margin-bottom: 20px;
+        }
+        .card h1 {
+            font-size: 1.8rem;
+            color: #333;
+            margin-bottom: 15px;
+        }
+        .card p {
+            color: #888;
+            margin-bottom: 30px;
+        }
+        .btn-back {
+            background: linear-gradient(135deg, #e8c8a0 0%, #d4946a 50%, #b8774f 100%);
+            border: none;
+            color: white;
+            padding: 12px 40px;
+            border-radius: 50px;
+            font-size: 1rem;
+            text-decoration: none;
+            display: inline-block;
+            transition: transform 0.2s;
+        }
+        .btn-back:hover {
+            transform: scale(1.05);
+            color: white;
+        }
+        /* 顶部品牌栏：logo在左上角，标语和它放一起 */
+        .brand-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 14px;
+            background: linear-gradient(135deg, #d4946a 0%, #b8774f 100%);
+            padding: 10px 24px;
+            box-shadow: 0 2px 12px rgba(180,100,50,0.3);
+            z-index: 999;
+        }
+        .brand-bar-logo {
+            width: 44px;
+            height: 44px;
+            object-fit: contain;
+            border-radius: 8px;
+            background: rgba(255,255,255,0.15);
+            padding: 2px;
+        }
+        .brand-bar-title {
+            color: #fff;
+            font-size: 1.2rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-shadow: 0 1px 4px rgba(0,0,0,0.2);
+            white-space: nowrap;
+        }
+        .brand-bar-slogan {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #fff;
+            font-size: 1.15rem;
+            font-weight: 600;
+            letter-spacing: 6px;
+            text-shadow: 0 1px 4px rgba(0,0,0,0.25);
+            white-space: nowrap;
+        }
+        .brand-bar-right {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+        }
+        .login-dropdown {
+            position: relative;
+        }
+        .brand-bar-login {
+            background: rgba(255,255,255,0.18);
+            border: 1px solid rgba(255,255,255,0.45);
+            color: #fff;
+            padding: 6px 18px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+            text-decoration: none;
+        }
+        .brand-bar-login:hover {
+            background: rgba(255,255,255,0.35);
+            color: #fff;
+        }
+        .login-menu {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: calc(100% + 8px);
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+            padding: 6px;
+            min-width: 170px;
+            z-index: 1000;
+        }
+        .login-menu a {
+            display: block;
+            padding: 9px 14px;
+            border-radius: 8px;
+            color: #333;
+            text-decoration: none;
+            font-size: 0.9rem;
+            white-space: nowrap;
+        }
+        .login-menu a:hover {
+            background: #f5efe8;
+            color: #b8774f;
+        }
+        .login-dropdown:hover .login-menu,
+        .login-dropdown.open .login-menu {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <!-- 顶部品牌栏：Logo + 标语 + 右上角登录 -->
+    <div class="brand-bar">
+        <img src="~/images/logo.png" alt="logo" class="brand-bar-logo" />
+        <span class="brand-bar-title">智能饮水机管理</span>
+        <span class="brand-bar-slogan">智慧饮水，净润朝夕</span>
+        <div class="brand-bar-right">
+            <div class="login-dropdown">
+                <a class="brand-bar-login" href="javascript:void(0)">🔐 登录 ▾</a>
+                <div class="login-menu">
+                    <a href="/Account/Login?section=elderly">🏥 养老院板块</a>
+                    <a href="/Account/Login?section=billing">💰 个人计费板块</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="icon">🔜</div>
+        <h1>敬请期待</h1>
+        <p>更多精彩功能正在开发中，即将上线，敬请期待！</p>
+        <a class="btn-back" href="/">返回首页</a>
+    </div>
+</body>
+</html>

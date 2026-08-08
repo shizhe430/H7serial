@@ -1,0 +1,31 @@
+# Local/generated ESP-IDF output
+Smart_Water_Gate_C6/build/
+Smart_Water_Gate_C6/build.teammate-cache/
+Smart_Water_Gate_C6/managed_components/
+Smart_Water_Gate_C6/.git/
+Smart_Water_Gate_C6/components/esp_rainmaker/.git/
+**/.git.upload-backup/
+Smart_Water_Gate_C6/sdkconfig
+Smart_Water_Gate_C6/sdkconfig.old
+Smart_Water_Gate_C6/*.bin
+Smart_Water_Gate_C6/*.elf
+Smart_Water_Gate_C6/*.log
+Smart_Water_Gate_C6/build_*.txt
+Smart_Water_Gate_C6/erase_*.txt
+Smart_Water_Gate_C6/monitor_*.txt
+Smart_Water_Gate_C6/flash_*.txt
+Smart_Water_Gate_C6/boot_log*.txt
+Smart_Water_Gate_C6/sdkconfig.user_backup
+Smart_Water_Gate_C6/*.pyc
+Smart_Water_Gate_C6/__pycache__/
+
+# Local ASP.NET output and runtime logs
+WaterDispenserWeb/bin/
+WaterDispenserWeb/obj/
+WaterDispenserWeb/*.log
+
+# Local database dump contains user records and password data
+WaterDispenserWeb/water_dispenser_backup.sql
+
+# Browser automation artifacts
+.playwright-cli/

@@ -1,0 +1,334 @@
+stages:
+  - build
+  - deploy
+
+variables:
+  V: "0"
+  MAKEFLAGS: "-j8 --no-keep-going"
+  APP_BUILD: "all"
+  GIT_SUBMODULE_STRATEGY: recursive
+  ESP_DOCS_ENV_IMAGE: "$CI_DOCKER_REGISTRY/esp-idf-doc-env-v5.4:1-1"
+  ESP_DOCS_PATH: "$CI_PROJECT_DIR"
+  # KVS WebRTC SDK clone settings (used by camera example builds)
+  KVS_SDK_PATH: "$CI_PROJECT_DIR/amazon-kinesis-video-streams-webrtc-sdk-c"
+
+before_script:
+   # add gitlab ssh key
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - echo -n $GITLAB_KEY > ~/.ssh/id_rsa_base64
+    - base64 --decode --ignore-garbage ~/.ssh/id_rsa_base64 > ~/.ssh/id_rsa
+    - chmod 600 ~/.ssh/id_rsa
+    - echo -e "Host gitlab.espressif.cn\n\tStrictHostKeyChecking no\n" >> ~/.ssh/config
+    # Create esp-rainmaker-bins-${CI_JOB_ID}/ dir (to copy binaries into for artifacts)
+    - mkdir -p $CI_PROJECT_DIR/esp-rainmaker-bins-${CI_JOB_ID}
+
+.build_matter_examples: &build_matter_examples
+  # start building examples
+  - for EXAMPLE in $EXAMPLES; do
+  - cd $CI_PROJECT_DIR/examples/$EXAMPLE
+  - echo Building $EXAMPLE
+  # build examples for the targets
+  - for TARGET in $EXAMPLE_TARGETS; do
+  - echo Building for $TARGET
+  - idf.py set-target $TARGET
+  - idf.py build
+  - mkdir -p $CI_PROJECT_DIR/esp-rainmaker-bins-${CI_JOB_ID}/$EXAMPLE/$TARGET/
+  - cp $CI_PROJECT_DIR/examples/$EXAMPLE/build/*.bin $CI_PROJECT_DIR/esp-rainmaker-bins-${CI_JOB_ID}/$EXAMPLE/$TARGET/
+  - done
+  - echo Build Complete for $EXAMPLE
+  - done
+  # Generating zip file for binaries generated
+  - cd $CI_PROJECT_DIR
+  - echo Generating zip file for binaries generated
+  - tar -zcvf esp-rainmaker-bins-${CI_JOB_ID}.zip esp-rainmaker-bins-${CI_JOB_ID}/
+
+.build_matter_controller_example: &build_matter_controller_example
+  # start build controller example for the targets
+  - cd $CI_PROJECT_DIR/examples/matter/matter_controller
+  - for TARGET in $CONTROLLER_EXAMPLE_TARGET; do
+  - echo Build matter controller for $TARGET
+  - idf.py set-target $CONTROLLER_EXAMPLE_TARGET
+  - idf.py build
+  - mkdir -p $CI_PROJECT_DIR/esp-rainmaker-bins-${CI_JOB_ID}/matter/matter_controller/$TARGET/
+  - cp $CI_PROJECT_DIR/examples/matter/matter_controller/build/*.bin $CI_PROJECT_DIR/esp-rainmaker-bins-${CI_JOB_ID}/matter/matter_controller/$TARGET/
+  - done
+  - echo Build Complete for matter_controller
+  # Generating zip file for binaries generated
+  - cd $CI_PROJECT_DIR
+  - echo Generating zip file for binaries generated
+  - tar -zcvf esp-rainmaker-bins-${CI_JOB_ID}.zip esp-rainmaker-bins-${CI_JOB_ID}/
+
+.build_all_examples: &build_all_examples
+  - for EXAMPLE in $EXAMPLES; do
+  - cd $CI_PROJECT_DIR/examples/$EXAMPLE
+  - echo Building $EXAMPLE
+  - if [[ "$EXAMPLE" == "thread_br" ]]; then
+  -   sed -i "/CONFIG_LWIP_IPV6_NUM_ADDRESSES=8/c\\CONFIG_LWIP_IPV6_NUM_ADDRESSES=12" sdkconfig.defaults
+  - fi
+  - for TARGET in $EXAMPLE_TARGETS; do
+  - echo Building for $TARGET
+  - rm -rf managed_components dependencies.lock build sdkconfig sdkconfig.old
+  - idf.py set-target $TARGET
+  - idf.py build
+  - mkdir -p $CI_PROJECT_DIR/esp-rainmaker-bins-${CI_JOB_ID}/$EXAMPLE/$TARGET/
+  - cp $CI_PROJECT_DIR/examples/$EXAMPLE/build/*.bin $CI_PROJECT_DIR/esp-rainmaker-bins-${CI_JOB_ID}/$EXAMPLE/$TARGET/
+  - done
+  - echo Build Complete for $EXAMPLE
+  - if [[ "$EXAMPLE" == "thread_br" ]]; then
+  -   sed -i "/CONFIG_LWIP_IPV6_NUM_ADDRESSES=12/c\\CONFIG_LWIP_IPV6_NUM_ADDRESSES=8" sdkconfig.defaults
+  - fi
+  - done
+  # Generating zip file for binaries generated
+  - cd $CI_PROJECT_DIR
+  - echo Generating zip file for binaries generated
+  - tar -zcvf esp-rainmaker-bins-${CI_JOB_ID}.zip esp-rainmaker-bins-${CI_JOB_ID}/
+
+.build_camera_examples: &build_camera_examples
+  # Clone KVS WebRTC SDK pinned at $KVS_GIT_COMMIT
+  - cd $CI_PROJECT_DIR
+  - git clone $KVS_GITHUB_PATH $KVS_SDK_PATH
+  - git -C $KVS_SDK_PATH checkout $KVS_GIT_COMMIT
+  - git -C $KVS_SDK_PATH submodule update --init --recursive --depth 1
+  # start building examples
+  - for EXAMPLE in $EXAMPLES; do
+  - cd $CI_PROJECT_DIR/examples/$EXAMPLE
+  - echo Building $EXAMPLE
+  # build examples for the targets
+  - for TARGET in $EXAMPLE_TARGETS; do
+  - echo Building for $TARGET
+  - idf.py set-target $TARGET
+  - idf.py build
+  - mkdir -p $CI_PROJECT_DIR/esp-rainmaker-bins-${CI_JOB_ID}/$EXAMPLE/$TARGET/
+  - cp $CI_PROJECT_DIR/examples/$EXAMPLE/build/*.bin $CI_PROJECT_DIR/esp-rainmaker-bins-${CI_JOB_ID}/$EXAMPLE/$TARGET/
+  - done
+  - echo Build Complete for $EXAMPLE
+  - done
+  # Generating zip file for binaries generated
+  - cd $CI_PROJECT_DIR
+  - echo Generating zip file for binaries generated
+  - tar -zcvf esp-rainmaker-bins-${CI_JOB_ID}.zip esp-rainmaker-bins-${CI_JOB_ID}/
+
+.build_homekit_examples: &build_homekit_examples
+  # Clone esp-homekit-sdk
+  - cd $CI_PROJECT_DIR/examples/homekit_switch
+  - cd components
+  - echo Cloning esp-homekit-sdk
+  - git clone --recursive --branch master --depth 1 https://github.com/espressif/esp-homekit-sdk.git
+  - cd ..
+  - export HOMEKIT_PATH=$PWD/components/esp-homekit-sdk
+  # start building homekit_switch example
+  - cd $CI_PROJECT_DIR/examples/homekit_switch
+  - echo Building homekit_switch
+  # build for the targets
+  - for TARGET in $EXAMPLE_TARGETS; do
+  - echo Building for $TARGET
+  - rm -rf managed_components dependencies.lock build sdkconfig sdkconfig.old
+  - idf.py set-target $TARGET
+  - idf.py build
+  - mkdir -p $CI_PROJECT_DIR/esp-rainmaker-bins-${CI_JOB_ID}/homekit_switch/$TARGET/
+  - cp $CI_PROJECT_DIR/examples/homekit_switch/build/*.bin $CI_PROJECT_DIR/esp-rainmaker-bins-${CI_JOB_ID}/homekit_switch/$TARGET/
+  - done
+  - echo Build Complete for homekit_switch
+  # Generating zip file for binaries generated
+  - cd $CI_PROJECT_DIR
+  - echo Generating zip file for binaries generated
+  - tar -zcvf esp-rainmaker-bins-${CI_JOB_ID}.zip esp-rainmaker-bins-${CI_JOB_ID}/
+
+.build_template:
+  stage: build
+  image: espressif/idf:latest
+  tags:
+    - build
+  variables:
+    PEDANTIC_FLAGS: "-Werror -Werror=deprecated-declarations -Wno-error=cpp -Werror=unused-variable -Werror=unused-but-set-variable -Werror=unused-function"
+    EXTRA_CFLAGS: "${PEDANTIC_FLAGS}"
+    EXTRA_CXXFLAGS: "${PEDANTIC_FLAGS}"
+    EXAMPLE_TARGETS: "esp32"
+    EXAMPLES: "switch led_light fan temperature_sensor multi_device gpio"
+  script:
+    - *build_all_examples
+
+build_idf_v5.1:
+  extends: .build_template
+  image: espressif/idf:release-v5.1
+  variables:
+    EXAMPLE_TARGETS: "esp32 esp32s2 esp32c3 esp32s3 esp32c6 esp32c2 esp32h2"
+
+build_idf_v5.2:
+  extends: .build_template
+  image: espressif/idf:release-v5.2
+  variables:
+    EXAMPLE_TARGETS: "esp32 esp32s2 esp32c3 esp32s3 esp32c6 esp32c2 esp32h2"
+
+build_idf_v5.3:
+  extends: .build_template
+  image: espressif/idf:release-v5.3
+  variables:
+    EXAMPLE_TARGETS: "esp32 esp32s2 esp32c3 esp32s3 esp32c6 esp32c2 esp32h2"
+
+build_idf_v5.4:
+  extends: .build_template
+  image: espressif/idf:release-v5.4
+  variables:
+    EXAMPLE_TARGETS: "esp32 esp32s2 esp32c3 esp32s3 esp32c6 esp32c2 esp32h2"
+
+build_idf_v5.5:
+  extends: .build_template
+  image: espressif/idf:release-v5.5
+  variables:
+    EXAMPLE_TARGETS: "esp32 esp32s2 esp32c3 esp32s3 esp32c6 esp32c2 esp32h2 esp32c5"
+
+build_standalone_camera:
+  extends: .build_template
+  image: espressif/idf:v5.5.1
+  variables:
+    PEDANTIC_FLAGS: "-Werror -Werror=deprecated-declarations -Wno-error=cpp -Wno-error=int-to-pointer-cast -Wno-error=pointer-to-int-cast"
+    EXAMPLE_TARGETS: "esp32p4 esp32s3 esp32"
+    EXAMPLES: "camera/standalone"
+  script:
+    - *build_camera_examples
+
+build_split_camera:
+  extends: .build_template
+  image: espressif/idf:v5.5.1
+  variables:
+    PEDANTIC_FLAGS: "-Werror -Werror=deprecated-declarations -Wno-error=cpp -Wno-error=int-to-pointer-cast -Wno-error=pointer-to-int-cast"
+    EXAMPLE_TARGETS: "esp32c6"
+    EXAMPLES: "camera/split_mode/rmaker_split_camera"
+  script:
+    - *build_camera_examples
+
+build_homekit:
+  extends: .build_template
+  image: espressif/idf:release-v5.5
+  variables:
+    EXAMPLE_TARGETS: "esp32 esp32s2 esp32c3 esp32s3 esp32c6 esp32c2"
+  script:
+    - *build_homekit_examples
+
+build_thread_br:
+  extends: .build_template
+  image: espressif/idf:release-v5.3
+  variables:
+    PEDANTIC_FLAGS: "-Werror -Werror=deprecated-declarations -Wno-error=cpp -Werror=unused-variable -Werror=unused-function"
+    EXAMPLE_TARGETS: "esp32s3"
+    EXAMPLES: "thread_br"
+
+build_ethernet_switch:
+  extends: .build_template
+  image: espressif/idf:release-v5.5
+  variables:
+    EXAMPLE_TARGETS: "esp32"
+    EXAMPLES: "ethernet_switch"
+
+build_matter:
+  stage: build
+  image: espressif/esp-matter:latest_idf_v5.4.1
+  tags:
+    - build
+  variables:
+    PEDANTIC_FLAGS: ""
+    EXAMPLE_TARGETS: "esp32 esp32c3 esp32s3 esp32c6 esp32c2"
+    EXAMPLES: "matter/matter_light matter/matter_switch"
+    CONTROLLER_EXAMPLE_TARGET: "esp32s3"
+  script:
+    - *build_matter_examples
+    - *build_matter_controller_example
+
+build_zigbee_gateway:
+  extends: .build_template
+  image: espressif/idf:release-v5.3
+  variables:
+    EXAMPLE_TARGETS: "esp32s3"
+    EXAMPLES: "zigbee_gateway"
+
+build_rainmaker_controller:
+  extends: .build_template
+  image: espressif/idf:release-v5.4
+  variables:
+    EXAMPLE_TARGETS: "esp32s3"
+    EXAMPLES: "rainmaker_controller"
+
+build_docs:
+  stage: build
+  image: $ESP_DOCS_ENV_IMAGE
+  tags:
+    - build_docs
+  artifacts:
+    paths:
+      - docs/_build/*/*/*.txt
+      - docs/_build/*/*/html/*
+    expire_in: 4 days
+  # No cleaning when the artifacts
+  after_script: []
+  script:
+    - mkdir -p components
+    - git clone --branch master --depth 1 https://${GITLAB_USER}:${GITLAB_PASSWORD}@${GITLAB_HTTP_SERVER}/app-frameworks/esp-rainmaker-common.git components/rmaker_common
+    - cd docs
+    - pip install -r requirements.txt
+    - build-docs -l en -t esp32
+
+.deploy_docs_template:
+  stage: deploy
+  image: $ESP_DOCS_ENV_IMAGE
+  tags:
+    - deploy_docs
+  needs:
+    - build_docs
+  script:
+    - source ${CI_PROJECT_DIR}/docs/utils.sh
+    - add_doc_server_ssh_keys $DOCS_DEPLOY_PRIVATEKEY $DOCS_DEPLOY_SERVER $DOCS_DEPLOY_SERVER_USER
+    - export GIT_VER=$(git describe --always)
+    - pip install -r ${CI_PROJECT_DIR}/docs/requirements.txt
+    - deploy-docs
+
+deploy_docs_preview:
+  extends:
+    - .deploy_docs_template
+  except:
+    refs:
+      - master
+  variables:
+    TYPE: "preview"
+    DOCS_BUILD_DIR: "${CI_PROJECT_DIR}/docs/_build/"
+    DOCS_DEPLOY_PRIVATEKEY: "$DOCS_PREVIEW_PRIVATEKEY"
+    DOCS_DEPLOY_SERVER: "$DOCS_PREVIEW_SERVER"
+    DOCS_DEPLOY_SERVER_USER: "$DOCS_PREVIEW_USER"
+    DOCS_DEPLOY_PATH: "$DOCS_PREVIEW_PATH"
+    DOCS_DEPLOY_URL_BASE: "$DOCS_PREVIEW_URL_BASE"
+
+deploy_docs_production:
+  extends:
+    - .deploy_docs_template
+  only:
+    refs:
+      - master
+  variables:
+    TYPE: "production"
+    DOCS_BUILD_DIR: "${CI_PROJECT_DIR}/docs/_build/"
+    DOCS_DEPLOY_PRIVATEKEY: "$DOCS_PROD_PRIVATEKEY"
+    DOCS_DEPLOY_SERVER: "$DOCS_PROD_SERVER"
+    DOCS_DEPLOY_SERVER_USER: "$DOCS_PROD_USER"
+    DOCS_DEPLOY_PATH: "$DOCS_PROD_PATH"
+    DOCS_DEPLOY_URL_BASE: "$DOCS_PROD_URL_BASE"
+
+push_master_to_github:
+  stage: deploy
+  image: espressif/idf:latest
+  tags:
+    - build
+  when: on_success
+  dependencies: []
+  only:
+    - master
+  script:
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - echo -n $GH_PUSH_KEY > ~/.ssh/id_rsa_base64
+    - base64 --decode --ignore-garbage ~/.ssh/id_rsa_base64 > ~/.ssh/id_rsa
+    - chmod 600 ~/.ssh/id_rsa
+    - echo -e "Host github.com\n\tStrictHostKeyChecking no\n" >> ~/.ssh/config
+    - git remote remove github &>/dev/null || true
+    - git remote add github git@github.com:espressif/esp-rainmaker.git
+    - git push github "${CI_COMMIT_SHA}:refs/heads/${CI_COMMIT_REF_NAME}"

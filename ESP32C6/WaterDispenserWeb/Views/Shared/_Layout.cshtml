@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - 智能饮水机</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body class="@(Context.Session.GetString("UserSection") == "elderly" ? "elderly-bg" : Context.Session.GetString("UserSection") == "billing" ? "billing-bg" : Context.Session.GetString("UserSection") == "home" ? "home-bg" : "")">
+    @if (Context.Session.GetString("UserSection") == "home")
+    {
+        <!-- 家庭板块温馨装饰层：太阳/彩虹/云朵/气球/星星/水滴/花朵 -->
+        <div class="home-deco" aria-hidden="true">
+            <div class="deco-sun"></div>
+            <div class="deco-rainbow"></div>
+            <div class="deco-cloud deco-cloud-1"></div>
+            <div class="deco-cloud deco-cloud-2"></div>
+            <div class="deco-cloud deco-cloud-3"></div>
+            <div class="deco-cloud deco-cloud-4"></div>
+            <div class="deco-balloon deco-balloon-1"></div>
+            <div class="deco-balloon deco-balloon-2"></div>
+            <div class="deco-balloon deco-balloon-3"></div>
+            <span class="deco-star deco-star-1">⭐</span>
+            <span class="deco-star deco-star-2">✨</span>
+            <span class="deco-star deco-star-3">🌟</span>
+            <span class="deco-star deco-star-4">⭐</span>
+            <span class="deco-drop deco-drop-1">💧</span>
+            <span class="deco-drop deco-drop-2">💧</span>
+            <span class="deco-drop deco-drop-3">💧</span>
+            <span class="deco-drop deco-drop-4">💧</span>
+            <span class="deco-drop deco-drop-5">💧</span>
+            <span class="deco-flower deco-flower-1">🌷</span>
+            <span class="deco-flower deco-flower-2">🌼</span>
+            <span class="deco-flower deco-flower-3">🌻</span>
+            <span class="deco-flower deco-flower-4">🌸</span>
+        </div>
+    }
+    @if (Context.Session.GetString("UserSection") == "billing")
+    {
+        <!-- 个人计费板块科技装饰层：发光金币/数据点/波纹环/数据流线 -->
+        <span class="coin-spark coin-spark-1">🪙</span>
+        <span class="coin-spark coin-spark-2">💠</span>
+        <span class="coin-spark coin-spark-3">💳</span>
+        <span class="coin-spark coin-spark-4">💧</span>
+        <span class="coin-spark coin-spark-5">💎</span>
+        <span class="data-dot data-dot-1"></span>
+        <span class="data-dot data-dot-2"></span>
+        <span class="data-dot data-dot-3"></span>
+        <span class="data-dot data-dot-4"></span>
+        <span class="tech-ring tech-ring-1"></span>
+        <span class="tech-ring tech-ring-2"></span>
+        <span class="tech-ring tech-ring-3"></span>
+        <span class="tech-line tech-line-1"></span>
+        <span class="tech-line tech-line-2"></span>
+    }
+    <header>
+        <nav class="navbar navbar-expand-sm navbar-dark bg-primary box-shadow mb-3">
+            <div class="container-fluid">
+                <a class="navbar-brand d-flex align-items-center" asp-controller="Home" asp-action="Index">
+                    <img src="~/images/logo.png" alt="logo" class="brand-logo" />
+                    <span class="brand-title">智能饮水机管理</span>
+                </a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                @{
+                    var role = Context.Session.GetInt32("UserRole");
+                    var userName = Context.Session.GetString("UserName");
+                    var section = Context.Session.GetString("UserSection");
+                    var sectionRaw = Context.Session.GetString("UserSectionRaw");
+                }
+                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
+                    <ul class="navbar-nav flex-grow-1">
+                        @if (section == "elderly")
+                        {
+                            @if (role == 0)
+                            {
+                                <li class="nav-item"><a class="nav-link" asp-controller="Admin" asp-action="Index">📊 今日饮水概况</a></li>
+                                <li class="nav-item"><a class="nav-link" asp-controller="Admin" asp-action="Users">👥 用户信息管理</a></li>
+                            }
+                            else if (role == 1)
+                            {
+                                <li class="nav-item"><a class="nav-link" asp-controller="Worker" asp-action="Index">📊 饮水者概况</a></li>
+                            }
+                            else if (role == 2)
+                            {
+                                <li class="nav-item"><a class="nav-link" asp-controller="Drinker" asp-action="Index">💧 我的饮水</a></li>
+                            }
+                        }
+                        else if (section == "billing")
+                        {
+                            @if (role == 0)
+                            {
+                                <li class="nav-item"><a class="nav-link" asp-controller="BillingAdmin" asp-action="Index">📊 管理仪表盘</a></li>
+                                <li class="nav-item"><a class="nav-link" asp-controller="BillingAdmin" asp-action="Users">👥 用户信息管理</a></li>
+                            }
+                            else if (role == 3)
+                            {
+                                <li class="nav-item"><a class="nav-link" asp-controller="BillingUser" asp-action="Index">💧 我的饮水</a></li>
+                            }
+                        }
+                        else if (section == "home")
+                        {
+                            @if (role == 0)
+                            {
+                                <li class="nav-item"><a class="nav-link" asp-controller="Family" asp-action="Index">📊 家庭成员饮水概况</a></li>
+                                <li class="nav-item"><a class="nav-link" asp-controller="Family" asp-action="Users">👥 用户信息管理</a></li>
+                            }
+                            else if (role == 2)
+                            {
+                                <li class="nav-item"><a class="nav-link" asp-controller="Family" asp-action="Index">📊 家庭成员饮水概况</a></li>
+                            }
+                        }
+                    </ul>
+                    @if (Context.Session.GetInt32("UserId") > 0)
+                    {
+                        <div class="navbar-section-badge">
+                            @if (section == "elderly") { <span class="section-badge-inner">🏥 养老院板块</span> }
+                            else if (section == "billing") { <span class="section-badge-inner">💰 个人计费板块</span> }
+                            else if (section == "home") { <span class="section-badge-inner">🏠 家庭板块</span> }
+                        </div>
+                    }
+                    <ul class="navbar-nav">
+                        @if (Context.Session.GetInt32("UserId") > 0)
+                        {
+                            <li class="nav-item">
+                                <span class="nav-link d-flex align-items-center gap-2 text-light">
+                                    @if (section == "home")
+                                    {
+                                        @if (role == 0 && sectionRaw == "*") { <span class="role-label role-admin">👑 管理员</span> }
+                                        else if (role == 0) { <span class="role-label role-admin">👑 家长</span> }
+                                        else if (role == 2) { <span class="role-label">👶 孩子</span> }
+                                    }
+                                    else if (role == 0) { <span class="role-label role-admin">👑 管理员</span> }
+                                    else if (role == 1) { <span class="role-label">护工</span> }
+                                    else if (role == 2) { <span class="role-label">饮水者</span> }
+                                    else if (role == 3) { <span class="role-label">普通用户</span> }
+                                    <span class="user-chip">👤 @userName</span>
+                                </span>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" asp-controller="Home" asp-action="Index">🔄 切换板块</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link logout-link" asp-controller="Account" asp-action="Logout">➤ 退出</a>
+                            </li>
+                        }
+                        else
+                        {
+                            <li class="nav-item">
+                                <a class="nav-link" asp-controller="Account" asp-action="Login">🔐 登录</a>
+                            </li>
+                        }
+                    </ul>
+                </div>
+            </div>
+        </nav>
+    </header>
+    <div class="container">
+        @if (TempData["Success"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                ✅ @TempData["Success"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        }
+        @if (TempData["Error"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                ❌ @TempData["Error"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        }
+        <main role="main" class="pb-3">
+            @RenderBody()
+        </main>
+    </div>
+
+    <footer class="border-top footer text-muted">
+        <div class="container text-center">
+            &copy; 2026 智能饮水机 - 智能饮水管理平台
+        </div>
+    </footer>
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

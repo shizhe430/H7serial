@@ -1,0 +1,117 @@
+@{
+    ViewData["Title"] = "饮水者详情";
+
+    var detail = ViewBag.Detail as User;
+    var summary = ViewBag.Summary as DailySummaryItem;
+    var recentRecords = ViewBag.RecentRecords as List<Record>;
+}
+
+<div class="mb-4">
+    <a asp-action="Index" class="btn btn-outline-secondary btn-sm">← 返回概况</a>
+</div>
+
+<div class="row">
+    <!-- 个人信息 -->
+    <div class="col-md-4 mb-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">👤 个人信息</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr><th>编号</th><td>@detail?.Username</td></tr>
+                    <tr><th>姓名</th><td>@detail?.Name</td></tr>
+                    <tr><th>性别</th><td>@(detail?.Gender == 1 ? "男" : detail?.Gender == 2 ? "女" : "未知")</td></tr>
+                    <tr><th>年龄</th><td>@(detail?.Age > 0 ? $"{detail.Age}岁" : "未设置")</td></tr>
+                    <tr><th>身高</th><td>@(detail?.HeightCm > 0 ? $"{detail.HeightCm}cm" : "未设置")</td></tr>
+                    <tr><th>体重</th><td>@(detail?.WeightKg > 0 ? $"{detail.WeightKg}kg" : "未设置")</td></tr>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 今日饮水 -->
+    <div class="col-md-8 mb-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">💧 今日饮水情况</h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center mb-3">
+                    <div class="col-4">
+                        <div class="display-6 fw-bold text-info">@(summary?.TotalMl ?? 0)</div>
+                        <div class="text-muted">今日饮水(ml)</div>
+                    </div>
+                    <div class="col-4">
+                        <div class="display-6 fw-bold">@(summary?.UseCount ?? 0)</div>
+                        <div class="text-muted">饮水次数</div>
+                    </div>
+                    <div class="col-4">
+                        <div class="display-6 fw-bold text-danger">@(summary?.NeededMl ?? 0)</div>
+                        <div class="text-muted">还需(ml)</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 饮水记录 -->
+<div class="card shadow-sm mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">📋 今日饮水记录</h5>
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr><th>时间</th><th>饮水量(ml)</th></tr>
+            </thead>
+            <tbody>
+                @if (recentRecords != null && recentRecords.Any())
+                {
+                    @foreach (var r in recentRecords)
+                    {
+                        <tr>
+                            <td>@r.RecordedAt.ToString("HH:mm:ss")</td>
+                            <td>@r.VolumeMl</td>
+                        </tr>
+                    }
+                }
+                else
+                {
+                    <tr><td colspan="2" class="text-center text-muted py-3">今日暂无饮水记录</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- 基础建议 -->
+@if (!string.IsNullOrEmpty(ViewBag.Advice))
+{
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <h5 class="card-title">💡 饮水建议</h5>
+            <p class="card-text">@ViewBag.Advice</p>
+        </div>
+    </div>
+}
+
+<!-- AI 智能建议 -->
+@if (!string.IsNullOrEmpty(ViewBag.AiAdvice))
+{
+    <div class="card shadow-sm border-info">
+        <div class="card-body">
+            <h5 class="card-title text-info">🤖 AI 智能建议 <span class="badge bg-info text-dark">DeepSeek</span></h5>
+            <p class="card-text">@ViewBag.AiAdvice</p>
+        </div>
+    </div>
+}
+
+<!-- AI 交互问答 -->
+@{
+    ViewData["ChatUserId"] = detail?.Id ?? 0;
+    ViewData["ChatUserName"] = detail?.Name ?? "该饮水者";
+    ViewData["AskAIUrl"] = Url.Action("AskAI", "Worker");
+}
+@await Html.PartialAsync("_AIChat")

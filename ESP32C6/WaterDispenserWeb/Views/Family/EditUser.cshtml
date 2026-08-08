@@ -1,0 +1,86 @@
+@model User
+@{
+    ViewData["Title"] = "编辑家庭成员";
+    var isGlobalAdmin = ViewBag.IsGlobalAdmin as bool? ?? false;
+}
+
+<h2 class="mb-4">✏️ 编辑家庭成员</h2>
+
+<div class="card shadow-sm">
+    <div class="card-body">
+        <form asp-action="EditUser" method="post">
+            <input type="hidden" asp-for="Id" />
+            <input type="hidden" asp-for="Section" value="home" />
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label asp-for="Username" class="form-label">登录编号</label>
+                    <input asp-for="Username" class="form-control" />
+                    <span asp-validation-for="Username" class="text-danger"></span>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label asp-for="Password" class="form-label">密码（留空不修改）</label>
+                    <input asp-for="Password" class="form-control" type="text" placeholder="留空则不修改密码" />
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label asp-for="Name" class="form-label">姓名</label>
+                    <input asp-for="Name" class="form-control" />
+                    <span asp-validation-for="Name" class="text-danger"></span>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label asp-for="Role" class="form-label">身份</label>
+                    <select asp-for="Role" class="form-select">
+                        @if (isGlobalAdmin)
+                        {
+                            <option value="0">家长</option>
+                        }
+                        <option value="2">孩子</option>
+                    </select>
+                    @if (!isGlobalAdmin)
+                    {
+                        <span class="form-text text-muted">仅管理员可设置家长身份</span>
+                    }
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label asp-for="Gender" class="form-label">性别</label>
+                    <select asp-for="Gender" class="form-select">
+                        <option value="0">未知</option>
+                        <option value="1">男</option>
+                        <option value="2">女</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label asp-for="Age" class="form-label">年龄</label>
+                    <input asp-for="Age" class="form-control" type="number" min="0" max="150" />
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label asp-for="HeightCm" class="form-label">身高(cm)</label>
+                    <input asp-for="HeightCm" class="form-control" type="number" step="0.1" min="0" />
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label asp-for="WeightKg" class="form-label">体重(kg)</label>
+                    <input asp-for="WeightKg" class="form-control" type="number" step="0.1" min="0" />
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-12 mb-3">
+                    <label asp-for="Phone" class="form-label">信息推送Token（选填）</label>
+                    <input asp-for="Phone" class="form-control" placeholder="PushPlus微信token，填写的用户每次更新数据会推送DS建议到微信" />
+                    <span class="form-text text-muted">可留空；留空则清空原有token，不再推送</span>
+                </div>
+            </div>
+
+            <div class="mt-3">
+                <button type="submit" class="btn btn-primary">保存修改</button>
+                <a asp-action="Users" class="btn btn-secondary">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
