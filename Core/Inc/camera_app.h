@@ -21,8 +21,25 @@ extern "C" {
 #define APP_MODE_FACE_AI_VISUAL 11U
 #define APP_MODE_OPENMV_HOST_DIAG 12U
 #define APP_MODE_OPENMV_BOARD_DIAG 13U
+#define APP_MODE_WATER_ROI_CALIB 14U
 #ifndef APP_MODE
 #define APP_MODE  APP_MODE_PUMP_CTRL
+#endif
+
+/* Water-camera calibration for the SVGA-derived 320x240 view. */
+#ifndef WATER_AI_ROI_OFFSET_X
+#define WATER_AI_ROI_OFFSET_X 46
+#endif
+#ifndef WATER_AI_ROI_OFFSET_Y
+#define WATER_AI_ROI_OFFSET_Y 15
+#endif
+#ifndef WATER_AI_VIEW_FILL
+#define WATER_AI_VIEW_FILL 180U
+#endif
+
+#if ((WATER_AI_ROI_OFFSET_X < -128) || (WATER_AI_ROI_OFFSET_X > 127) || \
+     (WATER_AI_ROI_OFFSET_Y < -128) || (WATER_AI_ROI_OFFSET_Y > 127))
+#error "WATER_AI_ROI_OFFSET_X/Y must fit the signed AIV1 metadata range"
 #endif
 
 #ifndef CAMERA_APP_ACTIVE_CAMERA
@@ -37,6 +54,10 @@ extern "C" {
 
 #ifndef CAMERA_FACE_IDENTITY_ENABLE
 #define CAMERA_FACE_IDENTITY_ENABLE 1U
+#endif
+
+#ifndef CAMERA_FACE_BACKEND_OPENMV
+#define CAMERA_FACE_BACKEND_OPENMV 1U
 #endif
 
 /* AS608 driver files are kept as backup, but excluded from the active product flow. */
@@ -65,7 +86,8 @@ extern "C" {
 
 #if ((APP_MODE == APP_MODE_XCAM_VIEW) || (APP_MODE == APP_MODE_COLORBAR_VIEW) || \
      (APP_MODE == APP_MODE_AI_VISUAL) || (APP_MODE == APP_MODE_FACE_AI_VISUAL) || \
-     (APP_MODE == APP_MODE_OPENMV_HOST_DIAG) || (APP_MODE == APP_MODE_OPENMV_BOARD_DIAG))
+     (APP_MODE == APP_MODE_OPENMV_HOST_DIAG) || (APP_MODE == APP_MODE_OPENMV_BOARD_DIAG) || \
+     (APP_MODE == APP_MODE_WATER_ROI_CALIB))
 #define APP_MODE_STREAM_SILENT 1U
 #else
 #define APP_MODE_STREAM_SILENT 0U

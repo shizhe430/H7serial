@@ -90,11 +90,15 @@ static void HAL_FMC_MspInit(void){
   */
     PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_FMC;
     PeriphClkInitStruct.PLL2.PLL2M = 5;
-    /* PLL2_R=200 MHz; FMC SDCLK is divided by two to 100 MHz. */
+    /* FMC SDCLK is PLL2_R divided by two. */
     PeriphClkInitStruct.PLL2.PLL2N = 80;
     PeriphClkInitStruct.PLL2.PLL2P = 2;
     PeriphClkInitStruct.PLL2.PLL2Q = 2;
+#if (SDRAM_50MHZ_DIAG != 0U)
+    PeriphClkInitStruct.PLL2.PLL2R = 4;
+#else
     PeriphClkInitStruct.PLL2.PLL2R = 2;
+#endif
     PeriphClkInitStruct.PLL2.PLL2RGE = RCC_PLL2VCIRANGE_2;
     PeriphClkInitStruct.PLL2.PLL2VCOSEL = RCC_PLL2VCOWIDE;
     PeriphClkInitStruct.PLL2.PLL2FRACN = 0;

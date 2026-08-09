@@ -42,12 +42,15 @@ Assert-FileContains 'Core/Src/main.c' 'RCC_ClkInitStruct\.AHBCLKDivider\s*=\s*RC
 Assert-FileContains 'Core/Src/main.c' 'MPU_InitStruct\.BaseAddress\s*=\s*0xC0000000;' 'SDRAM MPU region is missing'
 Assert-FileContains 'Core/Src/main.c' 'MPU_InitStruct\.Size\s*=\s*MPU_REGION_SIZE_32MB;' 'SDRAM MPU region size is not 32 MB'
 Assert-FileContains 'Core/Src/main.c' 'MPU_InitStruct\.IsCacheable\s*=\s*MPU_ACCESS_CACHEABLE;' 'SDRAM is not configured as cacheable Normal memory'
+Assert-FileContains 'Core/Inc/main.h' 'SDRAM_50MHZ_DIAG\s+1U' 'Stable 50 MHz SDRAM default was reset'
+Assert-FileContains 'H7serial.ioc' 'RCC\.DIVR2=4' 'CubeMX PLL2R was reset; SDRAM must default to 50 MHz'
+Assert-FileContains 'H7serial.ioc' 'RCC\.FMCFreq_Value=100000000' 'CubeMX FMC kernel must remain 100 MHz'
 
 Assert-FileContains 'Core/Src/fmc.c' 'PLL2\.PLL2M\s*=\s*5;' 'FMC PLL2 M divider was reset'
 Assert-FileContains 'Core/Src/fmc.c' 'PLL2\.PLL2N\s*=\s*80;' 'FMC PLL2 N multiplier was reset'
-Assert-FileContains 'Core/Src/fmc.c' 'PLL2\.PLL2R\s*=\s*2;' 'FMC PLL2 R divider was reset'
-Assert-FileContains 'Core/Src/fmc.c' 'SDClockPeriod\s*=\s*FMC_SDRAM_CLOCK_PERIOD_2;' 'SDRAM divider was reset; SDCLK must remain 100 MHz'
-Assert-FileContains 'Core/Src/quadspi.c' 'ClockPrescaler\s*=\s*1;' 'QSPI prescaler was reset; QSPI must remain 100 MHz'
+Assert-FileContains 'Core/Src/fmc.c' 'PLL2\.PLL2R\s*=\s*4;' 'Stable FMC PLL2 R divider was reset'
+Assert-FileContains 'Core/Src/fmc.c' 'SDClockPeriod\s*=\s*FMC_SDRAM_CLOCK_PERIOD_2;' 'SDRAM divider was reset; SDCLK must remain 50 MHz'
+Assert-FileContains 'Core/Src/quadspi.c' 'ClockPrescaler\s*=\s*1;' 'QSPI prescaler was reset; QSPI must remain 50 MHz'
 Assert-FileContains 'Core/Src/quadspi.c' 'QspiClockSelection\s*=\s*RCC_QSPICLKSOURCE_PLL2;' 'QSPI clock source was reset'
 Assert-FileContains 'Core/Src/usart.c' 'huart1\.Init\.BaudRate\s*=\s*921600;' 'USART1 diagnostic baud rate was reset'
 

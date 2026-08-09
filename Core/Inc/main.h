@@ -65,6 +65,10 @@ void Error_Handler(void);
 #define AMBIENT_LED1_GPIO_Port GPIOH
 #define LCD_BL_Pin GPIO_PIN_5
 #define LCD_BL_GPIO_Port GPIOB
+#define CAMERA_LIGHT_Pin GPIO_PIN_1
+#define CAMERA_LIGHT_GPIO_Port GPIOA
+#define DS18B20_DQ_Pin GPIO_PIN_12
+#define DS18B20_DQ_GPIO_Port GPIOB
 #define PUMP_PWM_Pin GPIO_PIN_0
 #define PUMP_PWM_GPIO_Port GPIOI
 #define TANK_LEVEL_Pin GPIO_PIN_1
@@ -76,7 +80,9 @@ void Error_Handler(void);
 #endif
 
 #define SDRAM_OFFICIAL_CLOCK_DIAG 1U
-#define SDRAM_50MHZ_DIAG 0U
+#ifndef SDRAM_50MHZ_DIAG
+#define SDRAM_50MHZ_DIAG 1U
+#endif
 
 /* USER CODE END Private defines */
 

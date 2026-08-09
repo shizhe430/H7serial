@@ -9,7 +9,7 @@ static uint32_t s_last_refresh_ms = 0U;
 static uint8_t s_last_water_level = 0xFFU;
 static uint8_t s_last_water_out_state = 0xFFU;
 static uint8_t s_last_hot_cold_mode = 0xFFU;
-static uint16_t s_last_temp_val = 0xFFFFU;
+static int16_t s_last_temp_tenths = INT16_MIN;
 static uint16_t s_last_dev_id = 0xFFFFU;
 
 void OLED_Status_Init(void)
@@ -33,7 +33,7 @@ void OLED_Status_Poll(void)
 
 void OLED_Status_Show(uint8_t water_level,
                       uint8_t water_out_state,
-                      uint16_t temp_val,
+                      int16_t temp_tenths,
                       uint8_t hot_cold_mode,
                       uint16_t dev_id)
 {
@@ -47,7 +47,7 @@ void OLED_Status_Show(uint8_t water_level,
 
     changed = ((water_level != s_last_water_level) ||
                (water_out_state != s_last_water_out_state) ||
-               (temp_val != s_last_temp_val) ||
+               (temp_tenths != s_last_temp_tenths) ||
                (hot_cold_mode != s_last_hot_cold_mode) ||
                (dev_id != s_last_dev_id)) ? 1U : 0U;
 
@@ -57,12 +57,34 @@ void OLED_Status_Show(uint8_t water_level,
         return;
     }
 
-    LCD_UI_ShowStatus(water_level, water_out_state, temp_val, hot_cold_mode, dev_id);
+    LCD_UI_ShowStatus(water_level, water_out_state, temp_tenths, hot_cold_mode, dev_id);
 
     s_last_water_level = water_level;
     s_last_water_out_state = water_out_state;
-    s_last_temp_val = temp_val;
+    s_last_temp_tenths = temp_tenths;
     s_last_hot_cold_mode = hot_cold_mode;
     s_last_dev_id = dev_id;
     s_last_refresh_ms = now_ms;
+}
+
+void OLED_Status_ShowCloud(const char *username_utf8,
+                           uint32_t today_ml,
+                           uint32_t use_count,
+                           uint32_t remaining_ml,
+                           uint32_t interval_min,
+                           uint32_t suggested_ml,
+                           uint8_t advice_received)
+{
+    if (s_oled_ready == 0U)
+    {
+        return;
+    }
+
+    LCD_UI_ShowCloud(username_utf8,
+                     today_ml,
+                     use_count,
+                     remaining_ml,
+                     interval_min,
+                     suggested_ml,
+                     advice_received);
 }

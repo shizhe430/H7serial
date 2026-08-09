@@ -226,27 +226,7 @@ function Save-FrameArtifacts {
         $targetDir = Get-SelectedSaveFolderPath
         $stem = Get-FrameFileStem -Frame $Frame
         $jpgPath = Join-Path $targetDir ($stem + ".jpg")
-        $jsonPath = Join-Path $targetDir ($stem + ".json")
         [System.IO.File]::WriteAllBytes($jpgPath, $Frame.Jpeg)
-        $meta = [ordered]@{
-            saved_at     = [DateTime]::Now.ToString("yyyy-MM-dd HH:mm:ss.fff")
-            file_name    = [System.IO.Path]::GetFileName($jpgPath)
-            class_id     = $Frame.ClassId
-            class_name   = $Frame.ClassName
-            raw_class_id = $Frame.RawClassId
-            confidence   = [Math]::Round($Frame.Confidence, 4)
-            regression   = [Math]::Round($Frame.Regression, 4)
-            save_label   = $script:SelectedSaveClass
-            pipeline_ms  = $Frame.PipelineMs
-            infer_ms     = $Frame.InferMs
-            frame_id     = $Frame.FrameId
-            logits       = $Frame.Logits
-            input_min    = $Frame.InputMin
-            input_max    = $Frame.InputMax
-            input_mean   = $Frame.InputMean
-            jpeg_size    = $Frame.JpegLen
-        }
-        $meta | ConvertTo-Json -Depth 3 | Set-Content -Path $jsonPath -Encoding UTF8
         Update-SaveUi
         Set-Status "saved $jpgPath"
     } catch {
@@ -330,11 +310,14 @@ function Try-ExtractFrame {
 
     $script:Buffer.RemoveRange(0, $script:HeaderSize + $jpegLen + $script:TailMagic.Length)
 
+    $protocolFlags = [int]$header[7]
+    $hasRoiMetadata = (($protocolFlags -band 0x04) -ne 0)
+
     return [pscustomobject]@{
         Version      = [int]$header[4]
         ClassId      = [int]$header[5]
         RawClassId   = [int]$header[6]
-        InputHash    = [int]$header[7]
+        InputHash    = $protocolFlags
         Confidence   = (Get-LeUInt16 -Buffer $header -Offset 8) / 1000.0
         Regression   = (Get-LeUInt16 -Buffer $header -Offset 10) / 1000.0
         PipelineMs   = [int](Get-LeUInt16 -Buffer $header -Offset 12)
@@ -351,7 +334,11 @@ function Try-ExtractFrame {
         InputMin     = ([int]$header[29] - 128)
         InputMax     = ([int]$header[30] - 128)
         InputMean    = ([int]$header[31] - 128)
-        HasInputStats = (($header[29] -ne 0) -or ($header[30] -ne 0) -or ($header[31] -ne 0))
+        HasInputStats = ((-not $hasRoiMetadata) -and (($header[29] -ne 0) -or ($header[30] -ne 0) -or ($header[31] -ne 0)))
+        HasRoiMetadata = $hasRoiMetadata
+        RoiOffsetX   = if ($hasRoiMetadata) { ([int]$header[29] - 128) } else { $RoiOffsetX }
+        RoiOffsetY   = if ($hasRoiMetadata) { ([int]$header[30] - 128) } else { $RoiOffsetY }
+        ViewFill     = if ($hasRoiMetadata) { [int]$header[31] } else { $ViewFillValue }
         ClassName    = Get-ClassName -ClassId ([int]$header[5])
         JpegHead     = if ($jpegLen -ge 4) { Format-HexBytes -Bytes $jpeg[0..3] } else { "" }
         JpegTail     = if ($jpegLen -ge 2) { Format-HexBytes -Bytes $jpeg[($jpegLen - 2)..($jpegLen - 1)] } else { "" }
@@ -432,21 +419,17 @@ function Update-Viewer {
         $bitmap = [System.Drawing.Bitmap]::new($sourceWidth, $sourceHeight)
         $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
         $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-        $fill = [System.Drawing.Color]::FromArgb($ViewFillValue, $ViewFillValue, $ViewFillValue)
+        $fill = [System.Drawing.Color]::FromArgb($Frame.ViewFill, $Frame.ViewFill, $Frame.ViewFill)
         $graphics.Clear($fill)
-        if (($sourceWidth -eq 320) -and ($sourceHeight -eq 240)) {
-            $graphics.DrawImage($sourceBitmap, -$ViewShiftX, -$ViewShiftY, $sourceWidth, $sourceHeight)
-        } else {
-            $graphics.DrawImage($sourceBitmap, 0, 0, $sourceWidth, $sourceHeight)
-        }
+        $graphics.DrawImage($sourceBitmap, 0, 0, $sourceWidth, $sourceHeight)
 
         $centerX = [int]($sourceWidth / 2)
         if (($sourceWidth -eq 320) -and ($sourceHeight -eq 240)) {
-            $centerX += $RoiOffsetX
+            $centerX += $Frame.RoiOffsetX
         }
         $centerY = [int]($sourceHeight / 2)
         if (($sourceWidth -eq 320) -and ($sourceHeight -eq 240)) {
-            $centerY += $RoiOffsetY
+            $centerY += $Frame.RoiOffsetY
         }
         $radius = if (($sourceWidth -eq 320) -and ($sourceHeight -eq 240)) {
             100
@@ -479,7 +462,7 @@ function Update-Viewer {
         $labelInfer.Text = "Infer: $($Frame.InferMs) ms"
         $labelFps.Text = ("FPS: {0:F1}" -f $script:DisplayFps)
         $labelFrame.Text = "Frame ID: $($Frame.FrameId)"
-        $labelJpeg.Text = "JPEG: ${sourceWidth}x${sourceHeight}, $($Frame.JpegLen) bytes"
+        $labelJpeg.Text = "JPEG: ${sourceWidth}x${sourceHeight}, $($Frame.JpegLen) bytes  ROI=($($Frame.RoiOffsetX),$($Frame.RoiOffsetY))"
         if ($Frame.HasInputStats) {
             $labelLogits.Text = "Logits: $($Frame.Logits -join ', ')`r`nInput q: min=$($Frame.InputMin) max=$($Frame.InputMax) mean=$($Frame.InputMean) hash=$($Frame.InputHash)"
         } else {
@@ -562,7 +545,7 @@ $buttonDisconnect.Add_Click({ Disconnect-Serial })
 $panelTop.Controls.Add($buttonDisconnect)
 
 $buttonSave = New-Object System.Windows.Forms.Button
-$buttonSave.Text = "Save Frame"
+$buttonSave.Text = "Save JPEG"
 $buttonSave.Left = 492
 $buttonSave.Top = 9
 $buttonSave.Width = 96
@@ -573,10 +556,10 @@ $buttonSave.Add_Click({ Save-FrameArtifacts -Frame $script:CurrentFrame })
 $panelTop.Controls.Add($buttonSave)
 
 $checkAutoSave = New-Object System.Windows.Forms.CheckBox
-$checkAutoSave.Text = "Auto Save"
+$checkAutoSave.Text = "Auto Save JPEG"
 $checkAutoSave.Left = 602
 $checkAutoSave.Top = 14
-$checkAutoSave.Width = 92
+$checkAutoSave.Width = 118
 $checkAutoSave.Font = $buttonFont
 $checkAutoSave.ForeColor = [System.Drawing.Color]::White
 $checkAutoSave.Add_CheckedChanged({
@@ -592,7 +575,7 @@ $panelTop.Controls.Add($checkAutoSave)
 
 $labelSaveClassTop = New-Object System.Windows.Forms.Label
 $labelSaveClassTop.Text = "Label"
-$labelSaveClassTop.Left = 704
+$labelSaveClassTop.Left = 730
 $labelSaveClassTop.Top = 15
 $labelSaveClassTop.Width = 42
 $labelSaveClassTop.Font = $buttonFont
@@ -600,7 +583,7 @@ $labelSaveClassTop.ForeColor = [System.Drawing.Color]::White
 $panelTop.Controls.Add($labelSaveClassTop)
 
 $comboSaveClass = New-Object System.Windows.Forms.ComboBox
-$comboSaveClass.Left = 752
+$comboSaveClass.Left = 778
 $comboSaveClass.Top = 11
 $comboSaveClass.Width = 136
 $comboSaveClass.Font = $buttonFont
@@ -616,7 +599,7 @@ $comboSaveClass.Add_SelectedIndexChanged({
 $panelTop.Controls.Add($comboSaveClass)
 
 $labelStatus = New-Object System.Windows.Forms.Label
-$labelStatus.Left = 900
+$labelStatus.Left = 924
 $labelStatus.Top = 15
 $labelStatus.Width = 260
 $labelStatus.Font = $buttonFont

@@ -20,7 +20,10 @@
 /* USER CODE BEGIN Includes */
 #include "camera_app.h"
 #include "face_ai.h"
+#include "openmv_face.h"
 #include "oled_status.h"
+#include "camera_light.h"
+#include "environment_sensors.h"
 #include <stdio.h>
 #include <string.h>
 /* USER CODE END Includes */
@@ -337,10 +340,9 @@ int main(void)
   MX_FMC_Init();
   MX_QUADSPI_Init();
   /* USER CODE BEGIN 2 */
+  CameraLight_Init();
+  EnvironmentSensors_Init();
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET);
-#if (APP_MODE == APP_MODE_PUMP_CTRL)
-  OLED_Status_Init();
-#endif
   HAL_Delay(4000U);
   main_print_build_info();
   main_uart_print("\r\n[BOOT] main enter\r\n");
@@ -391,7 +393,8 @@ int main(void)
   __DSB();
   __ISB();
 #if ((APP_MODE == APP_MODE_FACE_AI_DIAG) || (APP_MODE == APP_MODE_FACE_AI_VISUAL) || \
-     ((APP_MODE == APP_MODE_PUMP_CTRL) && (CAMERA_FACE_IDENTITY_ENABLE != 0U)))
+     ((APP_MODE == APP_MODE_PUMP_CTRL) && (CAMERA_FACE_IDENTITY_ENABLE != 0U) && \
+      (CAMERA_FACE_BACKEND_OPENMV == 0U)))
   if (FaceAI_LoadWeights() != 0U)
   {
     main_uart_print("[FACE_AI] weights load failed\r\n");
@@ -401,6 +404,27 @@ int main(void)
     main_uart_print("[FACE_AI] network init failed\r\n");
   }
   (void)FaceAI_LoadEnrollment();
+#endif
+#if ((APP_MODE == APP_MODE_OPENMV_BOARD_DIAG) || \
+     ((APP_MODE == APP_MODE_PUMP_CTRL) && (CAMERA_FACE_IDENTITY_ENABLE != 0U) && \
+      (CAMERA_FACE_BACKEND_OPENMV != 0U)))
+  {
+    uint8_t db_status = OpenMVFace_InitDatabase();
+    char db_msg[80];
+    int db_len = snprintf(db_msg, sizeof(db_msg),
+                          "[OPENMV] db=%s users=%u capacity=%u\r\n",
+                          (db_status == 0U) ? "loaded" : "empty",
+                          (unsigned int)OpenMVFace_GetUserCount(),
+                          (unsigned int)OPENMV_FACE_MAX_USERS);
+    if (db_len > 0)
+    {
+      main_uart_print(db_msg);
+    }
+  }
+#endif
+#if (APP_MODE == APP_MODE_PUMP_CTRL)
+  /* Initialize the LCD after FMC SDRAM and QSPI diagnostics have completed. */
+  OLED_Status_Init();
 #endif
   main_boot_stage("camera_init_enter");
   CameraApp_Init();

@@ -21,6 +21,8 @@ $script:RxBytes = 0L
 $script:FrameCount = 0L
 $script:EnrollmentPending = $false
 $script:EnrollmentRequestAfterFrame = 0
+$script:EnrollmentId = [uint16]1
+$script:EnrollmentAccepted = 0
 $script:ReferenceReadyLatched = $false
 $script:LastFrameId = 0
 $script:MatchCount = 0
@@ -88,7 +90,22 @@ function Add-DiagnosticBytes {
     $parts = $script:DiagnosticText -split "`r?`n", -1
     $script:DiagnosticText = $parts[$parts.Count - 1]
     for ($i = 0; $i -lt ($parts.Count - 1); $i++) {
-        if ($parts[$i] -match '^\[[A-Z0-9_:-]+\]') { Add-LogLine $parts[$i] }
+        $line = $parts[$i]
+        if ($line -match '^\[OPENMV\] enroll begin id=([0-9]+)') {
+            $labelResult.Text = ('ENROLL ID={0}' -f $Matches[1]) + [Environment]::NewLine + 'BOARD ACK; SHOW FRONTAL FACE'
+            $labelResult.ForeColor = [Drawing.Color]::DarkOrange
+        } elseif ($line -match '^\[OPENMV\] enroll id=([0-9]+) accepted=([0-9]+)/5 remaining=([0-9]+)') {
+            $labelResult.Text = ('ENROLL ID={0}' -f $Matches[1]) + [Environment]::NewLine +
+                                ('ACCEPTED {0}/5; REMAINING {1}' -f $Matches[2], $Matches[3])
+            $labelResult.ForeColor = [Drawing.Color]::DarkOrange
+        } elseif ($line -match '^\[OPENMV\] enroll reject id=([0-9]+)') {
+            $script:EnrollmentPending = $false
+            $buttonEnroll.Enabled = $true
+            $buttonEnroll.Text = 'Enroll'
+            $labelResult.Text = ('ENROLL ID={0} REJECTED' -f $Matches[1])
+            $labelResult.ForeColor = [Drawing.Color]::Crimson
+        }
+        if ($line -match '^\[[A-Z0-9_:-]+\]') { Add-LogLine $line }
     }
     if ($script:DiagnosticText.Length -gt 4096) {
         $script:DiagnosticText = $script:DiagnosticText.Substring($script:DiagnosticText.Length - 1024)
@@ -180,7 +197,7 @@ function Set-FrameResult {
     if ($Frame.ReferenceReady) {
         $script:ReferenceReadyLatched = $true
     }
-    $labelReference.Text = if ($script:ReferenceReadyLatched) { 'ID=1 READY' } else { 'EMPTY' }
+    $labelReference.Text = if ($script:ReferenceReadyLatched) { 'DATABASE READY' } else { 'EMPTY' }
     $labelSimilarity.Text = if ($Frame.ReferenceReady -and $Frame.DetectionValid) { '{0:F3}' -f $Frame.Similarity } else { '-' }
     $labelStatusCode.Text = [string]$Frame.Status
 
@@ -189,23 +206,35 @@ function Set-FrameResult {
     if ($script:EnrollmentPending -and
         ($Frame.FrameId -gt $script:EnrollmentRequestAfterFrame) -and
         $Frame.EmbeddingValid) {
-        if ($Frame.ReferenceReady -and $Frame.MatchValid -and ($Frame.MatchedId -eq 1)) {
+        if (($Frame.Status -eq 0) -and $Frame.ReferenceReady -and
+            $Frame.MatchValid -and ($Frame.MatchedId -eq $script:EnrollmentId)) {
             $script:EnrollmentPending = $false
             $buttonEnroll.Enabled = $true
-            $buttonEnroll.Text = 'Enroll ID=1'
-            $labelResult.Text = 'Reference: ID=1 READY' + [Environment]::NewLine + 'MATCH ID=1'
+            $buttonEnroll.Text = 'Enroll'
+            $labelResult.Text = ('ID={0} SAVED' -f $script:EnrollmentId) +
+                                [Environment]::NewLine + ('MATCH ID={0}' -f $script:EnrollmentId)
             $labelResult.ForeColor = [Drawing.Color]::ForestGreen
-            Add-LogLine ('enrollment confirmed frame={0} id=1 similarity={1:F3}' -f $Frame.FrameId, $Frame.Similarity)
+            Add-LogLine ('enrollment confirmed frame={0} id={1} similarity={2:F3}' -f $Frame.FrameId, $script:EnrollmentId, $Frame.Similarity)
+        } elseif ($Frame.Status -ne 0) {
+            $script:EnrollmentPending = $false
+            $buttonEnroll.Enabled = $true
+            $buttonEnroll.Text = 'Enroll'
+            $labelResult.Text = ('ENROLL ID={0}' -f $script:EnrollmentId) + [Environment]::NewLine +
+                                ('FAILED STATUS={0}' -f $Frame.Status)
+            $labelResult.ForeColor = [Drawing.Color]::Crimson
+            Add-LogLine ('enrollment failed frame={0} id={1} status={2}' -f $Frame.FrameId, $script:EnrollmentId, $Frame.Status)
         } elseif ($Frame.BackendId -eq 2) {
-            $labelResult.Text = 'ENROLL ID=1' + [Environment]::NewLine + 'COLLECTING 5 FACE FRAMES'
+            $script:EnrollmentAccepted = [Math]::Min(4, $script:EnrollmentAccepted + 1)
+            $labelResult.Text = ('ENROLL ID={0}' -f $script:EnrollmentId) + [Environment]::NewLine +
+                                ('ACCEPTED {0}/5; VARY FRONTAL POSE' -f $script:EnrollmentAccepted)
             $labelResult.ForeColor = [Drawing.Color]::DarkOrange
         } else {
             $script:EnrollmentPending = $false
             $buttonEnroll.Enabled = $true
-            $buttonEnroll.Text = 'Enroll ID=1'
-            $labelResult.Text = 'ENROLL ID=1' + [Environment]::NewLine + 'CHECK LOG FOR SAVE ERROR'
+            $buttonEnroll.Text = 'Enroll'
+            $labelResult.Text = ('ENROLL ID={0}' -f $script:EnrollmentId) + [Environment]::NewLine + 'CHECK LOG FOR SAVE ERROR'
             $labelResult.ForeColor = [Drawing.Color]::Crimson
-            Add-LogLine ('enrollment failed frame={0}' -f $Frame.FrameId)
+            Add-LogLine ('enrollment failed frame={0} id={1}' -f $Frame.FrameId, $script:EnrollmentId)
         }
     } elseif ($Frame.EmbeddingValid) {
         if ($Frame.Status -ne 0) {
@@ -213,13 +242,13 @@ function Set-FrameResult {
             $labelResult.ForeColor = [Drawing.Color]::Crimson
             Add-LogLine ('decision frame={0} status={1}' -f $Frame.FrameId, $Frame.Status)
         } elseif ($Frame.MatchValid) {
-            $labelResult.Text = 'Reference: ID=1 READY' + [Environment]::NewLine + 'MATCH ID=' + $Frame.MatchedId
+            $labelResult.Text = 'DATABASE READY' + [Environment]::NewLine + 'MATCH ID=' + $Frame.MatchedId
             $labelResult.ForeColor = [Drawing.Color]::ForestGreen
             $script:MatchCount++
             if ($Frame.Similarity -gt $script:BestSimilarity) { $script:BestSimilarity = $Frame.Similarity }
             Add-LogLine ('decision frame={0} MATCH id={1} distance={2:F3} similarity={3:F3}' -f $Frame.FrameId, $Frame.MatchedId, $Frame.EmbeddingNorm, $Frame.Similarity)
         } elseif ($Frame.ReferenceReady) {
-            $labelResult.Text = 'Reference: ID=1 READY' + [Environment]::NewLine + 'NO MATCH'
+            $labelResult.Text = 'DATABASE READY' + [Environment]::NewLine + 'NO MATCH'
             $labelResult.ForeColor = [Drawing.Color]::Crimson
             $script:NoMatchCount++
             if ($Frame.Similarity -gt $script:BestSimilarity) { $script:BestSimilarity = $Frame.Similarity }
@@ -359,22 +388,16 @@ function Send-FaceCommand {
         return
     }
     try {
-        if ($Command -eq 'ENROLL 1') {
-            $bytes = [byte[]](0x45)
-            $script:Serial.Write($bytes, 0, $bytes.Length)
-        } elseif ($Command -eq 'CLEAR') {
-            $bytes = [byte[]](0x43)
-            $script:Serial.Write($bytes, 0, $bytes.Length)
-        } else {
-            $script:Serial.WriteLine($Command)
-        }
+        $script:Serial.WriteLine($Command)
         Add-LogLine ('command sent: ' + $Command)
-        if ($Command -eq 'ENROLL 1') {
+        if ($Command -match '^ENROLL ([0-9]+)$') {
+            $script:EnrollmentId = [uint16]$Matches[1]
             $script:EnrollmentPending = $true
             $script:EnrollmentRequestAfterFrame = $script:LastFrameId
+            $script:EnrollmentAccepted = 0
             $buttonEnroll.Enabled = $false
             $buttonEnroll.Text = 'Waiting...'
-            $labelResult.Text = 'ENROLL ID=1' + [Environment]::NewLine + 'WAITING FOR FACE'
+            $labelResult.Text = ('ENROLL ID={0}' -f $script:EnrollmentId) + [Environment]::NewLine + 'WAITING FOR FACE'
             $labelResult.ForeColor = [Drawing.Color]::DarkOrange
         } elseif ($Command -eq 'CLEAR') {
             $script:EnrollmentPending = $false
@@ -383,7 +406,7 @@ function Send-FaceCommand {
             $script:NoMatchCount = 0
             $script:BestSimilarity = -1.0
             $buttonEnroll.Enabled = $true
-            $buttonEnroll.Text = 'Enroll ID=1'
+            $buttonEnroll.Text = 'Enroll'
             $labelReference.Text = 'EMPTY'
             $labelSimilarity.Text = '-'
             $labelResult.Text = 'REFERENCE EMPTY'
@@ -456,13 +479,28 @@ $buttonSave = New-Object Windows.Forms.Button
 $buttonSave.Text = 'Save frame'
 $buttonSave.Width = 92
 $top.Controls.Add($buttonSave)
+$top.Controls.Add((New-Object Windows.Forms.Label -Property @{Text='ID';AutoSize=$true;Margin=(New-Object Windows.Forms.Padding(10,7,3,0))}))
+$numericId = New-Object Windows.Forms.NumericUpDown
+$numericId.Minimum = 1
+$numericId.Maximum = 65535
+$numericId.Value = 1
+$numericId.Width = 64
+$top.Controls.Add($numericId)
 $buttonEnroll = New-Object Windows.Forms.Button
-$buttonEnroll.Text = 'Enroll ID=1'
-$buttonEnroll.Width = 100
+$buttonEnroll.Text = 'Enroll'
+$buttonEnroll.Width = 72
 $top.Controls.Add($buttonEnroll)
+$buttonDeleteEnroll = New-Object Windows.Forms.Button
+$buttonDeleteEnroll.Text = 'Delete'
+$buttonDeleteEnroll.Width = 68
+$top.Controls.Add($buttonDeleteEnroll)
+$buttonListEnroll = New-Object Windows.Forms.Button
+$buttonListEnroll.Text = 'List'
+$buttonListEnroll.Width = 58
+$top.Controls.Add($buttonListEnroll)
 $buttonClearEnroll = New-Object Windows.Forms.Button
-$buttonClearEnroll.Text = 'Clear ID'
-$buttonClearEnroll.Width = 82
+$buttonClearEnroll.Text = 'Clear all'
+$buttonClearEnroll.Width = 72
 $top.Controls.Add($buttonClearEnroll)
 $labelConnection = New-Object Windows.Forms.Label
 $labelConnection.Text = 'CLOSED'
@@ -568,7 +606,9 @@ $timer.Add_Tick({
 $buttonConnect.Add_Click({
     if ($null -ne $script:Serial -and $script:Serial.IsOpen) { Close-Serial } else { Open-Serial }
 })
-$buttonEnroll.Add_Click({ Send-FaceCommand 'ENROLL 1' })
+$buttonEnroll.Add_Click({ Send-FaceCommand ('ENROLL {0}' -f [uint16]$numericId.Value) })
+$buttonDeleteEnroll.Add_Click({ Send-FaceCommand ('DELETE {0}' -f [uint16]$numericId.Value) })
+$buttonListEnroll.Add_Click({ Send-FaceCommand 'LIST' })
 $buttonClearEnroll.Add_Click({ Send-FaceCommand 'CLEAR' })
 $buttonSave.Add_Click({
     if ($null -eq $script:CurrentBitmap) { return }

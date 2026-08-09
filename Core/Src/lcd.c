@@ -108,6 +108,8 @@ void LCD_Init(void)
 
     LCD_MPU_Config();
     LCD_FMC_Init();
+    LCD_WR_REG(0X0100);
+    HAL_Delay(120);
 
     /* ---- 读取LCD ID ---- */
     LCD_WR_REG(0XD3);

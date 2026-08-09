@@ -66,6 +66,9 @@ void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(PUMP_PWM_GPIO_Port, PUMP_PWM_Pin, GPIO_PIN_RESET);
 
+  /* Keep LCD FMC chip select inactive while SDRAM is initialized. */
+  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_7, GPIO_PIN_SET);
+
 #if (CAMERA_FINGERPRINT_ENABLE != 0U)
   /*Configure GPIO pin : AS608_WAK_Pin */
   GPIO_InitStruct.Pin = AS608_WAK_Pin;
@@ -107,6 +110,13 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(TANK_LEVEL_GPIO_Port, &GPIO_InitStruct);
+
+  /* Configure LCD FMC chip select as inactive GPIO before FMC bank setup. */
+  GPIO_InitStruct.Pin = GPIO_PIN_7;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PA15 */
   GPIO_InitStruct.Pin = GPIO_PIN_15;

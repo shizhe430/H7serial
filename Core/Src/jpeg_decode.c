@@ -37,6 +37,7 @@ typedef struct
 
 static uint8_t s_workbuf[JPEG_WORKBUF_SIZE];
 static uint8_t s_gray_320x240[SRC_W * SRC_H] __attribute__((section(".ai_ram_d1")));
+static uint8_t s_aligned_gray_320x240[SRC_W * SRC_H] __attribute__((section(".ai_ram_d1")));
 static uint8_t s_clahe_lut[CLAHE_GRID_Y][CLAHE_GRID_X][256] __attribute__((section(".ai_ram_d1")));
 static uint8_t s_clahe_x0[SRC_W];
 static uint8_t s_clahe_x1[SRC_W];
@@ -364,11 +365,13 @@ static int tjpgd_output_rgb888(JDEC *jd, void *bitmap, JRECT *rect)
     return 1;
 }
 
-uint8_t jpeg_to_ai_input(const uint8_t *jpg, uint32_t jpg_len, void *dst_input)
+uint8_t jpeg_to_ai_input_view(const uint8_t *jpg, uint32_t jpg_len, void *dst_input,
+                              int16_t offset_x, int16_t offset_y, uint8_t fill_gray)
 {
     JDEC jd;
     JRESULT jr;
     jpg_stream_t stream;
+    const uint8_t *view_gray = s_gray_320x240;
     uint32_t y;
 #if (JPEG_DECODE_AI_INPUT_FLOAT != 0U)
     ai_float *dst = (ai_float *)dst_input;
@@ -407,9 +410,37 @@ uint8_t jpeg_to_ai_input(const uint8_t *jpg, uint32_t jpg_len, void *dst_input)
         return 3U;
     }
 
-    /* Match training preprocess_v3.py: CLAHE on 320x240, then pad->crop->circle mask. */
+    /* Align the camera view before CLAHE, then pad->crop->circle mask. */
+    if ((offset_x != 0) || (offset_y != 0))
+    {
+        uint32_t dst_y;
+
+        for (dst_y = 0U; dst_y < SRC_H; dst_y++)
+        {
+            uint32_t dst_x;
+            int32_t source_y = (int32_t)dst_y + (int32_t)offset_y;
+
+            for (dst_x = 0U; dst_x < SRC_W; dst_x++)
+            {
+                int32_t source_x = (int32_t)dst_x + (int32_t)offset_x;
+                uint32_t dst_index = (dst_y * SRC_W) + dst_x;
+
+                if ((source_x >= 0) && (source_x < (int32_t)SRC_W) &&
+                    (source_y >= 0) && (source_y < (int32_t)SRC_H))
+                {
+                    s_aligned_gray_320x240[dst_index] = s_gray_320x240[((uint32_t)source_y * SRC_W) + (uint32_t)source_x];
+                }
+                else
+                {
+                    s_aligned_gray_320x240[dst_index] = fill_gray;
+                }
+            }
+        }
+        view_gray = s_aligned_gray_320x240;
+    }
+
     clahe_init_interp_maps();
-    clahe_build_lut_u8(s_gray_320x240);
+    clahe_build_lut_u8(view_gray);
 
     for (y = 0U; y < DST_H; y++)
     {
@@ -428,7 +459,7 @@ uint8_t jpeg_to_ai_input(const uint8_t *jpg, uint32_t jpg_len, void *dst_input)
             {
                 uint32_t src_x = square_x - PAD_LEFT;
                 uint32_t src_y = square_y - PAD_TOP;
-                g = clahe_apply_u8(s_gray_320x240, src_x, src_y);
+                g = clahe_apply_u8(view_gray, src_x, src_y);
             }
 
             g = apply_circle_mask_u8(g, (int32_t)x, (int32_t)y);
@@ -441,6 +472,11 @@ uint8_t jpeg_to_ai_input(const uint8_t *jpg, uint32_t jpg_len, void *dst_input)
     }
 
     return 0U;
+}
+
+uint8_t jpeg_to_ai_input(const uint8_t *jpg, uint32_t jpg_len, void *dst_input)
+{
+    return jpeg_to_ai_input_view(jpg, jpg_len, dst_input, 0, 0, 0U);
 }
 
 uint8_t jpeg_to_rgb888(const uint8_t *jpg, uint32_t jpg_len,

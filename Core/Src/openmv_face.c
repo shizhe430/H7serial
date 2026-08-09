@@ -8,6 +8,7 @@
 #include "openmv_face.h"
 #include "openmv_frontalface_data.h"
 #include "jpeg_decode.h"
+#include "quadspi.h"
 #include "stm32h7xx_hal.h"
 #include <math.h>
 #include <stddef.h>
@@ -31,10 +32,19 @@
 #define OPENMV_FACE_TARGET_BOX_SIZE      90U
 #define OPENMV_FACE_MIN_NEIGHBORS        5U
 #define OPENMV_FACE_GROUP_EPS_PERCENT    20U
-#define OPENMV_FACE_MATCH_DISTANCE_MAX   0.10f
+#define OPENMV_FACE_MATCH_DISTANCE_MAX   0.12f
+#define OPENMV_FACE_MATCH_DISTANCE_MARGIN 0.02f
 #define OPENMV_FACE_LBP_HIST_SIZE        59U
 #define OPENMV_FACE_LBP_REGIONS          8U
 #define OPENMV_FACE_ENROLL_FRAMES        5U
+#define OPENMV_FACE_ENROLL_INTERVAL_MS   1200U
+#define OPENMV_FACE_DB_RAM_BASE          0xC1900000UL
+#define OPENMV_FACE_DB_FLASH_OFFSET      0x01100000UL
+#define OPENMV_FACE_DB_FLASH_SIZE        0x00080000UL
+#define OPENMV_FACE_DB_MAGIC             0x3142504CUL
+#define OPENMV_FACE_DB_VERSION           2U
+#define OPENMV_FACE_DB_LEGACY_VERSION    1U
+#define OPENMV_FACE_ENROLL_RAM_BASE      0xC1980000UL
 
 typedef struct
 {
@@ -43,6 +53,46 @@ typedef struct
     int16_t w;
     int16_t h;
 } openmv_rect_t;
+
+typedef struct __attribute__((packed))
+{
+    uint16_t user_id;
+    uint8_t template_count;
+    uint8_t reserved;
+    float descriptor[OPENMV_FACE_TEMPLATES_PER_USER][OPENMV_FACE_LBP_DESC_SIZE];
+} openmv_face_db_entry_t;
+
+typedef struct __attribute__((packed))
+{
+    uint32_t magic;
+    uint16_t version;
+    uint16_t capacity;
+    uint16_t count;
+    uint16_t reserved;
+    openmv_face_db_entry_t entries[OPENMV_FACE_MAX_USERS];
+    uint32_t crc;
+} openmv_face_db_t;
+
+typedef struct __attribute__((packed))
+{
+    uint16_t user_id;
+    uint16_t reserved;
+    float descriptor[OPENMV_FACE_LBP_DESC_SIZE];
+} openmv_face_legacy_entry_t;
+
+typedef struct __attribute__((packed))
+{
+    uint32_t magic;
+    uint16_t version;
+    uint16_t capacity;
+    uint16_t count;
+    uint16_t reserved;
+    openmv_face_legacy_entry_t entries[OPENMV_FACE_MAX_USERS];
+    uint32_t crc;
+} openmv_face_legacy_db_t;
+
+_Static_assert(sizeof(openmv_face_db_t) <= OPENMV_FACE_DB_FLASH_SIZE,
+               "OpenMV face database exceeds reserved QSPI range");
 
 static uint8_t *const s_rgb = (uint8_t *)OPENMV_FACE_RGB_BASE;
 static uint8_t *const s_gray = (uint8_t *)OPENMV_FACE_GRAY_BASE;
@@ -53,12 +103,211 @@ static uint8_t *const s_normalized = (uint8_t *)OPENMV_FACE_NORMALIZED_BASE;
 static openmv_rect_t s_candidates[OPENMV_FACE_MAX_CANDIDATES];
 static uint16_t s_candidate_parent[OPENMV_FACE_MAX_CANDIDATES];
 static float s_last_desc[OPENMV_FACE_LBP_DESC_SIZE];
-static float s_reference_desc[OPENMV_FACE_LBP_DESC_SIZE];
-static float s_enrollment_sum[OPENMV_FACE_LBP_DESC_SIZE];
-static uint8_t s_reference_valid;
-static uint16_t s_reference_id;
+static openmv_face_db_t *const s_face_db = (openmv_face_db_t *)OPENMV_FACE_DB_RAM_BASE;
+static float *const s_enrollment_templates = (float *)OPENMV_FACE_ENROLL_RAM_BASE;
+static uint8_t s_db_initialized;
 static uint8_t s_enrollment_remaining;
+static int8_t s_enrollment_slot = -1;
 static uint16_t s_enrollment_user_id;
+static uint32_t s_enrollment_next_capture_ms;
+
+static uint32_t openmv_face_crc32(const uint8_t *data, uint32_t size)
+{
+    uint32_t crc = 0xFFFFFFFFUL;
+    uint32_t i;
+
+    for (i = 0U; i < size; i++)
+    {
+        uint32_t bit;
+
+        crc ^= data[i];
+        for (bit = 0U; bit < 8U; bit++)
+        {
+            crc = ((crc & 1U) != 0U) ? ((crc >> 1U) ^ 0xEDB88320UL) : (crc >> 1U);
+        }
+    }
+    return crc ^ 0xFFFFFFFFUL;
+}
+
+static uint8_t openmv_face_db_is_valid(const openmv_face_db_t *db)
+{
+    uint16_t valid_count = 0U;
+    uint32_t i;
+
+    if ((db == NULL) ||
+        (db->magic != OPENMV_FACE_DB_MAGIC) ||
+        (db->version != OPENMV_FACE_DB_VERSION) ||
+        (db->capacity != OPENMV_FACE_MAX_USERS) ||
+        (db->count > OPENMV_FACE_MAX_USERS) ||
+        (openmv_face_crc32((const uint8_t *)db,
+                           (uint32_t)offsetof(openmv_face_db_t, crc)) != db->crc))
+    {
+        return 0U;
+    }
+    for (i = 0U; i < OPENMV_FACE_MAX_USERS; i++)
+    {
+        uint32_t j;
+
+        if (db->entries[i].user_id == 0U)
+        {
+            if (db->entries[i].template_count != 0U)
+            {
+                return 0U;
+            }
+            continue;
+        }
+        if ((db->entries[i].template_count == 0U) ||
+            (db->entries[i].template_count > OPENMV_FACE_TEMPLATES_PER_USER))
+        {
+            return 0U;
+        }
+        valid_count++;
+        for (j = i + 1U; j < OPENMV_FACE_MAX_USERS; j++)
+        {
+            if (db->entries[i].user_id == db->entries[j].user_id)
+            {
+                return 0U;
+            }
+        }
+    }
+    return (valid_count == db->count) ? 1U : 0U;
+}
+
+static uint8_t openmv_face_legacy_db_is_valid(const openmv_face_legacy_db_t *db)
+{
+    uint16_t valid_count = 0U;
+    uint32_t i;
+
+    if ((db == NULL) ||
+        (db->magic != OPENMV_FACE_DB_MAGIC) ||
+        (db->version != OPENMV_FACE_DB_LEGACY_VERSION) ||
+        (db->capacity != OPENMV_FACE_MAX_USERS) ||
+        (db->count > OPENMV_FACE_MAX_USERS) ||
+        (openmv_face_crc32((const uint8_t *)db,
+                           (uint32_t)offsetof(openmv_face_legacy_db_t, crc)) != db->crc))
+    {
+        return 0U;
+    }
+    for (i = 0U; i < OPENMV_FACE_MAX_USERS; i++)
+    {
+        uint32_t j;
+
+        if (db->entries[i].user_id == 0U)
+        {
+            continue;
+        }
+        valid_count++;
+        for (j = i + 1U; j < OPENMV_FACE_MAX_USERS; j++)
+        {
+            if (db->entries[i].user_id == db->entries[j].user_id)
+            {
+                return 0U;
+            }
+        }
+    }
+    return (valid_count == db->count) ? 1U : 0U;
+}
+
+static void openmv_face_db_prepare(void)
+{
+    uint32_t i;
+    uint16_t count = 0U;
+
+    s_face_db->magic = OPENMV_FACE_DB_MAGIC;
+    s_face_db->version = OPENMV_FACE_DB_VERSION;
+    s_face_db->capacity = OPENMV_FACE_MAX_USERS;
+    s_face_db->reserved = 0U;
+    for (i = 0U; i < OPENMV_FACE_MAX_USERS; i++)
+    {
+        s_face_db->entries[i].reserved = 0U;
+        if (s_face_db->entries[i].user_id != 0U)
+        {
+            count++;
+        }
+        else
+        {
+            s_face_db->entries[i].template_count = 0U;
+        }
+    }
+    s_face_db->count = count;
+    s_face_db->crc = openmv_face_crc32((const uint8_t *)s_face_db,
+                                       (uint32_t)offsetof(openmv_face_db_t, crc));
+}
+
+static void openmv_face_db_reset_ram(void)
+{
+    memset((void *)s_face_db, 0, sizeof(*s_face_db));
+    openmv_face_db_prepare();
+    SCB_CleanDCache_by_Addr((uint32_t *)s_face_db, (int32_t)sizeof(*s_face_db));
+}
+
+static int32_t openmv_face_db_find_user(uint16_t user_id)
+{
+    uint32_t i;
+
+    for (i = 0U; i < OPENMV_FACE_MAX_USERS; i++)
+    {
+        if (s_face_db->entries[i].user_id == user_id)
+        {
+            return (int32_t)i;
+        }
+    }
+    return -1;
+}
+
+static int32_t openmv_face_db_find_free(void)
+{
+    uint32_t i;
+
+    for (i = 0U; i < OPENMV_FACE_MAX_USERS; i++)
+    {
+        if (s_face_db->entries[i].user_id == 0U)
+        {
+            return (int32_t)i;
+        }
+    }
+    return -1;
+}
+
+static uint8_t openmv_face_db_save(void)
+{
+    const openmv_face_db_t *flash_db =
+        (const openmv_face_db_t *)(0x90000000UL + OPENMV_FACE_DB_FLASH_OFFSET);
+    uint8_t status = 0U;
+    uint8_t map_status;
+
+    openmv_face_db_prepare();
+    SCB_CleanDCache_by_Addr((uint32_t *)s_face_db, (int32_t)sizeof(*s_face_db));
+    if (MX_QUADSPI_DisableMemoryMapped() != 0U)
+    {
+        return 1U;
+    }
+    if (MX_QUADSPI_EraseRange(OPENMV_FACE_DB_FLASH_OFFSET,
+                              OPENMV_FACE_DB_FLASH_SIZE) != 0U)
+    {
+        status = 2U;
+    }
+    if ((status == 0U) &&
+        (MX_QUADSPI_ProgramRange(OPENMV_FACE_DB_FLASH_OFFSET,
+                                 (const uint8_t *)s_face_db,
+                                 (uint32_t)sizeof(*s_face_db)) != 0U))
+    {
+        status = 3U;
+    }
+    map_status = MX_QUADSPI_EnableMemoryMapped();
+    if ((status == 0U) && (map_status != 0U))
+    {
+        status = 4U;
+    }
+    SCB_CleanInvalidateDCache();
+    if ((status == 0U) &&
+        ((openmv_face_db_is_valid(flash_db) == 0U) ||
+         (memcmp(flash_db, (const void *)s_face_db, sizeof(*s_face_db)) != 0)))
+    {
+        status = 5U;
+    }
+    return status;
+}
 
 static const uint8_t s_uniform_lbp[256] = {
      0,  1,  2,  3,  4, 58,  5,  6,  7, 58, 58, 58,  8, 58,  9, 10,
@@ -602,6 +851,48 @@ static float openmv_lbp_distance(const float *a, const float *b)
     return 0.5f * sum / 64.0f;
 }
 
+uint8_t OpenMVFace_InitDatabase(void)
+{
+    const openmv_face_db_t *flash_db =
+        (const openmv_face_db_t *)(0x90000000UL + OPENMV_FACE_DB_FLASH_OFFSET);
+    const openmv_face_legacy_db_t *legacy_db =
+        (const openmv_face_legacy_db_t *)(0x90000000UL + OPENMV_FACE_DB_FLASH_OFFSET);
+
+    SCB_CleanInvalidateDCache();
+    if (openmv_face_db_is_valid(flash_db) != 0U)
+    {
+        memcpy((void *)s_face_db, flash_db, sizeof(*s_face_db));
+        SCB_CleanDCache_by_Addr((uint32_t *)s_face_db, (int32_t)sizeof(*s_face_db));
+        s_db_initialized = 1U;
+        return 0U;
+    }
+    if (openmv_face_legacy_db_is_valid(legacy_db) != 0U)
+    {
+        uint32_t i;
+
+        openmv_face_db_reset_ram();
+        for (i = 0U; i < OPENMV_FACE_MAX_USERS; i++)
+        {
+            if (legacy_db->entries[i].user_id != 0U)
+            {
+                s_face_db->entries[i].user_id = legacy_db->entries[i].user_id;
+                s_face_db->entries[i].template_count = 1U;
+                memcpy(s_face_db->entries[i].descriptor[0],
+                       legacy_db->entries[i].descriptor,
+                       sizeof(legacy_db->entries[i].descriptor));
+            }
+        }
+        s_db_initialized = 1U;
+        return (openmv_face_db_save() == 0U) ? 0U : 2U;
+    }
+    else
+    {
+        openmv_face_db_reset_ram();
+        s_db_initialized = 1U;
+        return 1U;
+    }
+}
+
 uint8_t OpenMVFace_RunJpeg(const uint8_t *jpg,
                            uint32_t jpg_len,
                            face_ai_result_t *result,
@@ -620,6 +911,10 @@ uint8_t OpenMVFace_RunJpeg(const uint8_t *jpg,
     }
     memset(result, 0, sizeof(*result));
     memset(stats, 0, sizeof(*stats));
+    if (s_db_initialized == 0U)
+    {
+        (void)OpenMVFace_InitDatabase();
+    }
     started_ms = HAL_GetTick();
 
     phase_ms = HAL_GetTick();
@@ -645,7 +940,7 @@ uint8_t OpenMVFace_RunJpeg(const uint8_t *jpg,
     if (candidates == 0U)
     {
         result->status = 0U;
-        result->reference_ready = s_reference_valid;
+        result->reference_ready = (s_face_db->count != 0U) ? 1U : 0U;
         result->total_ms = HAL_GetTick() - started_ms;
         return 0U;
     }
@@ -669,67 +964,209 @@ uint8_t OpenMVFace_RunJpeg(const uint8_t *jpg,
     result->embedding_valid = 1U;
     if (s_enrollment_remaining != 0U)
     {
-        uint32_t i;
-        for (i = 0U; i < OPENMV_FACE_LBP_DESC_SIZE; i++)
+        if ((int32_t)(HAL_GetTick() - s_enrollment_next_capture_ms) >= 0)
         {
-            s_enrollment_sum[i] += s_last_desc[i];
+            uint32_t template_index = OPENMV_FACE_ENROLL_FRAMES - s_enrollment_remaining;
+
+            memcpy(&s_enrollment_templates[template_index * OPENMV_FACE_LBP_DESC_SIZE],
+                   s_last_desc,
+                   sizeof(s_last_desc));
+            s_enrollment_remaining--;
+            s_enrollment_next_capture_ms = HAL_GetTick() + OPENMV_FACE_ENROLL_INTERVAL_MS;
         }
-        s_enrollment_remaining--;
         if (s_enrollment_remaining == 0U)
         {
-            for (i = 0U; i < OPENMV_FACE_LBP_DESC_SIZE; i++)
+            int32_t slot = s_enrollment_slot;
+
+            if ((slot < 0) || (slot >= (int32_t)OPENMV_FACE_MAX_USERS))
             {
-                s_reference_desc[i] = s_enrollment_sum[i] / (float)OPENMV_FACE_ENROLL_FRAMES;
+                result->status = 30U;
+                result->reference_ready = (s_face_db->count != 0U) ? 1U : 0U;
+                result->total_ms = HAL_GetTick() - started_ms;
+                return result->status;
             }
-            s_reference_id = s_enrollment_user_id;
-            s_reference_valid = 1U;
-            result->reference_ready = 1U;
-            result->match_valid = 1U;
-            result->matched_id = s_reference_id;
-            result->similarity = 1.0f;
+            s_face_db->entries[slot].user_id = s_enrollment_user_id;
+            s_face_db->entries[slot].template_count = OPENMV_FACE_TEMPLATES_PER_USER;
+            memcpy(s_face_db->entries[slot].descriptor,
+                   s_enrollment_templates,
+                   sizeof(s_face_db->entries[slot].descriptor));
+            if (openmv_face_db_save() == 0U)
+            {
+                result->reference_ready = 1U;
+                result->match_valid = 1U;
+                result->matched_id = s_enrollment_user_id;
+                result->similarity = 1.0f;
+            }
+            else
+            {
+                result->status = 31U;
+            }
         }
     }
-    else if (s_reference_valid != 0U)
+    else if (s_face_db->count != 0U)
     {
-        distance = openmv_lbp_distance(s_reference_desc, s_last_desc);
+        uint32_t i;
+        float best_distance = 1.0e30f;
+        float second_distance = 1.0e30f;
+        uint16_t best_user_id = 0U;
+
+        for (i = 0U; i < OPENMV_FACE_MAX_USERS; i++)
+        {
+            if (s_face_db->entries[i].user_id != 0U)
+            {
+                uint32_t template_index;
+                float user_distance = 1.0e30f;
+
+                for (template_index = 0U;
+                     template_index < s_face_db->entries[i].template_count;
+                     template_index++)
+                {
+                    float candidate_distance =
+                        openmv_lbp_distance(s_face_db->entries[i].descriptor[template_index],
+                                            s_last_desc);
+
+                    if (candidate_distance < user_distance)
+                    {
+                        user_distance = candidate_distance;
+                    }
+                }
+                if (user_distance < best_distance)
+                {
+                    second_distance = best_distance;
+                    best_distance = user_distance;
+                    best_user_id = s_face_db->entries[i].user_id;
+                }
+                else if (user_distance < second_distance)
+                {
+                    second_distance = user_distance;
+                }
+            }
+        }
+        distance = best_distance;
         stats->distance = distance;
         result->embedding_norm = distance;
         result->similarity = (distance < OPENMV_FACE_MATCH_DISTANCE_MAX)
                                ? (1.0f - ((float)distance / (float)OPENMV_FACE_MATCH_DISTANCE_MAX))
                                : 0.0f;
-        if (distance <= OPENMV_FACE_MATCH_DISTANCE_MAX)
+        if ((distance <= OPENMV_FACE_MATCH_DISTANCE_MAX) &&
+            ((second_distance == 1.0e30f) ||
+             ((second_distance - distance) >= OPENMV_FACE_MATCH_DISTANCE_MARGIN)))
         {
             result->match_valid = 1U;
-            result->matched_id = s_reference_id;
+            result->matched_id = best_user_id;
         }
     }
+    result->reference_ready = (s_face_db->count != 0U) ? 1U : 0U;
     result->total_ms = HAL_GetTick() - started_ms;
-    return 0U;
+    return result->status;
 }
 
 uint8_t OpenMVFace_BeginEnrollment(uint16_t user_id)
 {
+    int32_t slot;
+
     if (user_id == 0U)
     {
         return 1U;
     }
-    memset(s_enrollment_sum, 0, sizeof(s_enrollment_sum));
+    if (s_db_initialized == 0U)
+    {
+        (void)OpenMVFace_InitDatabase();
+    }
+    slot = openmv_face_db_find_user(user_id);
+    if (slot < 0)
+    {
+        slot = openmv_face_db_find_free();
+    }
+    if (slot < 0)
+    {
+        return 2U;
+    }
+    memset(s_enrollment_templates, 0,
+           OPENMV_FACE_TEMPLATES_PER_USER * OPENMV_FACE_LBP_DESC_SIZE * sizeof(float));
+    s_enrollment_slot = (int8_t)slot;
     s_enrollment_user_id = user_id;
     s_enrollment_remaining = OPENMV_FACE_ENROLL_FRAMES;
-    s_reference_valid = 0U;
+    s_enrollment_next_capture_ms = HAL_GetTick() + OPENMV_FACE_ENROLL_INTERVAL_MS;
     return 0U;
+}
+
+void OpenMVFace_CancelEnrollment(void)
+{
+    s_enrollment_remaining = 0U;
+    s_enrollment_slot = -1;
+    s_enrollment_user_id = 0U;
+    s_enrollment_next_capture_ms = 0U;
+}
+
+uint8_t OpenMVFace_EnrollmentActive(void)
+{
+    return (s_enrollment_remaining != 0U) ? 1U : 0U;
+}
+
+uint8_t OpenMVFace_GetEnrollmentRemaining(void)
+{
+    return s_enrollment_remaining;
+}
+
+const uint8_t *OpenMVFace_GetLastRgbFrame(void)
+{
+    return s_rgb;
+}
+
+uint8_t OpenMVFace_DeleteUser(uint16_t user_id)
+{
+    int32_t slot;
+    uint8_t status;
+
+    if (s_db_initialized == 0U)
+    {
+        (void)OpenMVFace_InitDatabase();
+    }
+    slot = openmv_face_db_find_user(user_id);
+    if (slot < 0)
+    {
+        return 1U;
+    }
+    memset(&s_face_db->entries[slot], 0, sizeof(s_face_db->entries[slot]));
+    status = openmv_face_db_save();
+    return (status == 0U) ? 0U : (uint8_t)(10U + status);
+}
+
+uint8_t OpenMVFace_ClearDatabase(void)
+{
+    uint8_t status;
+
+    openmv_face_db_reset_ram();
+    s_db_initialized = 1U;
+    s_enrollment_remaining = 0U;
+    s_enrollment_slot = -1;
+    s_enrollment_user_id = 0U;
+    s_enrollment_next_capture_ms = 0U;
+    status = openmv_face_db_save();
+    return (status == 0U) ? 0U : (uint8_t)(10U + status);
+}
+
+uint8_t OpenMVFace_GetUserCount(void)
+{
+    return (s_db_initialized != 0U) ? (uint8_t)s_face_db->count : 0U;
+}
+
+uint16_t OpenMVFace_GetUserId(uint8_t slot)
+{
+    if ((s_db_initialized == 0U) || (slot >= OPENMV_FACE_MAX_USERS))
+    {
+        return 0U;
+    }
+    return s_face_db->entries[slot].user_id;
 }
 
 void OpenMVFace_ClearReference(void)
 {
-    memset(s_reference_desc, 0, sizeof(s_reference_desc));
-    s_reference_id = 0U;
-    s_reference_valid = 0U;
-    s_enrollment_remaining = 0U;
-    s_enrollment_user_id = 0U;
+    (void)OpenMVFace_ClearDatabase();
 }
 
 uint8_t OpenMVFace_HasReference(void)
 {
-    return s_reference_valid;
+    return (OpenMVFace_GetUserCount() != 0U) ? 1U : 0U;
 }

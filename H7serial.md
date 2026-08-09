@@ -308,10 +308,35 @@
 ### ESP32-C6 session reporting
 
 - Interface: `USART3`, PB10 TX / PB11 RX, 115200 baud, 8N1.
-- The first successful fingerprint match in a session is latched and sent once as `STM_FP:<id>\r\n`.
-- Fingerprint recognition does not block dispensing. If no fingerprint is matched, the completed session sends `STM_FP:0\r\n`.
-- When dispensing stops, elapsed pump-on time is converted using 400 ml / 18.058 s and sent once as `STM_DONE:<ml>\r\n`.
+- C6-side interface: UART1, GPIO4 TX / GPIO5 RX, 115200 baud, 8N1. Cross TX to RX and share ground.
+- Every protocol message is one UTF-8 text line terminated by `\r\n`.
+- The first successful face match in a session is latched and sent once as `STM_FP:<id>\r\n`. The `STM_FP` name is retained for C6 protocol compatibility even though face recognition replaced the active fingerprint path.
+- If no user is matched, the completed session sends `STM_FP:0\r\n` before its completion report.
+- Pump start sends `STM_VOL:0\r\n`; while the pump is active, current volume is sent every 1000 ms using the calibrated 400 ml / 22.7 s ratio.
+- Completion ordering is safety-critical: stop PWM first, send final `STM_VOL:<ml>\r\n`, then send `STM_DONE:<ml>\r\n`.
 - Normal completion, manual stop, and fault stop use the same reporting path.
+- H7 accepts `APP_CMD:START`, `APP_CMD:STOP`, `APP_CMD:SPEAK,<text>`, `APP_CMD:USER,<name>,<today_ml>,<count>,<remaining_ml>`, and `APP_CMD:ADVICE,<interval_min>,<suggested_ml>,<text>`.
+- `APP_CMD:STOP` immediately forces pump PWM to zero in the completed-line receive callback; workflow settlement and reporting then run in the main loop.
+- `USER` cumulative values are treated as authoritative cloud values and populate the LCD information page. Arbitrary UTF-8 names/advice are retained in logs; the fixed LCD glyph table shows an ID fallback for non-ASCII names.
+- `SPEAK` is parsed and logged. The current I2C voice module can only play predefined phrase IDs, so arbitrary cloud TTS text is not synthesized; this matches the P4 product policy.
+- `STM_FP_NEW` is reserved for the future on-device enrollment UI. `STM_VOICE` is reserved until the current command-word ASR module can produce a user name.
+
+### ESP32-C6 CubeMX preservation
+
+- Keep `USART3` asynchronous mode on PB10/PB11 at 115200, 8 data bits, no parity, 1 stop bit, no flow control.
+- Keep `USART3 global interrupt` enabled at preemption priority 5. The `.ioc` stores this as `NVIC.USART3_IRQn`; the USART3 MSP USER CODE block also enables it as regeneration protection.
+- Keep USART1 at 921600 for diagnostics/viewer traffic. Do not connect C6 to USART1.
+- After every CubeMX Generate Code, verify the boot line `[ESP32] USART3 PB10/PB11 115200 8N1 rx=0` before testing cloud commands.
+
+### ESP32-C6 integration acceptance
+
+1. Wire H7 PB10 TX to C6 GPIO5 RX, H7 PB11 RX to C6 GPIO4 TX, and connect GND.
+2. Boot H7 and verify `[ESP32] USART3 PB10/PB11 115200 8N1 rx=0` on USART1 diagnostics.
+3. Recognize a registered face and verify C6 receives `STM_FP:<id>`; H7 must then log `[ESP32_RX] USER ...` with the web cumulative total/count.
+4. Start dispensing and verify C6 receives `STM_VOL:0`, then increasing `STM_VOL` values approximately once per second.
+5. Stop dispensing and verify pump PWM reaches zero before the final `STM_VOL:<ml>` and `STM_DONE:<ml>` lines.
+6. Verify H7 receives the post-record cumulative `USER` line and the `ADVICE` line; open the LCD information page and check today volume, count, remaining volume, interval, and suggested volume.
+7. Toggle the RainMaker/App switch and verify `APP_CMD:START` starts only when the existing child-lock/vision safety gates permit it, while `APP_CMD:STOP` always stops PWM immediately.
 
 ### Unified global variables
 
@@ -1535,3 +1560,37 @@ Whenever CubeMX is used again for voice-module changes:
    - XCAM preview
    - AI inference
 4. only after the camera chain survives intact, continue with voice-module protocol code
+
+## 2026-08 Face Identity Production Integration
+
+Current production direction:
+
+- camera 1 uses the validated OpenMV-style Haar detector and LBP identity matcher
+- camera 0 remains dedicated to water-level inference
+- the active identity database supports five nonzero `uint16_t` user IDs
+- each user can store five independent LBP templates; matching keeps the conservative `0.10` distance threshold and selects the nearest template
+- the database is CRC-protected in QSPI at offset `0x01100000`, with a 512 KiB reserved range
+- database working memory and enrollment templates use SDRAM; internal SRAM remains reserved for control, LCD, camera DMA, and water AI
+- YuNet/SFace and AS608 source files remain available as compile-time/driver rollback implementations but are not active in the production identity path
+
+Deferred feature after the product flow is stable:
+
+- add an LCD `User management` page
+- list the five occupied/free ID slots
+- select a nonzero ID and start a camera-1 enrollment window
+- delete one selected ID without clearing the whole database
+- require an administrator confirmation before enrollment or deletion
+- keep registration and deletion outside an active dispensing session
+- retain UART viewer commands as a development and recovery path
+
+### 2026-08-04 production hardware checkpoint
+
+The OpenMV production image was flashed and verified on the board. After a true ST-LINK hardware reset, the board completed the following checks:
+
+- CPU 480 MHz and HCLK 240 MHz
+- 32 MB SDRAM at 100 MHz, including read-pipe variants and cached round-trip test
+- QSPI JEDEC/SFDP detection and memory-mapped mode
+- persistent face database load with three occupied user slots
+- camera 0 OV2640 initialization and water-level AI startup in `APP_MODE_PUMP_CTRL`
+
+The remaining acceptance test is physical rather than a boot failure. The water camera must first report three consecutive cup classes (`cls=1`, `2`, or `3`). During the latest monitored attempts it reported only `cls=0` and `cls=4`, so the state machine correctly stayed in standby and did not open the camera-1 face window. Do not bypass this guard for production validation.

@@ -83,6 +83,7 @@ uint8_t OV2640_LockAutoExposureGain(void);
 uint8_t OV2640_SetOutputFormatJPEG(void);
 uint8_t OV2640_SetOutputFormatRGB565(void);
 uint8_t OV2640_SetOutputSize(uint16_t width, uint16_t height);
+uint8_t OV2640_SetWideView320x240(void);
 uint8_t OV2640_StartSnapshot(void);
 uint8_t OV2640_StopCapture(void);
 void OV2640_AttachFrameBuffer(uint8_t *buf, uint32_t len);
