@@ -2,7 +2,7 @@
   ******************************************************************************
   * @file    waterlevel_data_params.h
   * @author  AST Embedded Analytics Research Platform
-  * @date    2026-08-02T14:59:10+0800
+  * @date    2026-08-10T17:16:53+0800
   * @brief   AI Tool Automatic Code Generator for Embedded NN computing
   ******************************************************************************
   * Copyright (c) 2026 STMicroelectronics.
@@ -28,10 +28,10 @@
 
 
 #define AI_WATERLEVEL_DATA_ACTIVATIONS_SIZES \
-  { 167280, }
-#define AI_WATERLEVEL_DATA_ACTIVATIONS_SIZE     (167280)
+  { 138352, }
+#define AI_WATERLEVEL_DATA_ACTIVATIONS_SIZE     (138352)
 #define AI_WATERLEVEL_DATA_ACTIVATIONS_COUNT    (1)
-#define AI_WATERLEVEL_DATA_ACTIVATION_1_SIZE    (167280)
+#define AI_WATERLEVEL_DATA_ACTIVATION_1_SIZE    (138352)
 
 
 

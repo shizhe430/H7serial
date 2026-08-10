@@ -23,15 +23,15 @@ extern "C" {
 #define APP_MODE_OPENMV_BOARD_DIAG 13U
 #define APP_MODE_WATER_ROI_CALIB 14U
 #ifndef APP_MODE
-#define APP_MODE  APP_MODE_PUMP_CTRL
+#define APP_MODE  APP_MODE_AI_VISUAL
 #endif
 
-/* Water-camera calibration for the SVGA-derived 320x240 view. */
+/* Calibrated dataset view: SVGA sensor window, 320x240 JPEG and shifted ROI. */
 #ifndef WATER_AI_ROI_OFFSET_X
-#define WATER_AI_ROI_OFFSET_X 46
+#define WATER_AI_ROI_OFFSET_X 50
 #endif
 #ifndef WATER_AI_ROI_OFFSET_Y
-#define WATER_AI_ROI_OFFSET_Y 15
+#define WATER_AI_ROI_OFFSET_Y (-1)
 #endif
 #ifndef WATER_AI_VIEW_FILL
 #define WATER_AI_VIEW_FILL 180U
@@ -40,6 +40,43 @@ extern "C" {
 #if ((WATER_AI_ROI_OFFSET_X < -128) || (WATER_AI_ROI_OFFSET_X > 127) || \
      (WATER_AI_ROI_OFFSET_Y < -128) || (WATER_AI_ROI_OFFSET_Y > 127))
 #error "WATER_AI_ROI_OFFSET_X/Y must fit the signed AIV1 metadata range"
+#endif
+
+/* Dataset-only PA1 lighting cycle. Production builds must leave this disabled. */
+#ifndef WATER_DATASET_LIGHT_CYCLE_ENABLE
+#define WATER_DATASET_LIGHT_CYCLE_ENABLE 0U
+#endif
+#ifndef WATER_DATASET_LIGHT_PRIMARY_DUTY
+#define WATER_DATASET_LIGHT_PRIMARY_DUTY 320U
+#endif
+#ifndef WATER_DATASET_LIGHT_ALT1_DUTY
+#define WATER_DATASET_LIGHT_ALT1_DUTY 180U
+#endif
+#ifndef WATER_DATASET_LIGHT_ALT2_DUTY
+#define WATER_DATASET_LIGHT_ALT2_DUTY 400U
+#endif
+#ifndef WATER_DATASET_LIGHT_PRIMARY_MS
+#define WATER_DATASET_LIGHT_PRIMARY_MS 7000U
+#endif
+#ifndef WATER_DATASET_LIGHT_ALT_MS
+#define WATER_DATASET_LIGHT_ALT_MS 3000U
+#endif
+
+#if ((WATER_DATASET_LIGHT_CYCLE_ENABLE != 0U) && (APP_MODE != APP_MODE_AI_VISUAL))
+#error "WATER_DATASET_LIGHT_CYCLE_ENABLE is restricted to APP_MODE_AI_VISUAL"
+#endif
+#if ((WATER_DATASET_LIGHT_PRIMARY_DUTY > 999U) || \
+     (WATER_DATASET_LIGHT_ALT1_DUTY > 999U) || \
+     (WATER_DATASET_LIGHT_ALT2_DUTY > 999U))
+#error "Water dataset light duty must fit the PA1 PWM range 0..999"
+#endif
+#if (((WATER_DATASET_LIGHT_PRIMARY_DUTY % 4U) != 0U) || \
+     ((WATER_DATASET_LIGHT_ALT1_DUTY % 4U) != 0U) || \
+     ((WATER_DATASET_LIGHT_ALT2_DUTY % 4U) != 0U))
+#error "Water dataset light duty must be divisible by 4 for AIV1 metadata"
+#endif
+#if ((WATER_DATASET_LIGHT_PRIMARY_MS == 0U) || (WATER_DATASET_LIGHT_ALT_MS == 0U))
+#error "Water dataset light phase duration must be nonzero"
 #endif
 
 #ifndef CAMERA_APP_ACTIVE_CAMERA

@@ -6,11 +6,13 @@
 #include "ov2640_sccb.h"
 #include "pump.h"
 #include "environment_sensors.h"
+#include "camera_light.h"
 #if (CAMERA_FINGERPRINT_ENABLE != 0U)
 #include "as608.h"
 #endif
 #include "oled_status.h"
 #include "lcd_ui.h"
+#include "quadspi.h"
 #include "usart.h"
 #include "voice_asr.h"
 #include "waterlevel.h"
@@ -87,6 +89,7 @@ static volatile uint8_t g_frame_error = 0U;
 #define CAMERA_AI_VISUAL_HEADER_SIZE 32U
 #define CAMERA_AI_VISUAL_SEND_GRAY_ONLY 0U
 #define CAMERA_AI_VISUAL_FLAG_ROI_CALIB 0x04U
+#define CAMERA_AI_VISUAL_FLAG_LIGHT_DUTY 0x08U
 
 #define CAMERA_FACE_VISUAL_MAGIC0   0x46U
 #define CAMERA_FACE_VISUAL_MAGIC1   0x41U
@@ -139,12 +142,13 @@ static volatile uint8_t g_frame_error = 0U;
 #define ESP32_SPEAK_TEXT_SIZE     ESP32_CMD_BUF_SIZE
 #define ESP32_ADVICE_TEXT_SIZE    ESP32_CMD_BUF_SIZE
 #define ESP32_VOLUME_REPORT_MS    1000U
+#define ESP32_CLOUD_DATA_MAX_AGE_MS (30UL * 60UL * 1000UL)
 #define ESP32_LINK_SELFTEST_ON_BOOT 0U
 #define ESP32_LINK_SELFTEST_PERIOD_MS 1000U
 #define ESP32_LINK_SELFTEST_MAX_COUNT 60U
-#define WATERLEVEL_LOW_HALF_SPLIT      0.395f
+#define WATERLEVEL_LOW_HALF_SPLIT      0.470f
 #define WATERLEVEL_HALF_FULL_SPLIT     0.665f
-#define WATERLEVEL_RAW_HALF_KEEP_REG   0.395f
+#define WATERLEVEL_RAW_HALF_KEEP_REG   0.470f
 #define WATERLEVEL_RAW_FULL_KEEP_REG   0.665f
 #define WATERLEVEL_DEMO_FORCE_ALL_AS_FULL 0U
 #define WATERLEVEL_DEMO_FULL_LOGIT_BIAS 0.000f
@@ -158,10 +162,15 @@ static volatile uint8_t g_frame_error = 0U;
 #define WATERLEVEL_DEMO_RING_DELTA_MIN   6U
 #define WATERLEVEL_DEMO_RING_BRIGHT_MIN  110U
 
+#define PARENTAL_LOCK_FLASH_OFFSET 0x01200000UL
+#define PARENTAL_LOCK_FLASH_SIZE   0x00010000UL
+#define PARENTAL_LOCK_MAGIC        0x314B4C50UL
+#define PARENTAL_LOCK_VERSION      1U
+
 #define WATERLEVEL_IN_ZERO_POINT  (-128)
-#define WATERLEVEL_OUT0_SCALE     (0.07420533150434494f)
-#define WATERLEVEL_OUT0_ZERO_POINT (9)
-#define WATERLEVEL_OUT1_SCALE     (0.0027080606669187546f)
+#define WATERLEVEL_OUT0_SCALE     (0.103576131f)
+#define WATERLEVEL_OUT0_ZERO_POINT (6)
+#define WATERLEVEL_OUT1_SCALE     (0.003226662f)
 #define WATERLEVEL_OUT1_ZERO_POINT (-128)
 
 #if (AI_WATERLEVEL_IN_1_SIZE_BYTES == (CAMERA_AI_INPUT_SIZE * 4U))
@@ -294,6 +303,9 @@ static AI_ALIGNED(32) ai_u8 g_ai_activations[AI_WATERLEVEL_DATA_ACTIVATIONS_SIZE
     __attribute__((section(".ai_ram_d1")));
 static uint8_t g_ai_clahe_lut[CAMERA_AI_CLAHE_GRID_Y][CAMERA_AI_CLAHE_GRID_X][256];
 static uint8_t g_ai_gray_buf[CAMERA_AI_INPUT_SIZE];
+#if (CAMERA_AI_VISUAL_SEND_GRAY_ONLY != 0U)
+static AI_ALIGNED(32) uint8_t g_ai_input_snapshot[CAMERA_AI_INPUT_SIZE];
+#endif
 static camera_ai_context_t g_ai_ctx;
 #endif
 static uint8_t g_camera_ready = 0U;
@@ -511,15 +523,45 @@ static uint8_t camera_app_decode_water_ai_input(const uint8_t *jpeg,
                                                 uint32_t jpeg_len,
                                                 void *input)
 {
-#if (APP_MODE == APP_MODE_WATER_ROI_CALIB)
+    /* Keep every active water model path on the same calibrated camera view. */
     return jpeg_to_ai_input_view(jpeg, jpeg_len, input,
                                  WATER_AI_ROI_OFFSET_X,
                                  WATER_AI_ROI_OFFSET_Y,
                                  WATER_AI_VIEW_FILL);
-#else
-    return jpeg_to_ai_input(jpeg, jpeg_len, input);
-#endif
 }
+
+#if (WATER_DATASET_LIGHT_CYCLE_ENABLE != 0U)
+static void camera_app_dataset_light_service(uint32_t now_ms)
+{
+    static const uint16_t duties[] = {
+        WATER_DATASET_LIGHT_PRIMARY_DUTY,
+        WATER_DATASET_LIGHT_ALT1_DUTY,
+        WATER_DATASET_LIGHT_PRIMARY_DUTY,
+        WATER_DATASET_LIGHT_ALT2_DUTY
+    };
+    static uint8_t initialized = 0U;
+    static uint8_t phase = 0U;
+    static uint32_t phase_started_ms = 0U;
+    uint32_t phase_duration_ms;
+
+    if (initialized == 0U)
+    {
+        initialized = 1U;
+        phase_started_ms = now_ms;
+        CameraLight_SetDuty(duties[phase]);
+        return;
+    }
+
+    phase_duration_ms = ((phase & 1U) == 0U) ?
+                        WATER_DATASET_LIGHT_PRIMARY_MS : WATER_DATASET_LIGHT_ALT_MS;
+    if ((uint32_t)(now_ms - phase_started_ms) >= phase_duration_ms)
+    {
+        phase = (uint8_t)((phase + 1U) % (sizeof(duties) / sizeof(duties[0])));
+        phase_started_ms = now_ms;
+        CameraLight_SetDuty(duties[phase]);
+    }
+}
+#endif
 #endif
 
 static int32_t camera_app_float_to_milli_signed(float value)
@@ -796,6 +838,15 @@ static uint8_t camera_app_recover_camera(const char *reason)
                 HAL_Delay(50U);
                 continue;
             }
+
+#if ((APP_MODE == APP_MODE_AI_VISUAL) || (APP_MODE == APP_MODE_PUMP_CTRL) || \
+     (APP_MODE == APP_MODE_WATER_ROI_CALIB))
+            if (OV2640_SetWideView320x240() != OV2640_OK)
+            {
+                HAL_Delay(50U);
+                continue;
+            }
+#endif
 
             JPEG_Stream_Init();
             OV2640_AttachFrameBuffer(JPEG_Stream_GetBuf(), JPEG_Stream_GetMaxSize());
@@ -1795,11 +1846,13 @@ static void camera_app_ai_visual_send_frame(const camera_ai_result_t *result,
     header[26] = camera_app_logit_to_visual_byte(result->logits[2]);
     header[27] = camera_app_logit_to_visual_byte(result->logits[3]);
     header[28] = camera_app_logit_to_visual_byte(result->logits[4]);
-#if (APP_MODE == APP_MODE_WATER_ROI_CALIB)
     header[7] = CAMERA_AI_VISUAL_FLAG_ROI_CALIB;
     header[29] = (uint8_t)(WATER_AI_ROI_OFFSET_X + 128);
     header[30] = (uint8_t)(WATER_AI_ROI_OFFSET_Y + 128);
     header[31] = WATER_AI_VIEW_FILL;
+#if (WATER_DATASET_LIGHT_CYCLE_ENABLE != 0U)
+    header[7] |= CAMERA_AI_VISUAL_FLAG_LIGHT_DUTY;
+    header[31] = (uint8_t)(CameraLight_GetDuty() / 4U);
 #endif
 
     tail[0] = CAMERA_AI_VISUAL_TAIL0;
@@ -5649,7 +5702,8 @@ void CameraApp_Init(void)
         camera_app_log("[APP] size ok\r\n");
     }
 
-#if (APP_MODE == APP_MODE_WATER_ROI_CALIB)
+#if ((APP_MODE == APP_MODE_AI_VISUAL) || (APP_MODE == APP_MODE_PUMP_CTRL) || \
+     (APP_MODE == APP_MODE_WATER_ROI_CALIB))
     if (OV2640_SetWideView320x240() != OV2640_OK)
     {
         camera_app_log("[APP] wide view fail\r\n");
@@ -6061,6 +6115,10 @@ void CameraApp_Run(void)
         uint32_t jpeg_len = 0U;
         uint8_t status;
 
+#if (WATER_DATASET_LIGHT_CYCLE_ENABLE != 0U)
+        camera_app_dataset_light_service(HAL_GetTick());
+#endif
+
         status = camera_app_capture_jpeg_snapshot(3000U, &jpeg_off, &jpeg_len);
         if (status != 0U)
         {
@@ -6100,6 +6158,10 @@ void CameraApp_Run(void)
         g_camera_bad_frame_count = 0U;
         camera_app_camera_auto_ctrl_note_good_frame();
 
+#if (CAMERA_AI_VISUAL_SEND_GRAY_ONLY != 0U)
+        /* The generated network may reuse its activation-backed input buffer during inference. */
+        memcpy(g_ai_input_snapshot, camera_app_ai_input_data(), CAMERA_AI_INPUT_SIZE);
+#endif
         infer_start = HAL_GetTick();
         if (camera_app_ai_run(&result) != 0U)
         {
@@ -6112,7 +6174,7 @@ void CameraApp_Run(void)
         camera_app_ai_visual_send_gray_frame(&result,
                                              HAL_GetTick() - pipeline_start,
                                              infer_ms,
-                                             camera_app_ai_input_data());
+                                             g_ai_input_snapshot);
         #else
         camera_app_ai_visual_send_frame(&result,
                                         HAL_GetTick() - pipeline_start,
@@ -6190,7 +6252,9 @@ void CameraApp_Run(void)
             return;
         }
 
-        if (jpeg_to_ai_input(JPEG_Stream_GetBuf() + jpeg_off, jpeg_len, camera_app_ai_input_data()) != 0U)
+        if (camera_app_decode_water_ai_input(JPEG_Stream_GetBuf() + jpeg_off,
+                                             jpeg_len,
+                                             camera_app_ai_input_data()) != 0U)
         {
             g_camera_bad_frame_count++;
             camera_app_pump_ctrl_decode_fail(jpeg_off, jpeg_len);

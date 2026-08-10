@@ -2,7 +2,7 @@
   ******************************************************************************
   * @file    waterlevel.h
   * @author  AST Embedded Analytics Research Platform
-  * @date    2026-08-02T14:59:10+0800
+  * @date    2026-08-10T17:16:53+0800
   * @brief   AI Tool Automatic Code Generator for Embedded NN computing
   ******************************************************************************
   * @attention
@@ -23,7 +23,7 @@
 
 /******************************************************************************/
 #define AI_WATERLEVEL_MODEL_NAME          "waterlevel"
-#define AI_WATERLEVEL_ORIGIN_MODEL_NAME   "v3_w05_origline_plus_newdata_qat_st_pure_int8"
+#define AI_WATERLEVEL_ORIGIN_MODEL_NAME   "waterlevel_st_roi_x50_y1_fill180_clahe_r100_v4c_cupmix_live_empty_pure_int8"
 
 /******************************************************************************/
 #define AI_WATERLEVEL_ACTIVATIONS_ALIGNMENT   (4)

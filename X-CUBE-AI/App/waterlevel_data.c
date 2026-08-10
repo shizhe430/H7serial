@@ -2,7 +2,7 @@
   ******************************************************************************
   * @file    waterlevel_data.c
   * @author  AST Embedded Analytics Research Platform
-  * @date    2026-08-02T14:59:10+0800
+  * @date    2026-08-10T17:16:53+0800
   * @brief   AI Tool Automatic Code Generator for Embedded NN computing
   ******************************************************************************
   * @attention
@@ -21,8 +21,8 @@
 AI_API_DECLARE_BEGIN
 ai_buffer g_waterlevel_data_map_activations[AI_WATERLEVEL_DATA_ACTIVATIONS_COUNT] = {
   AI_BUFFER_INIT(AI_FLAG_NONE,  AI_BUFFER_FORMAT_U8,
-    AI_BUFFER_SHAPE_INIT(AI_SHAPE_BCWH, 4, 1, 167280, 1, 1),
-    167280, NULL, NULL),    /* heap_overlay_pool */
+    AI_BUFFER_SHAPE_INIT(AI_SHAPE_BCWH, 4, 1, 138352, 1, 1),
+    138352, NULL, NULL),    /* heap_overlay_pool */
   };
 ai_buffer g_waterlevel_data_map_weights[AI_WATERLEVEL_DATA_WEIGHTS_COUNT] = {
   AI_BUFFER_INIT(AI_FLAG_NONE,  AI_BUFFER_FORMAT_U8,

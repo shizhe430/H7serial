@@ -2,8 +2,8 @@ param(
     [string]$Port = "",
     [int]$Baud = 921600,
     [string]$SaveDir = "",
-    [int]$RoiOffsetX = 0,
-    [int]$RoiOffsetY = 0,
+    [int]$RoiOffsetX = 50,
+    [int]$RoiOffsetY = -1,
     [int]$ViewShiftX = 0,
     [int]$ViewShiftY = 0,
     [int]$ViewFillValue = 180
@@ -162,7 +162,11 @@ function Get-FrameFileStem {
     $timeText = [DateTime]::Now.ToString("yyyyMMdd_HHmmss_fff")
     $confMilli = [Math]::Max(0, [Math]::Min(9999, [int]([Math]::Round($Frame.Confidence * 1000.0))))
     $regMilli = [Math]::Max(0, [Math]::Min(9999, [int]([Math]::Round($Frame.Regression * 1000.0))))
-    return "{0}_fid{1}_cls{2}_raw{3}_c{4:D4}_r{5:D4}" -f $timeText, $Frame.FrameId, $Frame.ClassId, $Frame.RawClassId, $confMilli, $regMilli
+    $stem = "{0}_fid{1}_cls{2}_raw{3}_c{4:D4}_r{5:D4}" -f $timeText, $Frame.FrameId, $Frame.ClassId, $Frame.RawClassId, $confMilli, $regMilli
+    if ($Frame.HasLightMetadata) {
+        $stem += "_light{0:D4}" -f $Frame.LightDuty
+    }
+    return $stem
 }
 
 function Get-ClassFolderName {
@@ -312,6 +316,7 @@ function Try-ExtractFrame {
 
     $protocolFlags = [int]$header[7]
     $hasRoiMetadata = (($protocolFlags -band 0x04) -ne 0)
+    $hasLightMetadata = (($protocolFlags -band 0x08) -ne 0)
 
     return [pscustomobject]@{
         Version      = [int]$header[4]
@@ -334,11 +339,13 @@ function Try-ExtractFrame {
         InputMin     = ([int]$header[29] - 128)
         InputMax     = ([int]$header[30] - 128)
         InputMean    = ([int]$header[31] - 128)
-        HasInputStats = ((-not $hasRoiMetadata) -and (($header[29] -ne 0) -or ($header[30] -ne 0) -or ($header[31] -ne 0)))
+        HasInputStats = ((-not $hasRoiMetadata) -and (-not $hasLightMetadata) -and (($header[29] -ne 0) -or ($header[30] -ne 0) -or ($header[31] -ne 0)))
         HasRoiMetadata = $hasRoiMetadata
+        HasLightMetadata = $hasLightMetadata
         RoiOffsetX   = if ($hasRoiMetadata) { ([int]$header[29] - 128) } else { $RoiOffsetX }
         RoiOffsetY   = if ($hasRoiMetadata) { ([int]$header[30] - 128) } else { $RoiOffsetY }
-        ViewFill     = if ($hasRoiMetadata) { [int]$header[31] } else { $ViewFillValue }
+        ViewFill     = if ($hasRoiMetadata -and (-not $hasLightMetadata)) { [int]$header[31] } else { $ViewFillValue }
+        LightDuty    = if ($hasLightMetadata) { [int]$header[31] * 4 } else { -1 }
         ClassName    = Get-ClassName -ClassId ([int]$header[5])
         JpegHead     = if ($jpegLen -ge 4) { Format-HexBytes -Bytes $jpeg[0..3] } else { "" }
         JpegTail     = if ($jpegLen -ge 2) { Format-HexBytes -Bytes $jpeg[($jpegLen - 2)..($jpegLen - 1)] } else { "" }
@@ -462,7 +469,8 @@ function Update-Viewer {
         $labelInfer.Text = "Infer: $($Frame.InferMs) ms"
         $labelFps.Text = ("FPS: {0:F1}" -f $script:DisplayFps)
         $labelFrame.Text = "Frame ID: $($Frame.FrameId)"
-        $labelJpeg.Text = "JPEG: ${sourceWidth}x${sourceHeight}, $($Frame.JpegLen) bytes  ROI=($($Frame.RoiOffsetX),$($Frame.RoiOffsetY))"
+        $lightText = if ($Frame.HasLightMetadata) { "  Light=$($Frame.LightDuty)/999" } else { "" }
+        $labelJpeg.Text = "JPEG: ${sourceWidth}x${sourceHeight}, $($Frame.JpegLen) bytes  ROI=($($Frame.RoiOffsetX),$($Frame.RoiOffsetY))$lightText"
         if ($Frame.HasInputStats) {
             $labelLogits.Text = "Logits: $($Frame.Logits -join ', ')`r`nInput q: min=$($Frame.InputMin) max=$($Frame.InputMax) mean=$($Frame.InputMean) hash=$($Frame.InputHash)"
         } else {

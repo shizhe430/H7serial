@@ -1,35 +1,35 @@
 ST Edge AI Core v2.2.0-20266 2adc00962
-Created date          : 2026-08-02 14:59:12
-Parameters            : generate --target stm32h7 --name waterlevel -m D:/v3_w05_origline_plus_newdata_qat_st_pure_int8.onnx --compression none --verbosity 1 -O time --workspace C:/Users/heshizhe/AppData/Local/Temp/mxAI_workspace658631502960015814424330231548740 --output D:/
+Created date          : 2026-08-10 17:16:56
+Parameters            : generate --target stm32 --type onnx --model workspace\waterlevel_st_roi_x50_y-1_fill180_clahe_r100_v4c_cupmix_live_empty_pure_int8.onnx --name waterlevel --optimization balanced --workspace workspace\stedgeai_waterlevel_v4c_final_gen --output workspace\stedgeai_waterlevel_v4c_final_gen\out --no-onnx-optimizer --verbosity 1
 
 Exec/report summary (generate)
----------------------------------------------------------------------------------------------------------------
-model file         :   D:\v3_w05_origline_plus_newdata_qat_st_pure_int8.onnx                                   
-type               :   onnx                                                                                    
-c_name             :   waterlevel                                                                              
-compression        :   none                                                                                    
-options            :   allocate-inputs, allocate-outputs                                                       
-optimization       :   time                                                                                    
-target/series      :   stm32h7                                                                                 
-workspace dir      :   C:\Users\heshizhe\AppData\Local\Temp\mxAI_workspace658631502960015814424330231548740    
-output dir         :   D:\                                                                                     
-model_fmt          :   ss/sa per channel                                                                       
-model_name         :   v3_w05_origline_plus_newdata_qat_st_pure_int8                                           
-model_hash         :   0xadeca6e01d8751b23efb645047b50613                                                      
-params #           :   172,390 items (673.40 KiB)                                                              
----------------------------------------------------------------------------------------------------------------
-input 1/1          :   'input', int8(1x224x224x1), 49.00 KBytes, QLinear(0.003920059,-128,int8), activations   
-output 1/2         :   '_cls_head_Gemm_0', int8(1x5), 5 Bytes, QLinear(0.074205332,9,int8), activations        
-output 2/2         :   '_Sigmoid_0', int8(1x1), 1 Bytes, QLinear(0.002708061,-128,int8), activations           
-outputs (total)    :   6 Bytes                                                                                 
-macc               :   16,479,543                                                                              
-weights (ro)       :   182,008 B (177.74 KiB) (1 segment) / -507,552(-73.6%) vs float model                    
-activations (rw)   :   167,280 B (163.36 KiB) (1 segment) *                                                    
-ram (total)        :   167,280 B (163.36 KiB) = 167,280 + 0 + 0                                                
----------------------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+model file         :   C:\Users\heshizhe\Desktop\cnntry\water_ai_topview\workspace\waterlevel_st_roi_x50_y-1_fill180_clahe_r100_v4c_cupmix_live_empty_pure_int8.onnx   
+type               :   onnx                                                                                                                                            
+c_name             :   waterlevel                                                                                                                                      
+compression        :   lossless                                                                                                                                        
+options            :   allocate-inputs, allocate-outputs                                                                                                               
+optimization       :   balanced                                                                                                                                        
+target/series      :   stm32                                                                                                                                           
+workspace dir      :   C:\Users\heshizhe\Desktop\cnntry\water_ai_topview\workspace\stedgeai_waterlevel_v4c_final_gen                                                   
+output dir         :   C:\Users\heshizhe\Desktop\cnntry\water_ai_topview\workspace\stedgeai_waterlevel_v4c_final_gen\out                                               
+model_fmt          :   ss/sa per channel                                                                                                                               
+model_name         :   waterlevel_st_roi_x50_y1_fill180_clahe_r100_v4c_cupmix_live_empty_pure_int8                                                                     
+model_hash         :   0xcc056fa71cfdf1400b99a241ef43d3b6                                                                                                              
+params #           :   172,390 items (673.40 KiB)                                                                                                                      
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+input 1/1          :   'input', int8(1x224x224x1), 49.00 KBytes, QLinear(0.003920452,-128,int8), activations                                                           
+output 1/2         :   '_cls_head_Gemm_0', int8(1x5), 5 Bytes, QLinear(0.103576131,6,int8), activations                                                                
+output 2/2         :   '_Sigmoid_0', int8(1x1), 1 Bytes, QLinear(0.003226662,-128,int8), activations                                                                   
+outputs (total)    :   6 Bytes                                                                                                                                         
+macc               :   16,479,543                                                                                                                                      
+weights (ro)       :   182,008 B (177.74 KiB) (1 segment) / -507,552(-73.6%) vs float model                                                                            
+activations (rw)   :   138,352 B (135.11 KiB) (1 segment) *                                                                                                            
+ram (total)        :   138,352 B (135.11 KiB) = 138,352 + 0 + 0                                                                                                        
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------
 (*) 'input'/'output' buffers are allocated in the activations buffer
 
-Model name - v3_w05_origline_plus_newdata_qat_st_pure_int8
+Model name - waterlevel_st_roi_x50_y1_fill180_clahe_r100_v4c_cupmix_live_empty_pure_int8
 ------ ---------------------------------------------------------------- ----------------------- ---------------- ----------- -------------------------------- --- ------------------- ------------------- ---------------------- 
 m_id   layer (type,original)                                            oshape                  param/size              macc                     connected to   | c_size              c_macc              c_type                 
 ------ ---------------------------------------------------------------- ----------------------- ---------------- ----------- -------------------------------- --- ------------------- ------------------- ---------------------- 
@@ -306,11 +306,11 @@ m_id   layer (type,original)                                            oshape  
 ------ ---------------------------------------------------------------- ----------------------- ---------------- ----------- -------------------------------- --- ------------------- ------------------- ---------------------- 
 200    _shared_1_weight_f..ut_0_const (Placeholder, DequantizeLinear)   [b:128,c:288]           36,864/147,456                                                  | -147,456(-100.0%)                       
 ------ ---------------------------------------------------------------- ----------------------- ---------------- ----------- -------------------------------- --- ------------------- ------------------- ---------------------- 
-201    _shared_1_Gemm_bias_dq_const (Placeholder, DequantizeLinear)     [b:128]                 128/512                                                         | -512(-100.0%)                           
+201    qat_export_source_..s_dq_const (Placeholder, DequantizeLinear)   [b:128]                 128/512                                                         | -512(-100.0%)                           
 ------ ---------------------------------------------------------------- ----------------------- ---------------- ----------- -------------------------------- --- ------------------- ------------------- ---------------------- 
 202    _shared_1_Gemm_output_0 (Gemm, Gemm)                             [b:1,c:128]                                   36,992   _activation_post_p..r_output_0   | +37,376(+100.0%)                        Dense_[46]             
                                                                                                                                _shared_1_weight_f..ut_0_const   | 
-                                                                                                                                 _shared_1_Gemm_bias_dq_const   | 
+                                                                                                                               qat_export_source_..s_dq_const   | 
 ------ ---------------------------------------------------------------- ----------------------- ---------------- ----------- -------------------------------- --- ------------------- ------------------- ---------------------- 
 203    _activation_post_p..r_output_0 (Conversion, QuantizeLinear)      [b:1,c:128]                                      256          _shared_1_Gemm_output_0   |                     -256(-100.0%)       
 ------ ---------------------------------------------------------------- ----------------------- ---------------- ----------- -------------------------------- --- ------------------- ------------------- ---------------------- 
@@ -318,11 +318,11 @@ m_id   layer (type,original)                                            oshape  
 ------ ---------------------------------------------------------------- ----------------------- ---------------- ----------- -------------------------------- --- ------------------- ------------------- ---------------------- 
 205    _cls_head_weight_f..ut_0_const (Placeholder, DequantizeLinear)   [b:5,c:128]             640/2,560                                                       | -2,560(-100.0%)                         
 ------ ---------------------------------------------------------------- ----------------------- ---------------- ----------- -------------------------------- --- ------------------- ------------------- ---------------------- 
-206    _cls_head_Gemm_bias_dq_const (Placeholder, DequantizeLinear)     [b:5]                   5/20                                                            | -20(-100.0%)                            
+206    qat_export_source_..s_dq_const (Placeholder, DequantizeLinear)   [b:5]                   5/20                                                            | -20(-100.0%)                            
 ------ ---------------------------------------------------------------- ----------------------- ---------------- ----------- -------------------------------- --- ------------------- ------------------- ---------------------- 
 207    _cls_head_Gemm_output_0 (Gemm, Gemm)                             [b:1,c:5]                                        645   _activation_post_p..duplicated   | +660(+100.0%)                           Dense_[o][47]          
                                                                                                                                _cls_head_weight_f..ut_0_const   | 
-                                                                                                                                 _cls_head_Gemm_bias_dq_const   | 
+                                                                                                                               qat_export_source_..s_dq_const   | 
 ------ ---------------------------------------------------------------- ----------------------- ---------------- ----------- -------------------------------- --- ------------------- ------------------- ---------------------- 
 208    _activation_post_p..r_output_0 (Conversion, QuantizeLinear)      [b:1,c:5]                                         10          _cls_head_Gemm_output_0   |                     -10(-100.0%)        
 ------ ---------------------------------------------------------------- ----------------------- ---------------- ----------- -------------------------------- --- ------------------- ------------------- ---------------------- 
@@ -330,11 +330,11 @@ m_id   layer (type,original)                                            oshape  
 ------ ---------------------------------------------------------------- ----------------------- ---------------- ----------- -------------------------------- --- ------------------- ------------------- ---------------------- 
 210    _reg_head_weight_f..ut_0_const (Placeholder, DequantizeLinear)   [b:1,c:128]             128/512                                                         | -512(-100.0%)                           
 ------ ---------------------------------------------------------------- ----------------------- ---------------- ----------- -------------------------------- --- ------------------- ------------------- ---------------------- 
-211    _reg_head_Gemm_bias_dq_const (Placeholder, DequantizeLinear)     [b:1]                   1/4                                                             | -4(-100.0%)                             
+211    qat_export_source_..s_dq_const (Placeholder, DequantizeLinear)   [b:1]                   1/4                                                             | -4(-100.0%)                             
 ------ ---------------------------------------------------------------- ----------------------- ---------------- ----------- -------------------------------- --- ------------------- ------------------- ---------------------- 
 212    _reg_head_Gemm_output_0 (Gemm, Gemm)                             [b:1,c:1]                                        129   _activation_post_p..duplicated   | +132(+100.0%)                           Dense_[48]             
                                                                                                                                _reg_head_weight_f..ut_0_const   | 
-                                                                                                                                 _reg_head_Gemm_bias_dq_const   | 
+                                                                                                                               qat_export_source_..s_dq_const   | 
 ------ ---------------------------------------------------------------- ----------------------- ---------------- ----------- -------------------------------- --- ------------------- ------------------- ---------------------- 
 213    _activation_post_p..r_output_0 (Conversion, QuantizeLinear)      [b:1,c:1]                                          2          _reg_head_Gemm_output_0   |                     -2(-100.0%)         
 ------ ---------------------------------------------------------------- ----------------------- ---------------- ----------- -------------------------------- --- ------------------- ------------------- ---------------------- 
@@ -352,17 +352,17 @@ m_id   layer (type,original)                                            oshape  
 ------ ---------------------------------------------------------------- ----------------------- ---------------- ----------- -------------------------------- --- ------------------- ------------------- ---------------------- 
 220    reg (Conversion, DequantizeLinear)                               [b:1]                                              2   _activation_post_p..r_output_0   |                     -2(-100.0%)         
 ------ ---------------------------------------------------------------- ----------------------- ---------------- ----------- -------------------------------- --- ------------------- ------------------- ---------------------- 
-model/c-model: macc=19,780,896/16,479,543 -3,301,353(-16.7%) weights=689,560/182,008 -507,552(-73.6%) activations=--/167,280 io=--/0
+model/c-model: macc=19,780,896/16,479,543 -3,301,353(-16.7%) weights=689,560/182,008 -507,552(-73.6%) activations=--/138,352 io=--/0
 
 
 
 Generated C-graph summary
 ------------------------------------------------------------------------------------------------------------------------
-model name            : v3_w05_origline_plus_newdata_qat_st_pure_int8
+model name            : waterlevel_st_roi_x50_y1_fill180_clahe_r100_v4c_cupmix_live_empty_pure_int8
 c-name                : waterlevel
 c-node #              : 50
 c-array #             : 162
-activations size      : 167280 (1 segment)
+activations size      : 138352 (1 segment)
 weights size          : 182008 (1 segment)
 macc                  : 16479543
 inputs                : ['input_output']
@@ -385,11 +385,11 @@ c_id   name (*_array)                                   item/size       domain/m
 10     _block_0_0_10_Conv_output_0_scratch0             3072/3072       activations/**default**   s8                    
 11     _block_0_0_10_Conv_output_0_weights              13824/13824     weights/weights           const s8              
 12     _block_0_0_1_Conv_output_0_bias                  40/160          weights/weights           const s32             
-13     _block_0_0_1_Conv_output_0_output                125440/134560   activations/**default**   s8                    
+13     _block_0_0_1_Conv_output_0_output                125440/125440   activations/**default**   s8                    
 14     _block_0_0_1_Conv_output_0_scratch0              432/432         activations/**default**   s8                    
 15     _block_0_0_1_Conv_output_0_weights               320/320         weights/weights           const s8              
 16     _block_0_0_2_Conv_output_0_bias                  48/192          weights/weights           const s32             
-17     _block_0_0_2_Conv_output_0_output                37632/43200     activations/**default**   s8                    
+17     _block_0_0_2_Conv_output_0_output                37632/37632     activations/**default**   s8                    
 18     _block_0_0_2_Conv_output_0_scratch0              544/544         activations/**default**   s8                    
 19     _block_0_0_2_Conv_output_0_weights               768/768         weights/weights           const s8              
 20     _block_0_0_3_Conv_output_0_bias                  48/192          weights/weights           const s32             
@@ -428,7 +428,7 @@ c_id   name (*_array)                                   item/size       domain/m
 53     _block_1_0_1_Conv_output_0_bias                  48/192          weights/weights           const s32             
 54     _block_1_0_1_Conv_output_0_output                37632/37632     activations/**default**   s8                    
 55     _block_1_0_1_Conv_output_0_pad_before_output     43200/43200     activations/**default**   s8                    
-56     _block_1_0_1_Conv_output_0_scratch0              1632/1632       activations/**default**   s8                    
+56     _block_1_0_1_Conv_output_0_scratch0              1777/1777       activations/**default**   s8                    
 57     _block_1_0_1_Conv_output_0_weights               432/432         weights/weights           const s8              
 58     _block_1_0_2_Conv_output_0_bias                  48/192          weights/weights           const s32             
 59     _block_1_0_2_Conv_output_0_output                9408/9408       activations/**default**   s8                    
@@ -465,7 +465,7 @@ c_id   name (*_array)                                   item/size       domain/m
 90     _block_1_0_Conv_output_0_bias                    40/160          weights/weights           const s32             
 91     _block_1_0_Conv_output_0_output                  31360/31360     activations/**default**   s8                    
 92     _block_1_0_Conv_output_0_pad_before_output       134560/134560   activations/**default**   s8                    
-93     _block_1_0_Conv_output_0_scratch0                1360/1360       activations/**default**   s8                    
+93     _block_1_0_Conv_output_0_scratch0                1481/1481       activations/**default**   s8                    
 94     _block_1_0_Conv_output_0_weights                 360/360         weights/weights           const s8              
 95     _block_2_0_1_Conv_output_0_bias                  16/64           weights/weights           const s32             
 96     _block_2_0_1_Conv_output_0_output                12544/12544     activations/**default**   s8                    
@@ -565,14 +565,14 @@ c_id   name (*_layer)                            id    layer_type      macc     
                                                                                          S: _block_0_0_1_Conv_output_0_scratch0                                        
                                                                                          W: _block_0_0_1_Conv_output_0_weights               int8(40x1x1x8) (15)       
                                                                                          W: _block_0_0_1_Conv_output_0_bias                  int32(40) (12)            
-                                                                                         O: _block_0_0_1_Conv_output_0_output                int8(1x40x56x56) (13)     
+                                                                                         O: _block_0_0_1_Conv_output_0_output                int8(1x56x56x40) (13)     
 ------ ----------------------------------------- ----- --------------- --------- ------- --------------------------------------------------- ------------------------- 
-5      _block_1_0_Conv_output_0_pad_before       25    Pad             0         0       I: _block_0_0_1_Conv_output_0_output                int8(1x40x56x56) (13)     
-                                                                                         O: _block_1_0_Conv_output_0_pad_before_output       int8(1x40x58x58) (92)     
+5      _block_1_0_Conv_output_0_pad_before       25    Pad             0         0       I: _block_0_0_1_Conv_output_0_output                int8(1x56x56x40) (13)     
+                                                                                         O: _block_1_0_Conv_output_0_pad_before_output       int8(1x58x58x40) (92)     
 ------ ----------------------------------------- ----- --------------- --------- ------- --------------------------------------------------- ------------------------- 
-6      _block_1_0_Conv_output_0                  25    Conv2D          282280    520     I: _block_1_0_Conv_output_0_pad_before_output       int8(1x40x58x58) (92)     
+6      _block_1_0_Conv_output_0                  25    Conv2D          282280    520     I: _block_1_0_Conv_output_0_pad_before_output       int8(1x58x58x40) (92)     
                                                                                          S: _block_1_0_Conv_output_0_scratch0                                          
-                                                                                         W: _block_1_0_Conv_output_0_weights                 int8(40x3x3x1) (94)       
+                                                                                         W: _block_1_0_Conv_output_0_weights                 int8(1x3x3x40) (94)       
                                                                                          W: _block_1_0_Conv_output_0_bias                    int32(40) (90)            
                                                                                          O: _block_1_0_Conv_output_0_output                  int8(1x28x28x40) (91)     
 ------ ----------------------------------------- ----- --------------- --------- ------- --------------------------------------------------- ------------------------- 
@@ -586,14 +586,14 @@ c_id   name (*_layer)                            id    layer_type      macc     
                                                                                          S: _block_0_0_2_Conv_output_0_scratch0                                        
                                                                                          W: _block_0_0_2_Conv_output_0_weights               int8(48x1x1x16) (19)      
                                                                                          W: _block_0_0_2_Conv_output_0_bias                  int32(48) (16)            
-                                                                                         O: _block_0_0_2_Conv_output_0_output                int8(1x48x28x28) (17)     
+                                                                                         O: _block_0_0_2_Conv_output_0_output                int8(1x28x28x48) (17)     
 ------ ----------------------------------------- ----- --------------- --------- ------- --------------------------------------------------- ------------------------- 
-9      _block_1_0_1_Conv_output_0_pad_before     40    Pad             0         0       I: _block_0_0_2_Conv_output_0_output                int8(1x48x28x28) (17)     
-                                                                                         O: _block_1_0_1_Conv_output_0_pad_before_output     int8(1x48x30x30) (55)     
+9      _block_1_0_1_Conv_output_0_pad_before     40    Pad             0         0       I: _block_0_0_2_Conv_output_0_output                int8(1x28x28x48) (17)     
+                                                                                         O: _block_1_0_1_Conv_output_0_pad_before_output     int8(1x30x30x48) (55)     
 ------ ----------------------------------------- ----- --------------- --------- ------- --------------------------------------------------- ------------------------- 
-10     _block_1_0_1_Conv_output_0                40    Conv2D          338736    624     I: _block_1_0_1_Conv_output_0_pad_before_output     int8(1x48x30x30) (55)     
+10     _block_1_0_1_Conv_output_0                40    Conv2D          338736    624     I: _block_1_0_1_Conv_output_0_pad_before_output     int8(1x30x30x48) (55)     
                                                                                          S: _block_1_0_1_Conv_output_0_scratch0                                        
-                                                                                         W: _block_1_0_1_Conv_output_0_weights               int8(48x3x3x1) (57)       
+                                                                                         W: _block_1_0_1_Conv_output_0_weights               int8(1x3x3x48) (57)       
                                                                                          W: _block_1_0_1_Conv_output_0_bias                  int32(48) (53)            
                                                                                          O: _block_1_0_1_Conv_output_0_output                int8(1x28x28x48) (54)     
 ------ ----------------------------------------- ----- --------------- --------- ------- --------------------------------------------------- ------------------------- 
@@ -927,24 +927,24 @@ m_id   name                               c_macc                    c_rom       
 212    _reg_head_Gemm_output_0            |                  0.0%   |                  0.1%   [48]      
 215    _Sigmoid_output_0                  |                  0.0%   |                  0.0%   [49]      
 ------ ---------------------------------- ------------------------- ------------------------- --------- 
-macc=16,479,543 weights=182,008 act=167,280 ram_io=0
+macc=16,479,543 weights=182,008 act=138,352 ram_io=0
  
  Requested memory size by section - "stm32h7" target
  ------------------------------ -------- --------- -------- --------- 
  module                             text    rodata     data       bss 
  ------------------------------ -------- --------- -------- --------- 
- NetworkRuntime1020_CM7_GCC.a     36,044         0        0         0 
- waterlevel.o                      3,260    18,416   19,036       684 
+ NetworkRuntime1020_CM7_GCC.a     33,720         0        0         0 
+ waterlevel.o                      3,276    18,416   19,036       684 
  waterlevel_data.o                    48        16       88         0 
  lib (toolchain)*                    104         0        0         0 
  ------------------------------ -------- --------- -------- --------- 
- RT total**                       39,456    18,432   19,124       684 
+ RT total**                       37,148    18,432   19,124       684 
  ------------------------------ -------- --------- -------- --------- 
  weights                               0   182,008        0         0 
- activations                           0         0        0   167,280 
+ activations                           0         0        0   138,352 
  io                                    0         0        0         0 
  ------------------------------ -------- --------- -------- --------- 
- TOTAL                            39,456   200,440   19,124   167,964 
+ TOTAL                            37,148   200,440   19,124   139,036 
  ------------------------------ -------- --------- -------- --------- 
  *  toolchain objects (libm/libgcc*)
  ** RT AI runtime objects (kernels+infrastructure)
@@ -953,19 +953,19 @@ macc=16,479,543 weights=182,008 act=167,280 ram_io=0
   ---------------------------------------------------
                FLASH (ro)      %*   RAM (rw)       % 
   ---------------------------------------------------
-  RT total         77,012   29.7%     19,808   10.6% 
+  RT total         74,704   29.1%     19,808   12.5% 
   ---------------------------------------------------
-  TOTAL           259,020            187,088         
+  TOTAL           256,712            158,160         
   ---------------------------------------------------
   *  rt/total
 
 
 Generated files (7)
------------------------------ 
-D:\waterlevel_data_params.h   
-D:\waterlevel_data_params.c   
-D:\waterlevel_data.h          
-D:\waterlevel_data.c          
-D:\waterlevel_config.h        
-D:\waterlevel.h               
-D:\waterlevel.c               
+---------------------------------------------------------------------------------------------------------------------------- 
+C:\Users\heshizhe\Desktop\cnntry\water_ai_topview\workspace\stedgeai_waterlevel_v4c_final_gen\out\waterlevel_data_params.h   
+C:\Users\heshizhe\Desktop\cnntry\water_ai_topview\workspace\stedgeai_waterlevel_v4c_final_gen\out\waterlevel_data_params.c   
+C:\Users\heshizhe\Desktop\cnntry\water_ai_topview\workspace\stedgeai_waterlevel_v4c_final_gen\out\waterlevel_data.h          
+C:\Users\heshizhe\Desktop\cnntry\water_ai_topview\workspace\stedgeai_waterlevel_v4c_final_gen\out\waterlevel_data.c          
+C:\Users\heshizhe\Desktop\cnntry\water_ai_topview\workspace\stedgeai_waterlevel_v4c_final_gen\out\waterlevel_config.h        
+C:\Users\heshizhe\Desktop\cnntry\water_ai_topview\workspace\stedgeai_waterlevel_v4c_final_gen\out\waterlevel.h               
+C:\Users\heshizhe\Desktop\cnntry\water_ai_topview\workspace\stedgeai_waterlevel_v4c_final_gen\out\waterlevel.c               
