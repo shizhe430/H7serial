@@ -24,7 +24,7 @@ else
                     <div class="card-body">
                         <div class="d-flex justify-content-between">
                             <h5 class="card-title">@item.Name</h5>
-                            <span class="badge bg-secondary">@item.Username</span>
+                            <span class="badge bg-secondary">ID @(item.MemberId?.ToString() ?? "-")</span>
                         </div>
                         <p class="text-muted small mb-2">
                             性别: @(item.Gender == 1 ? "男" : item.Gender == 2 ? "女" : "未知")

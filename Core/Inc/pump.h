@@ -14,12 +14,16 @@ typedef enum
     PUMP_COMMAND_SLOW = 2U
 } pump_command_t;
 
+#define PUMP_PWM_MAX 999U
+
 void Pump_Init(void);
 void Pump_SetSpeed(uint16_t duty);
 void Pump_Stop(void);
 void Pump_Start(void);
 void Pump_StartFast(void);
 void Pump_StartSlow(void);
+void Pump_SetFastDuty(uint16_t duty);
+uint16_t Pump_GetFastDuty(void);
 void Pump_ApplyCommand(uint8_t command);
 uint16_t Pump_GetLastDuty(void);
 uint32_t Pump_GetPinLevel(void);

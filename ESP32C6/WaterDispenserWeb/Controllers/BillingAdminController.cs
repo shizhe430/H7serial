@@ -14,12 +14,18 @@ public class BillingAdminController : Controller
     private readonly AppDbContext _db;
     private readonly WaterAdviceService _advice;
     private readonly BillingService _billing;
+    private readonly PushPlusService _pushPlus;
 
-    public BillingAdminController(AppDbContext db, WaterAdviceService advice, BillingService billing)
+    public BillingAdminController(
+        AppDbContext db,
+        WaterAdviceService advice,
+        BillingService billing,
+        PushPlusService pushPlus)
     {
         _db = db;
         _advice = advice;
         _billing = billing;
+        _pushPlus = pushPlus;
     }
 
     /// <summary>管理员仪表盘</summary>
@@ -139,6 +145,28 @@ public class BillingAdminController : Controller
         await _db.SaveChangesAsync();
 
         TempData["Success"] = $"用户 {dbUser.Name} 已更新";
+        return RedirectToAction("Users");
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> TestPush(int id)
+    {
+        var user = await _db.Users.FindAsync(id);
+        if (user == null || user.Section != "billing" || user.Role != 3) return NotFound();
+        if (string.IsNullOrWhiteSpace(user.Phone))
+        {
+            TempData["Error"] = $"用户 {user.Name} 尚未绑定 PushPlus Token";
+            return RedirectToAction("Users");
+        }
+
+        var (success, message) = await _pushPlus.SendAsync(
+            user.Phone,
+            "饮水机消息推送测试",
+            $"{user.Name}，PushPlus 已成功连接到智能饮水机计费系统。测试时间：{DateTime.Now:yyyy-MM-dd HH:mm:ss}",
+            HttpContext.RequestAborted);
+        TempData[success ? "Success" : "Error"] = success
+            ? $"测试消息已发送给 {user.Name}"
+            : $"测试消息发送失败：{message}";
         return RedirectToAction("Users");
     }
 

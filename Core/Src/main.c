@@ -369,6 +369,11 @@ int main(void)
     HAL_Delay(200U);
   }
 #else
+#if (APP_MODE == APP_MODE_LCD_TEST)
+  /* LCD-only test: keep camera, AI, cloud, and pump paths out of the test. */
+  OLED_Status_Init();
+  main_uart_print("[LCD_TEST] init complete; LCD_UI active\r\n");
+#else
   if (MX_QUADSPI_EnableMemoryMapped() == 0U)
   {
     uint32_t yunet_probe = *(volatile uint32_t *)0x90000000UL;
@@ -431,6 +436,7 @@ int main(void)
   main_boot_stage("camera_init_exit");
   main_uart_print("[BOOT] camera init return\r\n");
 #endif
+#endif
 
   /* USER CODE END 2 */
 
@@ -442,7 +448,7 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
     CameraApp_Run();
-#if (APP_MODE == APP_MODE_PUMP_CTRL)
+#if ((APP_MODE == APP_MODE_PUMP_CTRL) || (APP_MODE == APP_MODE_LCD_TEST))
     OLED_Status_Poll();
 #endif
 

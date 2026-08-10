@@ -17,12 +17,18 @@ public class AdminController : Controller
     private readonly AppDbContext _db;
     private readonly WaterAdviceService _advice;
     private readonly DeepSeekService _deepSeek;
+    private readonly PushPlusService _pushPlus;
 
-    public AdminController(AppDbContext db, WaterAdviceService advice, DeepSeekService deepSeek)
+    public AdminController(
+        AppDbContext db,
+        WaterAdviceService advice,
+        DeepSeekService deepSeek,
+        PushPlusService pushPlus)
     {
         _db = db;
         _advice = advice;
         _deepSeek = deepSeek;
+        _pushPlus = pushPlus;
     }
 
     /// <summary>管理员首页仪表盘 - 所有饮水者今日概况</summary>
@@ -161,6 +167,28 @@ public class AdminController : Controller
 
         await _db.SaveChangesAsync();
         TempData["Success"] = $"用户 {dbUser.Name} 信息已更新！";
+        return RedirectToAction("Users");
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> TestPush(int id)
+    {
+        var user = await _db.Users.FindAsync(id);
+        if (user == null || user.Section != "elderly") return NotFound();
+        if (string.IsNullOrWhiteSpace(user.Phone))
+        {
+            TempData["Error"] = $"用户 {user.Name} 尚未绑定 PushPlus Token";
+            return RedirectToAction("Users");
+        }
+
+        var (success, message) = await _pushPlus.SendAsync(
+            user.Phone,
+            "饮水机消息推送测试",
+            $"{user.Name}，PushPlus 已成功连接到智能饮水机系统。测试时间：{DateTime.Now:yyyy-MM-dd HH:mm:ss}",
+            HttpContext.RequestAborted);
+        TempData[success ? "Success" : "Error"] = success
+            ? $"测试消息已发送给 {user.Name}"
+            : $"测试消息发送失败：{message}";
         return RedirectToAction("Users");
     }
 

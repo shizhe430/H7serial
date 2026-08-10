@@ -1,11 +1,14 @@
 #include "lcd_ui.h"
 
 #include "camera_app.h"
+#include "camera_light.h"
+#include "pump.h"
 #include "lcd.h"
 #include "touch.h"
 #include "delay.h"
 #include "usart.h"
 #include "character_library.h"
+#include "font.h"
 #include "9th_logo2.h"
 #include "wendu_logo.h"
 #include "shuiwei_logo.h"
@@ -25,19 +28,22 @@
 
 #define LCD_UI_ORANGE          0xFCA0U
 #define LCD_UI_CYAN_THEME      0x07FFU
-#define LCD_UI_REFRESH_MS      150U
 #define LCD_UI_TOUCH_SCAN_MS   20U
 #define LCD_UI_FACE_CONFIRM_DEFAULT_MS 2500U
 #define LCD_UI_FACE_FRAME_WIDTH  320U
 #define LCD_UI_FACE_FRAME_HEIGHT 240U
 #define LCD_UI_FACE_SCALE         2U
 #define LCD_UI_FACE_DISPLAY_WIDTH 640U
+#define LCD_UI_CLOUD_HOLD_MS      60000U
 
 #define LCD_UI_PAGE_HOME       0U
 #define LCD_UI_PAGE_INFO       1U
 #define LCD_UI_PAGE_FACE       2U
 #define LCD_UI_PAGE_ID_MANAGER 3U
 #define LCD_UI_PAGE_FACE_SCAN  4U
+
+static const uint16_t s_light_presets[] = {80U, 180U, 320U, 400U, 600U, 800U, 999U};
+static const uint16_t s_pump_presets[] = {450U, 500U, 550U, 600U, 650U, 700U, 800U};
 
 static uint8_t s_ui_ready;
 static uint8_t s_touch_ready;
@@ -52,8 +58,10 @@ static uint16_t s_id_selected = 1U;
 static uint8_t s_last_water_level = 0xFFU;
 static uint8_t s_last_water_out_state = 0xFFU;
 static uint8_t s_last_hot_cold_mode = 0xFFU;
-static int16_t s_last_temp_tenths = INT16_MIN;
+static int16_t s_last_temp_tenths = INT16_MAX;
 static uint16_t s_last_dev_id = 0xFFFFU;
+static uint16_t s_recent_dev_id = 0xFFFFU;
+static uint32_t s_recent_user_expires_ms;
 static uint32_t s_last_status_ms;
 static char s_cloud_name[64];
 static uint32_t s_cloud_today_ml;
@@ -63,6 +71,9 @@ static uint32_t s_cloud_interval_min;
 static uint32_t s_cloud_suggested_ml;
 static uint8_t s_cloud_user_valid;
 static uint8_t s_cloud_advice_valid;
+static uint16_t s_cloud_user_id = 0xFFFFU;
+
+static void lcd_ui_draw_info_cloud(void);
 
 static void lcd_ui_log(const char *text)
 {
@@ -168,6 +179,65 @@ static uint8_t lcd_ui_ascii_text_valid(const char *text)
     return 1U;
 }
 
+static uint8_t lcd_ui_name_glyph_lookup(const uint8_t *utf8, uint8_t *glyph_index)
+{
+    static const struct
+    {
+        uint8_t utf8[3];
+        uint8_t glyph_index;
+    } glyphs[] = {
+        {{0xE8U, 0xB4U, 0xBAU}, LCD_CN_NAME_HE},
+        {{0xE5U, 0xA4U, 0xA7U}, LCD_CN_NAME_DA},
+        {{0xE7U, 0x88U, 0xB7U}, LCD_CN_NAME_YE},
+        {{0xE6U, 0x9DU, 0x8EU}, LCD_CN_NAME_LI},
+        {{0xE5U, 0xA5U, 0xB6U}, LCD_CN_NAME_NAI},
+        {{0xE5U, 0x88U, 0x98U}, LCD_CN_NAME_LIU},
+        {{0xE5U, 0x8FU, 0x94U}, LCD_CN_NAME_SHU},
+        {{0xE5U, 0xB0U, 0xB9U}, LCD_CN_NAME_YIN},
+    };
+    size_t i;
+
+    for (i = 0U; i < (sizeof(glyphs) / sizeof(glyphs[0])); i++)
+    {
+        if (memcmp(utf8, glyphs[i].utf8, sizeof(glyphs[i].utf8)) == 0)
+        {
+            *glyph_index = glyphs[i].glyph_index;
+            return 1U;
+        }
+    }
+    return 0U;
+}
+
+static uint8_t lcd_ui_show_utf8_name_32(u16 x, u16 y, const char *text, u16 color)
+{
+    uint8_t indices[14];
+    uint8_t count = 0U;
+    uint8_t i;
+    const uint8_t *cursor = (const uint8_t *)text;
+
+    if ((cursor == NULL) || (*cursor == 0U))
+    {
+        return 0U;
+    }
+    while (*cursor != 0U)
+    {
+        if ((count >= (uint8_t)(sizeof(indices) / sizeof(indices[0]))) ||
+            (cursor[1] == 0U) || (cursor[2] == 0U) ||
+            (lcd_ui_name_glyph_lookup(cursor, &indices[count]) == 0U))
+        {
+            return 0U;
+        }
+        count++;
+        cursor += 3;
+    }
+
+    for (i = 0U; i < count; i++)
+    {
+        LCD_ShowChinese((u16)(x + (i * 32U)), y, indices[i], color);
+    }
+    return 1U;
+}
+
 static void lcd_ui_show_ascii_transparent(u16 x, u16 y, const char *text, u16 color)
 {
     u32 previous_color = POINT_COLOR;
@@ -184,6 +254,103 @@ static void lcd_ui_show_ascii_transparent(u16 x, u16 y, const char *text, u16 co
         text++;
     }
     POINT_COLOR = previous_color;
+}
+
+static u16 lcd_ui_show_ascii_2x(u16 x, u16 y, const char *text, u16 color)
+{
+    const uint8_t *glyph;
+    uint8_t row;
+    uint8_t col;
+    u16 start_x = x;
+    u32 previous_color = POINT_COLOR;
+
+    POINT_COLOR = color;
+    while ((text != NULL) && (*text != '\0') && (x <= 783U))
+    {
+        uint8_t value = (uint8_t)*text++;
+        if ((value < 0x20U) || (value > 0x7EU))
+        {
+            continue;
+        }
+        glyph = &ASCII_8x16[(value - 0x20U) * 16U];
+        for (row = 0U; row < 16U; row++)
+        {
+            uint8_t bits = glyph[row];
+            for (col = 0U; col < 8U; col++)
+            {
+                if ((bits & (uint8_t)(0x80U >> col)) != 0U)
+                {
+                    LCD_Fill((u16)(x + (col * 2U)),
+                             (u16)(y + (row * 2U)),
+                             (u16)(x + (col * 2U) + 1U),
+                             (u16)(y + (row * 2U) + 1U),
+                             color);
+                }
+            }
+        }
+        x = (u16)(x + 16U);
+    }
+    POINT_COLOR = previous_color;
+    return (x == start_x) ? start_x : x;
+}
+
+static void lcd_ui_clear_cloud(void)
+{
+    memset(s_cloud_name, 0, sizeof(s_cloud_name));
+    s_cloud_today_ml = 0U;
+    s_cloud_use_count = 0U;
+    s_cloud_remaining_ml = 0U;
+    s_cloud_interval_min = 0U;
+    s_cloud_suggested_ml = 0U;
+    s_cloud_user_valid = 0U;
+    s_cloud_advice_valid = 0U;
+    s_cloud_user_id = 0xFFFFU;
+}
+
+static uint8_t lcd_ui_recent_user_expired(uint32_t now_ms)
+{
+    return ((s_recent_dev_id != 0xFFFFU) &&
+            ((int32_t)(now_ms - s_recent_user_expires_ms) >= 0)) ? 1U : 0U;
+}
+
+static void lcd_ui_expire_recent_user(uint32_t now_ms)
+{
+    if (lcd_ui_recent_user_expired(now_ms) == 0U)
+    {
+        return;
+    }
+
+    s_recent_dev_id = 0xFFFFU;
+    s_recent_user_expires_ms = 0U;
+    lcd_ui_clear_cloud();
+    s_last_dev_id = 0xFFFFU;
+    if ((s_ui_ready != 0U) && (s_current_page == LCD_UI_PAGE_INFO))
+    {
+        lcd_ui_draw_info_cloud();
+    }
+}
+
+static void lcd_ui_select_recent_user(uint16_t user_id)
+{
+    uint32_t now_ms;
+
+    if (user_id == 0U)
+    {
+        return;
+    }
+
+    now_ms = HAL_GetTick();
+    if (s_recent_dev_id != user_id)
+    {
+        s_recent_dev_id = user_id;
+        lcd_ui_clear_cloud();
+    }
+    s_recent_user_expires_ms = now_ms + LCD_UI_CLOUD_HOLD_MS;
+    s_last_dev_id = 0xFFFFU;
+    if ((s_ui_ready != 0U) && (s_current_page == LCD_UI_PAGE_INFO))
+    {
+        lcd_ui_draw_info_cloud();
+    }
 }
 
 static void lcd_ui_show_mono_image(u16 x, u16 y, u16 w, u16 h,
@@ -240,13 +407,24 @@ static void lcd_ui_fill_round_rect(u16 x1, u16 y1, u16 x2, u16 y2,
     }
 }
 
-static void lcd_ui_draw_status_bar(uint8_t hot, uint8_t cold, uint8_t fault)
+static void lcd_ui_draw_status_bar(uint8_t hot, uint8_t cold, uint8_t fault, uint8_t done)
 {
     if (fault != 0U)
     {
         LCD_Fill(0, 400, 799, 479, RED);
         LCD_ShowChinese(336, 420, 9, WHITE);
         LCD_ShowChinese(368, 420, 10, WHITE);
+        return;
+    }
+
+    if (done != 0U)
+    {
+        LCD_Fill(0, 400, 799, 479, GREEN);
+        LCD_ShowChinese(320, 420, 8, WHITE);
+        LCD_ShowChinese(352, 420, 1, WHITE);
+        LCD_ShowChinese(384, 420, 40, WHITE);
+        LCD_ShowChinese(416, 420, 41, WHITE);
+        LCD_ShowChinese(448, 420, 42, WHITE);
         return;
     }
 
@@ -269,6 +447,151 @@ static void lcd_ui_draw_status_bar(uint8_t hot, uint8_t cold, uint8_t fault)
     else
     {
         LCD_Color_Fill(0, 400, 799, 479, lcd_ui_img(&gImage_background[640000]));
+    }
+}
+
+static void lcd_ui_draw_face_toggle(void)
+{
+    uint8_t enabled = CameraApp_GetFaceIdentityEnabled();
+    u16 color = (enabled != 0U) ? GREEN : 0x7BEFU;
+
+    lcd_ui_fill_round_rect(700U, 20U, 790U, 100U, 8U, color);
+    lcd_ui_show_ascii_transparent(728U, 38U, "FACE", WHITE);
+    lcd_ui_show_ascii_transparent((enabled != 0U) ? 736U : 732U,
+                                  70U,
+                                  (enabled != 0U) ? "ON" : "OFF",
+                                  WHITE);
+}
+
+static void lcd_ui_toggle_face_identity(void)
+{
+    uint8_t next = (CameraApp_GetFaceIdentityEnabled() == 0U) ? 1U : 0U;
+    uint8_t applied = CameraApp_SetFaceIdentityEnabled(next);
+
+    lcd_ui_draw_face_toggle();
+    lcd_ui_log((applied != 0U) ? "[LCD] face identity=on\r\n" :
+                                  "[LCD] face identity=off\r\n");
+}
+
+static void lcd_ui_draw_light_control(void)
+{
+    char value[8];
+    uint16_t duty = CameraLight_GetDuty();
+    uint16_t percent = (uint16_t)(((uint32_t)duty * 100U +
+                                  (CAMERA_LIGHT_PWM_MAX / 2U)) /
+                                 CAMERA_LIGHT_PWM_MAX);
+
+    lcd_ui_restore_background(270U, 315U, 570U, 375U);
+    lcd_ui_show_ascii_transparent(280U, 338U, "LIGHT", BLACK);
+    lcd_ui_fill_round_rect(360U, 320U, 410U, 370U, 8U, 0x7BEFU);
+    lcd_ui_fill_round_rect(510U, 320U, 560U, 370U, 8U, LCD_UI_CYAN_THEME);
+    lcd_ui_show_ascii_transparent(381U, 337U, "-", WHITE);
+    lcd_ui_show_ascii_transparent(531U, 337U, "+", BLACK);
+    (void)snprintf(value, sizeof(value), "%u%%", (unsigned int)percent);
+    lcd_ui_show_ascii_transparent(438U, 337U, value, GREEN);
+}
+
+static void lcd_ui_adjust_light(int8_t direction)
+{
+    uint16_t current = CameraLight_GetDuty();
+    uint16_t next = current;
+    size_t index;
+    char message[48];
+    int length;
+
+    if (direction > 0)
+    {
+        for (index = 0U; index < (sizeof(s_light_presets) / sizeof(s_light_presets[0])); index++)
+        {
+            if (s_light_presets[index] > current)
+            {
+                next = s_light_presets[index];
+                break;
+            }
+        }
+    }
+    else
+    {
+        for (index = sizeof(s_light_presets) / sizeof(s_light_presets[0]); index > 0U; index--)
+        {
+            if (s_light_presets[index - 1U] < current)
+            {
+                next = s_light_presets[index - 1U];
+                break;
+            }
+        }
+    }
+
+    CameraLight_SetDuty(next);
+    lcd_ui_draw_light_control();
+    length = snprintf(message, sizeof(message),
+                      "[LCD] light duty=%u/%u\r\n",
+                      (unsigned int)next,
+                      (unsigned int)CAMERA_LIGHT_PWM_MAX);
+    if (length > 0)
+    {
+        lcd_ui_log(message);
+    }
+}
+
+static void lcd_ui_draw_pump_control(void)
+{
+    char value[8];
+    uint16_t duty = Pump_GetFastDuty();
+    uint16_t percent = (uint16_t)(((uint32_t)duty * 100U +
+                                  (PUMP_PWM_MAX / 2U)) /
+                                 PUMP_PWM_MAX);
+
+    lcd_ui_restore_background(575U, 315U, 799U, 375U);
+    lcd_ui_show_ascii_transparent(580U, 338U, "PUMP", BLACK);
+    lcd_ui_fill_round_rect(645U, 320U, 685U, 370U, 8U, 0x7BEFU);
+    lcd_ui_fill_round_rect(750U, 320U, 790U, 370U, 8U, LCD_UI_CYAN_THEME);
+    lcd_ui_show_ascii_transparent(660U, 337U, "-", WHITE);
+    lcd_ui_show_ascii_transparent(765U, 337U, "+", BLACK);
+    (void)snprintf(value, sizeof(value), "%u%%", (unsigned int)percent);
+    lcd_ui_show_ascii_transparent(691U, 337U, value, GREEN);
+}
+
+static void lcd_ui_adjust_pump(int8_t direction)
+{
+    uint16_t current = Pump_GetFastDuty();
+    uint16_t next = current;
+    size_t index;
+    char message[48];
+    int length;
+
+    if (direction > 0)
+    {
+        for (index = 0U; index < (sizeof(s_pump_presets) / sizeof(s_pump_presets[0])); index++)
+        {
+            if (s_pump_presets[index] > current)
+            {
+                next = s_pump_presets[index];
+                break;
+            }
+        }
+    }
+    else
+    {
+        for (index = sizeof(s_pump_presets) / sizeof(s_pump_presets[0]); index > 0U; index--)
+        {
+            if (s_pump_presets[index - 1U] < current)
+            {
+                next = s_pump_presets[index - 1U];
+                break;
+            }
+        }
+    }
+
+    Pump_SetFastDuty(next);
+    lcd_ui_draw_pump_control();
+    length = snprintf(message, sizeof(message),
+                      "[LCD] pump fast duty=%u/%u\r\n",
+                      (unsigned int)next,
+                      (unsigned int)PUMP_PWM_MAX);
+    if (length > 0)
+    {
+        lcd_ui_log(message);
     }
 }
 
@@ -316,7 +639,11 @@ static void lcd_ui_draw_home(void)
     lcd_ui_show_ascii_transparent(692, 254, "ID", WHITE);
     lcd_ui_show_ascii_transparent(672, 278, "MANAGE", WHITE);
 
-    lcd_ui_draw_status_bar(0U, 0U, 0U);
+    lcd_ui_draw_face_toggle();
+    lcd_ui_draw_light_control();
+    lcd_ui_draw_pump_control();
+
+    lcd_ui_draw_status_bar(0U, 0U, 0U, 0U);
 }
 
 static void lcd_ui_draw_info(void)
@@ -378,9 +705,9 @@ static void lcd_ui_draw_info_cloud(void)
     lcd_ui_restore_background(320, 330, 780, 362);
     lcd_ui_restore_background(320, 375, 780, 407);
 
-    if (s_last_dev_id != 0xFFFFU)
+    if (s_recent_dev_id != 0xFFFFU)
     {
-        (void)lcd_ui_show_u32_32(330, 150, s_last_dev_id, GREEN);
+        (void)lcd_ui_show_u32_32(330, 150, s_recent_dev_id, GREEN);
     }
     if (s_cloud_user_valid == 0U)
     {
@@ -389,29 +716,31 @@ static void lcd_ui_draw_info_cloud(void)
 
     if (lcd_ui_ascii_text_valid(s_cloud_name) != 0U)
     {
-        lcd_ui_show_ascii_transparent(330, 203, s_cloud_name, BLACK);
+        (void)lcd_ui_show_ascii_2x(330, 195, s_cloud_name, BLACK);
     }
-    else
+    else if (lcd_ui_show_utf8_name_32(330, 195, s_cloud_name, BLACK) == 0U)
     {
-        (void)snprintf(fallback, sizeof(fallback), "ID %u", (unsigned int)s_last_dev_id);
-        lcd_ui_show_ascii_transparent(330, 203, fallback, BLACK);
+        (void)snprintf(fallback, sizeof(fallback), "ID %u",
+                       (unsigned int)((s_cloud_user_id != 0xFFFFU) ?
+                                      s_cloud_user_id : s_recent_dev_id));
+        (void)lcd_ui_show_ascii_2x(330, 195, fallback, BLACK);
     }
 
     next_x = lcd_ui_show_u32_32(330, 240, s_cloud_today_ml, GREEN);
-    lcd_ui_show_ascii_transparent(next_x, 248, "ml", BLACK);
-    (void)snprintf(count_text, sizeof(count_text), "  x%lu", (unsigned long)s_cloud_use_count);
-    lcd_ui_show_ascii_transparent(610, 248, count_text, BLACK);
+    (void)lcd_ui_show_ascii_2x(next_x, 240, "ml", GREEN);
+    (void)snprintf(count_text, sizeof(count_text), "x%lu", (unsigned long)s_cloud_use_count);
+    (void)lcd_ui_show_ascii_2x(610, 240, count_text, GREEN);
 
     if (s_cloud_advice_valid != 0U)
     {
         next_x = lcd_ui_show_u32_32(330, 285, s_cloud_suggested_ml, GREEN);
-        lcd_ui_show_ascii_transparent(next_x, 293, "ml", BLACK);
+        (void)lcd_ui_show_ascii_2x(next_x, 285, "ml", GREEN);
         next_x = lcd_ui_show_u32_32(330, 330, s_cloud_interval_min, GREEN);
-        lcd_ui_show_ascii_transparent(next_x, 338, "min", BLACK);
+        (void)lcd_ui_show_ascii_2x(next_x, 330, "min", GREEN);
     }
 
     next_x = lcd_ui_show_u32_32(330, 375, s_cloud_remaining_ml, GREEN);
-    lcd_ui_show_ascii_transparent(next_x, 383, "ml", BLACK);
+    (void)lcd_ui_show_ascii_2x(next_x, 375, "ml", GREEN);
 }
 
 static void lcd_ui_switch_page(uint8_t page)
@@ -423,7 +752,7 @@ static void lcd_ui_switch_page(uint8_t page)
         s_last_water_level = 0xFFU;
         s_last_water_out_state = 0xFFU;
         s_last_hot_cold_mode = 0xFFU;
-        s_last_temp_tenths = INT16_MIN;
+        s_last_temp_tenths = INT16_MAX;
         s_last_dev_id = 0xFFFFU;
     }
     else
@@ -674,11 +1003,16 @@ static u16 lcd_ui_show_temp_32(u16 x, u16 y, int16_t temp_tenths, u16 color)
 {
     uint16_t magnitude;
     uint16_t next_x;
+    u32 saved_point_color = POINT_COLOR;
+
+    POINT_COLOR = color;
 
     if (temp_tenths == INT16_MIN)
     {
+        POINT_COLOR = RED;
         LCD_ShowChar(x, (u16)(y + 8U), '-', 16U, 1U);
         LCD_ShowChar((u16)(x + 16U), (u16)(y + 8U), '-', 16U, 1U);
+        POINT_COLOR = saved_point_color;
         return (u16)(x + 32U);
     }
 
@@ -695,6 +1029,7 @@ static u16 lcd_ui_show_temp_32(u16 x, u16 y, int16_t temp_tenths, u16 color)
     LCD_ShowChinese(next_x, y, (u8)(20U + (magnitude % 10U)), color);
     next_x = (u16)(next_x + 32U);
     LCD_ShowChinese(next_x, y, 17U, color);
+    POINT_COLOR = saved_point_color;
     return (u16)(next_x + 32U);
 }
 
@@ -707,6 +1042,7 @@ static void lcd_ui_draw_home_status(uint8_t water_level,
     uint8_t hot_active = ((water_out_state == 1U) && (hot_cold_mode == 1U)) ? 1U : 0U;
     uint8_t cold_active = ((water_out_state == 1U) && (hot_cold_mode != 1U)) ? 1U : 0U;
     uint8_t fault_active = (water_out_state == 2U) ? 1U : 0U;
+    uint8_t done_active = (water_out_state == 3U) ? 1U : 0U;
 
     if (temp_tenths != s_last_temp_tenths)
     {
@@ -738,7 +1074,7 @@ static void lcd_ui_draw_home_status(uint8_t water_level,
     if ((water_out_state != s_last_water_out_state) ||
         (hot_cold_mode != s_last_hot_cold_mode))
     {
-        lcd_ui_draw_status_bar(hot_active, cold_active, fault_active);
+        lcd_ui_draw_status_bar(hot_active, cold_active, fault_active, done_active);
     }
 }
 
@@ -770,6 +1106,7 @@ void LCD_UI_Poll(void)
     }
 
     now_ms = HAL_GetTick();
+    lcd_ui_expire_recent_user(now_ms);
     if ((s_current_page == LCD_UI_PAGE_FACE) &&
         ((int32_t)(now_ms - s_face_confirm_until_ms) >= 0))
     {
@@ -814,6 +1151,12 @@ void LCD_UI_Poll(void)
             }
             else if (s_current_page == LCD_UI_PAGE_HOME)
             {
+                if ((tx >= 690U) && (tx <= 799U) && (ty >= 10U) && (ty <= 110U))
+                {
+                    lcd_ui_toggle_face_identity();
+                    s_touch_processed = 1U;
+                    break;
+                }
                 if ((tx >= 330U) && (tx <= 469U) && (ty >= 170U) && (ty <= 309U))
                 {
                     lcd_ui_log("[LCD] touch hot request\r\n");
@@ -838,6 +1181,30 @@ void LCD_UI_Poll(void)
                 if ((tx >= 630U) && (tx <= 770U) && (ty >= 170U) && (ty <= 309U))
                 {
                     lcd_ui_open_id_manager();
+                    s_touch_processed = 1U;
+                    break;
+                }
+                if ((tx >= 350U) && (tx <= 420U) && (ty >= 310U) && (ty <= 380U))
+                {
+                    lcd_ui_adjust_light(-1);
+                    s_touch_processed = 1U;
+                    break;
+                }
+                if ((tx >= 500U) && (tx <= 570U) && (ty >= 310U) && (ty <= 380U))
+                {
+                    lcd_ui_adjust_light(1);
+                    s_touch_processed = 1U;
+                    break;
+                }
+                if ((tx >= 635U) && (tx <= 695U) && (ty >= 310U) && (ty <= 380U))
+                {
+                    lcd_ui_adjust_pump(-1);
+                    s_touch_processed = 1U;
+                    break;
+                }
+                if ((tx >= 735U) && (tx <= 799U) && (ty >= 310U) && (ty <= 380U))
+                {
+                    lcd_ui_adjust_pump(1);
                     s_touch_processed = 1U;
                     break;
                 }
@@ -913,13 +1280,20 @@ void LCD_UI_ShowStatus(uint8_t water_level,
         return;
     }
 
+    now_ms = HAL_GetTick();
+    lcd_ui_expire_recent_user(now_ms);
+    if (dev_id != 0U)
+    {
+        lcd_ui_select_recent_user(dev_id);
+    }
+    dev_id = (s_recent_dev_id != 0xFFFFU) ? s_recent_dev_id : 0U;
+
     changed = ((water_level != s_last_water_level) ||
                (water_out_state != s_last_water_out_state) ||
                (temp_tenths != s_last_temp_tenths) ||
                (hot_cold_mode != s_last_hot_cold_mode) ||
                (dev_id != s_last_dev_id)) ? 1U : 0U;
-    now_ms = HAL_GetTick();
-    if ((changed == 0U) && ((now_ms - s_last_status_ms) < LCD_UI_REFRESH_MS))
+    if (changed == 0U)
     {
         return;
     }
@@ -938,7 +1312,13 @@ void LCD_UI_ShowStatus(uint8_t water_level,
     s_last_status_ms = now_ms;
 }
 
+void LCD_UI_SelectUser(uint16_t user_id)
+{
+    lcd_ui_select_recent_user(user_id);
+}
+
 void LCD_UI_ShowCloud(const char *username_utf8,
+                      uint16_t user_id,
                       uint32_t today_ml,
                       uint32_t use_count,
                       uint32_t remaining_ml,
@@ -947,6 +1327,15 @@ void LCD_UI_ShowCloud(const char *username_utf8,
                       uint8_t advice_received)
 {
     size_t name_length = (username_utf8 != NULL) ? strlen(username_utf8) : 0U;
+
+    if (user_id != 0U)
+    {
+        if ((s_recent_dev_id != 0xFFFFU) && (s_recent_dev_id != user_id))
+        {
+            return;
+        }
+        lcd_ui_select_recent_user(user_id);
+    }
 
     if (name_length >= sizeof(s_cloud_name))
     {
@@ -962,6 +1351,7 @@ void LCD_UI_ShowCloud(const char *username_utf8,
     s_cloud_remaining_ml = remaining_ml;
     s_cloud_interval_min = interval_min;
     s_cloud_suggested_ml = suggested_ml;
+    s_cloud_user_id = (user_id != 0U) ? user_id : s_recent_dev_id;
     s_cloud_user_valid = (name_length != 0U) ? 1U : 0U;
     s_cloud_advice_valid = (advice_received != 0U) ? 1U : 0U;
 

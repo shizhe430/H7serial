@@ -48,3 +48,8 @@
 - The visual viewer now provides `Enroll ID=1`, `Clear ID`, reference status, similarity, and matched-ID fields. Enrollment is pending until the next valid detected face, so a background frame cannot be registered accidentally.
 - The first enrollment completed successfully, but the initial `0.60` cosine threshold was stricter than OpenCV's documented SFace LFW threshold (`0.363`) and the text log did not expose recognition decisions. Changed the threshold to `0.363`, added per-frame identity status/similarity logging, rebuilt Release, and programmed/verified the MCU without touching QSPI weights or enrollment data.
 - The follow-up hardware run produced 9 confirmed `status=0 ref=1 match=1 id=1` results from 26 SFace runs, with observed cosine similarities from `0.552` to `0.776`. The same run had no serial errors, no repeated boot, and only four explicit viewer-open events across separate sessions.
+
+## 2026-08-11
+
+- Removed obsolete `facedet`, `faceid`, and `water_detect` generated sources from the active tree after confirming they are recoverable from commits `a8eb541` and `5e1c295`.
+- Kept the production build limited to YuNet, SFace, and `waterlevel`; the CubeMX regression check passes with no legacy model objects linked.

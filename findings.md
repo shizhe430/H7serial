@@ -64,3 +64,11 @@
 - `H7serial.ioc` now records `waterlevel,yunet,sface` and uses project-local ONNX files under `models/face`, so future CubeMX sessions do not depend on temporary InsightFace files.
 - The IOC also now records the validated 480 MHz SYSCLK, 240 MHz HCLK, 200 MHz PLL2_R kernel, 100 MHz SDRAM, 100 MHz QSPI and USART1 921600 settings.
 - `tools/check_cubemx_regressions.ps1` is the required check after every CubeMX Generate Code. It is intentionally read-only and exits nonzero if generated settings or model build lists regress.
+
+## 2026-08-11 Legacy model archive
+
+- The obsolete generated `facedet` and `faceid` sources remain available in Git commit `a8eb541`; `water_detect` remains available in commit `5e1c295`.
+- These generated sources and reports were removed from the current working tree after YuNet, SFace, and `waterlevel` became the production model set. Their ONNX files, analysis outputs, measurements, and Git history were not deleted.
+- Restore commands for retrospective testing:
+  - `git restore --source=a8eb541 -- X-CUBE-AI/App/facedet* X-CUBE-AI/App/faceid*`
+  - `git restore --source=5e1c295 -- X-CUBE-AI/App/water_detect*`

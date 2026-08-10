@@ -49,6 +49,12 @@
                             }
                         </td>
                         <td>
+                            @if (!string.IsNullOrEmpty(u.Phone))
+                            {
+                                <form asp-action="TestPush" asp-route-id="@u.Id" method="post" style="display:inline">
+                                    <button type="submit" class="btn btn-sm btn-outline-success">测试推送</button>
+                                </form>
+                            }
                             <a asp-action="EditUser" asp-route-id="@u.Id" class="btn btn-sm btn-outline-primary">编辑</a>
                             <form asp-action="DeleteUser" asp-route-id="@u.Id" method="post" style="display:inline"
                                   onsubmit="return confirm('确定删除【@u.Name】吗？')">

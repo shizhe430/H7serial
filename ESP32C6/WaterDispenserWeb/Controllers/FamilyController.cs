@@ -19,12 +19,18 @@ public class FamilyController : Controller
     private readonly AppDbContext _db;
     private readonly WaterAdviceService _advice;
     private readonly DeepSeekService _deepSeek;
+    private readonly PushPlusService _pushPlus;
 
-    public FamilyController(AppDbContext db, WaterAdviceService advice, DeepSeekService deepSeek)
+    public FamilyController(
+        AppDbContext db,
+        WaterAdviceService advice,
+        DeepSeekService deepSeek,
+        PushPlusService pushPlus)
     {
         _db = db;
         _advice = advice;
         _deepSeek = deepSeek;
+        _pushPlus = pushPlus;
     }
 
     /// <summary>是否全局管理员（登录时 user.Section 存入 Session["UserSectionRaw"]）</summary>
@@ -57,6 +63,7 @@ public class FamilyController : Controller
             overviews.Add(new DrinkerOverview
             {
                 UserId = m.Id,
+                MemberId = m.FpId,
                 Name = m.Name,
                 Username = m.Username,
                 Gender = m.Gender,
@@ -87,9 +94,9 @@ public class FamilyController : Controller
         }
 
         var today = DateTime.Today;
-        var summary = await _db.DailySummaries.FirstOrDefaultAsync(d => d.UserId == id && d.Date == today);
+        var summary = await _db.DailySummaries.FirstOrDefaultAsync(d => d.UserId == user.Id && d.Date == today);
         var recentRecords = await _db.Records
-            .Where(r => r.UserId == id && r.RecordedAt >= today)
+            .Where(r => r.UserId == user.Id && r.RecordedAt >= today)
             .OrderByDescending(r => r.RecordedAt)
             .Take(20)
             .ToListAsync();
@@ -100,7 +107,7 @@ public class FamilyController : Controller
         for (int i = 6; i >= 0; i--)
         {
             var date = today.AddDays(-i);
-            var daySummary = await _db.DailySummaries.FirstOrDefaultAsync(d => d.UserId == id && d.Date == date);
+            var daySummary = await _db.DailySummaries.FirstOrDefaultAsync(d => d.UserId == user.Id && d.Date == date);
             var item = new DailySummaryItem
             {
                 DateStr = date.ToString("MM-dd"),
@@ -119,7 +126,7 @@ public class FamilyController : Controller
             // 只在数据库确实无今日记录时才新建
             summary = new DailySummary
             {
-                UserId = id,
+                UserId = user.Id,
                 Date = today,
                 TotalMl = 0,
                 UseCount = 0,
@@ -167,7 +174,7 @@ public class FamilyController : Controller
         var users = await _db.Users
             .Where(u => u.Section == "home" && (u.Role == 0 || u.Role == 2))
             .OrderBy(u => u.Role)
-            .ThenBy(u => u.Username)
+            .ThenBy(u => u.FpId)
             .ToListAsync();
         ViewBag.IsGlobalAdmin = IsGlobalAdmin();
         ViewBag.CurrentUserId = HttpContext.Session.GetInt32("UserId");
@@ -353,6 +360,34 @@ public class FamilyController : Controller
         return RedirectToAction("Users");
     }
 
+    [HttpPost]
+    public async Task<IActionResult> TestPush(int id)
+    {
+        if (!IsParent())
+        {
+            TempData["Error"] = "无权测试消息推送";
+            return RedirectToAction("Index");
+        }
+
+        var user = await _db.Users.FindAsync(id);
+        if (user == null || user.Section != "home") return NotFound();
+        if (string.IsNullOrWhiteSpace(user.Phone))
+        {
+            TempData["Error"] = $"家庭成员 {user.Name} 尚未绑定 PushPlus Token";
+            return RedirectToAction("Users");
+        }
+
+        var (success, message) = await _pushPlus.SendAsync(
+            user.Phone,
+            "饮水机消息推送测试",
+            $"{user.Name}，PushPlus 已成功连接到家庭饮水管理系统。测试时间：{DateTime.Now:yyyy-MM-dd HH:mm:ss}",
+            HttpContext.RequestAborted);
+        TempData[success ? "Success" : "Error"] = success
+            ? $"测试消息已发送给 {user.Name}"
+            : $"测试消息发送失败：{message}";
+        return RedirectToAction("Users");
+    }
+
     /// <summary>删除家庭成员 - 仅家长/管理员；删家长仅限全局管理员且不能删自己</summary>
     [HttpPost]
     public async Task<IActionResult> DeleteUser(int id)
@@ -395,7 +430,7 @@ public class FamilyController : Controller
             return Json(new { ok = false, answer = "只能查询家庭成员" });
 
         var today = DateTime.Today;
-        var summary = await _db.DailySummaries.FirstOrDefaultAsync(d => d.UserId == userId && d.Date == today);
+        var summary = await _db.DailySummaries.FirstOrDefaultAsync(d => d.UserId == user.Id && d.Date == today);
         var targetMl = summary?.TargetMl ?? _advice.CalculateTargetMl(user.WeightKg);
 
         var history = ParseMessages(messages);

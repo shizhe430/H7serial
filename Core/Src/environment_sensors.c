@@ -13,7 +13,6 @@
 #define ENV_DS_CONVERSION_MS       750U
 #define ENV_DS_RETRY_MS            1000U
 #define ENV_SENSOR_LOG_MS          1000U
-
 static uint8_t s_initialized;
 static uint8_t s_water_present;
 static uint8_t s_ds_present;
@@ -26,6 +25,7 @@ static uint32_t s_last_log_ms;
 
 static void environment_ds_output(void)
 {
+    ENV_DS_PORT->OTYPER &= ~ENV_DS_PIN;
     ENV_DS_PORT->MODER = (ENV_DS_PORT->MODER & ~(3UL << (12U * 2U))) |
                          (1UL << (12U * 2U));
 }
@@ -44,19 +44,38 @@ static void environment_ds_release(void)
 static uint8_t environment_ds_reset(void)
 {
     uint32_t primask = __get_PRIMASK();
-    uint32_t wait_us;
-    uint8_t present;
+    uint32_t wait_us = 0U;
+    uint8_t present = 0U;
 
     __disable_irq();
     environment_ds_output();
     HAL_GPIO_WritePin(ENV_DS_PORT, ENV_DS_PIN, GPIO_PIN_RESET);
-    delay_us(480U);
+    delay_us(750U);
     HAL_GPIO_WritePin(ENV_DS_PORT, ENV_DS_PIN, GPIO_PIN_SET);
     environment_ds_input();
-    delay_us(70U);
-    present = (HAL_GPIO_ReadPin(ENV_DS_PORT, ENV_DS_PIN) == GPIO_PIN_RESET) ? 1U : 0U;
-    wait_us = 410U;
-    delay_us(wait_us);
+    delay_us(15U);
+    while (wait_us < 200U)
+    {
+        if (HAL_GPIO_ReadPin(ENV_DS_PORT, ENV_DS_PIN) == GPIO_PIN_RESET)
+        {
+            present = 1U;
+            break;
+        }
+        delay_us(1U);
+        wait_us++;
+    }
+    wait_us = 0U;
+    while ((present != 0U) &&
+           (HAL_GPIO_ReadPin(ENV_DS_PORT, ENV_DS_PIN) == GPIO_PIN_RESET) &&
+           (wait_us < 240U))
+    {
+        delay_us(1U);
+        wait_us++;
+    }
+    if (wait_us >= 240U)
+    {
+        present = 0U;
+    }
     environment_ds_release();
     if (primask == 0U)
     {
@@ -102,9 +121,9 @@ static uint8_t environment_ds_read_bit(void)
     delay_us(3U);
     HAL_GPIO_WritePin(ENV_DS_PORT, ENV_DS_PIN, GPIO_PIN_SET);
     environment_ds_input();
-    delay_us(10U);
+    delay_us(12U);
     value = (HAL_GPIO_ReadPin(ENV_DS_PORT, ENV_DS_PIN) == GPIO_PIN_SET) ? 1U : 0U;
-    delay_us(53U);
+    delay_us(51U);
     environment_ds_release();
     if (primask == 0U)
     {
@@ -213,10 +232,11 @@ static void environment_sensor_log(uint32_t now_ms)
     }
     s_last_log_ms = now_ms;
     length = snprintf(message, sizeof(message),
-                      "[SENSOR] tank=%s pi1=%u ds18b20=%s temp=%s%ld.%01ldC light=%u/999 lcd=0x%04X %ux%u\r\n",
+                      "[SENSOR] tank=%s pi1=%u ds18b20=%s dq=%u temp=%s%ld.%01ldC light=%u/999 lcd=0x%04X %ux%u\r\n",
                       (s_water_present != 0U) ? "present" : "empty",
                       (unsigned int)HAL_GPIO_ReadPin(TANK_LEVEL_GPIO_Port, TANK_LEVEL_Pin),
                       (s_ds_present != 0U) ? "present" : "missing",
+                      (unsigned int)HAL_GPIO_ReadPin(ENV_DS_PORT, ENV_DS_PIN),
                       (s_temperature_valid != 0U && s_temperature_tenths < 0) ? "-" : "",
                       (long)((s_temperature_valid != 0U) ?
                              ((s_temperature_tenths < 0) ? -s_temperature_tenths : s_temperature_tenths) / 10 : 0),
@@ -236,6 +256,9 @@ void EnvironmentSensors_Init(void)
 {
     __HAL_RCC_GPIOB_CLK_ENABLE();
     delay_init();
+    ENV_DS_PORT->PUPDR = (ENV_DS_PORT->PUPDR & ~(3UL << (12U * 2U))) |
+                         (1UL << (12U * 2U));
+    ENV_DS_PORT->OSPEEDR |= (3UL << (12U * 2U));
     environment_ds_output();
     HAL_GPIO_WritePin(ENV_DS_PORT, ENV_DS_PIN, GPIO_PIN_SET);
 

@@ -11,9 +11,6 @@ C_SRCS += \
 ../X-CUBE-AI/App/sface.c \
 ../X-CUBE-AI/App/sface_data.c \
 ../X-CUBE-AI/App/sface_data_params.c \
-../X-CUBE-AI/App/water_detect.c \
-../X-CUBE-AI/App/water_detect_data.c \
-../X-CUBE-AI/App/water_detect_data_params.c \
 ../X-CUBE-AI/App/waterlevel.c \
 ../X-CUBE-AI/App/waterlevel_data.c \
 ../X-CUBE-AI/App/waterlevel_data_params.c 
@@ -25,9 +22,6 @@ OBJS += \
 ./X-CUBE-AI/App/sface.o \
 ./X-CUBE-AI/App/sface_data.o \
 ./X-CUBE-AI/App/sface_data_params.o \
-./X-CUBE-AI/App/water_detect.o \
-./X-CUBE-AI/App/water_detect_data.o \
-./X-CUBE-AI/App/water_detect_data_params.o \
 ./X-CUBE-AI/App/waterlevel.o \
 ./X-CUBE-AI/App/waterlevel_data.o \
 ./X-CUBE-AI/App/waterlevel_data_params.o 
@@ -39,9 +33,6 @@ C_DEPS += \
 ./X-CUBE-AI/App/sface.d \
 ./X-CUBE-AI/App/sface_data.d \
 ./X-CUBE-AI/App/sface_data_params.d \
-./X-CUBE-AI/App/water_detect.d \
-./X-CUBE-AI/App/water_detect_data.d \
-./X-CUBE-AI/App/water_detect_data_params.d \
 ./X-CUBE-AI/App/waterlevel.d \
 ./X-CUBE-AI/App/waterlevel_data.d \
 ./X-CUBE-AI/App/waterlevel_data_params.d 
@@ -54,7 +45,7 @@ X-CUBE-AI/App/%.o X-CUBE-AI/App/%.su X-CUBE-AI/App/%.cyclo: ../X-CUBE-AI/App/%.c
 clean: clean-X-2d-CUBE-2d-AI-2f-App
 
 clean-X-2d-CUBE-2d-AI-2f-App:
-	-$(RM) ./X-CUBE-AI/App/water_detect.cyclo ./X-CUBE-AI/App/water_detect.d ./X-CUBE-AI/App/water_detect.o ./X-CUBE-AI/App/water_detect.su ./X-CUBE-AI/App/water_detect_data.cyclo ./X-CUBE-AI/App/water_detect_data.d ./X-CUBE-AI/App/water_detect_data.o ./X-CUBE-AI/App/water_detect_data.su ./X-CUBE-AI/App/water_detect_data_params.cyclo ./X-CUBE-AI/App/water_detect_data_params.d ./X-CUBE-AI/App/water_detect_data_params.o ./X-CUBE-AI/App/water_detect_data_params.su ./X-CUBE-AI/App/waterlevel.cyclo ./X-CUBE-AI/App/waterlevel.d ./X-CUBE-AI/App/waterlevel.o ./X-CUBE-AI/App/waterlevel.su ./X-CUBE-AI/App/waterlevel_data.cyclo ./X-CUBE-AI/App/waterlevel_data.d ./X-CUBE-AI/App/waterlevel_data.o ./X-CUBE-AI/App/waterlevel_data.su ./X-CUBE-AI/App/waterlevel_data_params.cyclo ./X-CUBE-AI/App/waterlevel_data_params.d ./X-CUBE-AI/App/waterlevel_data_params.o ./X-CUBE-AI/App/waterlevel_data_params.su
+	-$(RM) ./X-CUBE-AI/App/waterlevel.cyclo ./X-CUBE-AI/App/waterlevel.d ./X-CUBE-AI/App/waterlevel.o ./X-CUBE-AI/App/waterlevel.su ./X-CUBE-AI/App/waterlevel_data.cyclo ./X-CUBE-AI/App/waterlevel_data.d ./X-CUBE-AI/App/waterlevel_data.o ./X-CUBE-AI/App/waterlevel_data.su ./X-CUBE-AI/App/waterlevel_data_params.cyclo ./X-CUBE-AI/App/waterlevel_data_params.d ./X-CUBE-AI/App/waterlevel_data_params.o ./X-CUBE-AI/App/waterlevel_data_params.su
 
 .PHONY: clean-X-2d-CUBE-2d-AI-2f-App
 

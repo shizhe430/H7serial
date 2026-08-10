@@ -15,7 +15,8 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddSingleton<WaterAdviceService>();
 builder.Services.AddSingleton<BillingService>();
 builder.Services.AddHttpClient<DeepSeekService>();
-builder.Services.AddHttpClient<PushPlusService>();
+builder.Services.AddHttpClient<PushPlusService>(client =>
+    client.Timeout = TimeSpan.FromSeconds(15));
 builder.Services.AddHttpClient<WeatherService>();
 
 // 注册授权过滤器

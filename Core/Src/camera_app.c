@@ -106,6 +106,10 @@ static volatile uint8_t g_frame_error = 0U;
 #define PUMP_FACE_DECISION_WINDOW_MS 8000U
 #define PUMP_VOICE_PROMPT_GUARD_MS 2000U
 #define PUMP_VOICE_START_DELAY_MS 1000U
+#define PUMP_VOICE_POLL_MS        100U
+#define PUMP_VOICE_ERROR_BACKOFF_MS 1000U
+#define PUMP_VOICE_PLAYBACK_GUARD_MS 1800U
+#define PUMP_CHILD_LOCK_PROMPT_GUARD_MS 2000U
 #define PUMP_CAMERA_START_SETTLE_MS 300U
 #define PUMP_FAULT_GUARD_START_DELAY_MS 2000U
 #define PUMP_STABLE_FRAME_COUNT   3U
@@ -118,19 +122,22 @@ static volatile uint8_t g_frame_error = 0U;
 #define PUMP_REG_MIN_FRAMES       3U
 #define PUMP_REG_RISE_TOL         0.03f
 #define PUMP_HALF_STOP_REG        0.54f
-#define PUMP_FULL_STOP_REG        0.78f
-#define PUMP_FULL_NEAR_STOP_REG   0.72f
+#define PUMP_FULL_STOP_REG        0.81f
+#define PUMP_FULL_NEAR_STOP_REG   0.75f
 #define PUMP_HALF_CLASS_STOP_REG  0.48f
-#define PUMP_FULL_CLASS_STOP_REG  0.665f
+#define PUMP_FULL_CLASS_STOP_REG  0.72f
 #define PUMP_TARGET_CLASS_STOP_FRAMES 3U
+#define PUMP_STATUS_REPORT_PERIOD_MS 500U
 #define FINGER_RECOG_POLL_MS      250U
 #define FINGER_RECONNECT_MS       3000U
 #define TANK_LEVEL_DEBOUNCE_MS    300U
 #define PUMP_OLED_STATUS_HOLD_MS  1200U
 #define PUMP_OLED_COLD_TEMP_C     25U
 #define PUMP_OLED_HOT_TEMP_C      85U
-#define PUMP_FLOW_CAL_TIME_MS     22700U
-#define PUMP_FLOW_CAL_VOLUME_ML   400U
+#define PUMP_FLOW_CAL_TIME_MS     33563U
+#define PUMP_FLOW_CAL_VOLUME_ML   320U
+#define PUMP_FLOW_CAL_DUTY        600U
+#define PUMP_MAX_RUN_TIMEOUT_MS   (PUMP_FLOW_CAL_TIME_MS * 2U)
 #define PUMP_HALF_TIMEOUT_MS      ((PUMP_FLOW_CAL_TIME_MS + 1U) / 2U)
 #define PUMP_HALF_MIN_VISUAL_STOP_MS 3000U
 #define PUMP_HALF_RISE_STOP_REG      0.18f
@@ -173,11 +180,16 @@ static volatile uint8_t g_frame_error = 0U;
 #define WATERLEVEL_OUT1_SCALE     (0.003226662f)
 #define WATERLEVEL_OUT1_ZERO_POINT (-128)
 
-#if (AI_WATERLEVEL_IN_1_SIZE_BYTES == (CAMERA_AI_INPUT_SIZE * 4U))
-#define CAMERA_AI_MODEL_FP32      1U
-#else
-#define CAMERA_AI_MODEL_FP32      0U
+#if ((AI_WATERLEVEL_IN_1_HEIGHT != 224) || (AI_WATERLEVEL_IN_1_WIDTH != 224) || \
+     (AI_WATERLEVEL_IN_1_CHANNEL != 1) || \
+     (AI_WATERLEVEL_IN_1_SIZE_BYTES != CAMERA_AI_INPUT_SIZE))
+#error "Production waterlevel model must use INT8 1x224x224x1 input"
 #endif
+#if ((AI_WATERLEVEL_OUT_1_SIZE != 5) || (AI_WATERLEVEL_OUT_1_SIZE_BYTES != 5) || \
+     (AI_WATERLEVEL_OUT_2_SIZE != 1) || (AI_WATERLEVEL_OUT_2_SIZE_BYTES != 1))
+#error "Production waterlevel model must use INT8 classification[5] and regression[1] outputs"
+#endif
+#define CAMERA_AI_MODEL_FP32      0U
 
 typedef struct
 {
@@ -215,6 +227,7 @@ typedef struct
     uint8_t stable_candidate_count;
     uint8_t cup_lost_count;
     uint8_t abnormal_count;
+    uint8_t low_confidence_count;
     uint8_t target_reached_count;
     uint8_t auto_rearm_wait_no_cup;
     uint8_t key_cold_prev_down;
@@ -227,6 +240,9 @@ typedef struct
     uint8_t esp32_done_reported;
     uint8_t voice_command_armed;
     uint8_t child_lock_active;
+    uint8_t parental_lock_enabled;
+    uint8_t parental_lock_session_authorized;
+    uint8_t last_completed_volume_valid;
     uint32_t decision_deadline_ms;
     uint32_t voice_accept_after_ms;
     uint32_t oled_status_hold_until_ms;
@@ -237,9 +253,12 @@ typedef struct
     uint16_t session_user_id;
     uint16_t fingerprint_match_score;
     uint16_t last_volume_ml;
+    uint16_t last_completed_volume_ml;
     uint8_t pump_run_active;
+    uint16_t pump_run_duty;
     uint32_t pump_run_started_ms;
     uint32_t pump_run_total_ms;
+    uint64_t pump_run_duty_ms;
     uint32_t esp32_last_volume_report_ms;
     float reg_hist[PUMP_REG_WINDOW_SIZE];
     uint8_t reg_hist_count;
@@ -259,6 +278,18 @@ typedef struct
     uint32_t suggested_ml;
     char text[ESP32_ADVICE_TEXT_SIZE];
 } camera_esp32_advice_t;
+
+typedef struct
+{
+    uint32_t magic;
+    uint16_t version;
+    uint8_t enabled;
+    uint8_t reserved;
+    uint32_t checksum;
+} camera_parental_lock_record_t;
+
+_Static_assert(sizeof(camera_parental_lock_record_t) <= PARENTAL_LOCK_FLASH_SIZE,
+               "Parental-lock record exceeds reserved QSPI block");
 
 typedef enum
 {
@@ -335,8 +366,23 @@ static camera_esp32_user_info_t g_esp32_cloud_user;
 static camera_esp32_advice_t g_esp32_cloud_advice;
 static uint8_t g_esp32_cloud_user_valid = 0U;
 static uint8_t g_esp32_cloud_advice_valid = 0U;
+static uint16_t g_esp32_expected_user_id = 0U;
+static uint16_t g_esp32_cloud_user_id = 0U;
+static uint16_t g_esp32_cloud_advice_user_id = 0U;
+static uint16_t g_voice_user_context_id = 0U;
+static uint32_t g_esp32_cloud_user_received_ms = 0U;
+static uint32_t g_esp32_cloud_advice_received_ms = 0U;
+static uint32_t g_voice_last_poll_ms = 0U;
+static uint32_t g_voice_ignore_until_ms = 0U;
+static uint32_t g_voice_last_error_log_ms = 0U;
+static uint32_t g_voice_retry_after_ms = 0U;
+static uint8_t g_voice_stop_latched = 0U;
+static uint32_t g_parental_lock_last_block_prompt_ms = 0U;
+static uint8_t g_parental_lock_persist_dirty = 0U;
 static volatile uint8_t g_lcd_request_pending = 0U;
 static volatile uint8_t g_lcd_request_temp = CAMERA_WATER_TEMP_COLD;
+static uint8_t g_face_identity_runtime_enabled =
+    (CAMERA_FACE_IDENTITY_ENABLE != 0U) ? 1U : 0U;
 #if ((CAMERA_FACE_IDENTITY_ENABLE != 0U) && (CAMERA_FACE_BACKEND_OPENMV != 0U))
 static uint8_t g_face_manager_active = 0U;
 static char g_face_manager_status[20];
@@ -411,6 +457,13 @@ static void camera_app_pump_ctrl_apply_state(uint8_t state);
 static void camera_app_pump_ctrl_set_work_state(uint8_t next_state, const char *reason);
 static void camera_app_pump_ctrl_return_to_standby(const char *reason);
 static void camera_app_pump_ctrl_start_manual_cold(const char *reason);
+static void camera_app_pump_ctrl_start_voice_wait(uint8_t target,
+                                                  uint8_t temp,
+                                                  uint32_t now_ms,
+                                                  const char *reason);
+static void camera_app_pump_ctrl_clear_flow_context(void);
+static void camera_app_pump_ctrl_report_session_to_esp32(void);
+static void camera_app_pump_ctrl_hold_oled_status(uint8_t water_out_state);
 static uint8_t camera_app_pump_ctrl_session_active(void);
 static uint8_t camera_app_face_identity_try_window(const char *reason);
 #if ((CAMERA_FACE_IDENTITY_ENABLE != 0U) && (CAMERA_FACE_BACKEND_OPENMV != 0U))
@@ -422,6 +475,11 @@ static void camera_app_esp32_rx_start(void);
 static void camera_app_esp32_process_rx_line(char *line);
 static void camera_app_esp32_process_pending(void);
 static void camera_app_esp32_volume_poll(uint32_t now_ms);
+static void camera_app_voice_service(uint32_t now_ms);
+static void camera_app_voice_speak(uint8_t prompt_id);
+static void camera_app_pump_ctrl_voice_stop(uint8_t announce);
+static uint8_t camera_app_parental_lock_blocks_dispense(void);
+static void camera_app_parental_lock_load(void);
 #endif
 
 static void dbg_print(const char *s)
@@ -455,6 +513,37 @@ static void camera_app_log(const char *s)
     {
         camera_app_text_tx(s, (uint16_t)strlen(s));
     }
+}
+
+uint8_t CameraApp_GetFaceIdentityEnabled(void)
+{
+#if (APP_MODE == APP_MODE_PUMP_CTRL)
+    return g_face_identity_runtime_enabled;
+#else
+    return (CAMERA_FACE_IDENTITY_ENABLE != 0U) ? 1U : 0U;
+#endif
+}
+
+uint8_t CameraApp_SetFaceIdentityEnabled(uint8_t enabled)
+{
+#if (APP_MODE == APP_MODE_PUMP_CTRL)
+    uint8_t next = (enabled != 0U) ? 1U : 0U;
+
+    if ((next == 0U) && (g_pump_ctrl.parental_lock_enabled != 0U))
+    {
+        g_face_identity_runtime_enabled = 1U;
+        camera_app_log("[FACE] toggle off blocked by child lock\r\n");
+        return 1U;
+    }
+
+    g_face_identity_runtime_enabled = next;
+    camera_app_log(next ? "[FACE] runtime enabled\r\n" :
+                          "[FACE] runtime disabled\r\n");
+    return next;
+#else
+    (void)enabled;
+    return CameraApp_GetFaceIdentityEnabled();
+#endif
 }
 
 static uint32_t camera_app_float_to_permille(float value)
@@ -2198,31 +2287,174 @@ static void camera_app_pump_ctrl_hold_oled_status(uint8_t water_out_state)
     g_pump_ctrl.oled_status_hold_until_ms = HAL_GetTick() + PUMP_OLED_STATUS_HOLD_MS;
 }
 
-static uint8_t camera_app_voice_result_read(void)
+static void camera_app_voice_speak(uint8_t prompt_id)
 {
-    int result = Asr_Result();
+    HAL_StatusTypeDef status = Asr_SpeakChecked(ASR_ANNOUNCER, prompt_id);
 
-    if (result < 0)
+    g_pump_ctrl.voice_command_armed = 0U;
+    g_voice_ignore_until_ms = HAL_GetTick() + PUMP_VOICE_PLAYBACK_GUARD_MS;
+    if (status != HAL_OK)
     {
-        return 0U;
+        camera_app_esp32_log("[VOICE] speak id=0x%02X status=%u\r\n",
+                             (unsigned int)prompt_id,
+                             (unsigned int)status);
     }
-
-    return (uint8_t)result;
 }
 
-static uint8_t camera_app_voice_result_is_supported(uint8_t result)
+static uint32_t camera_app_parental_lock_checksum(const camera_parental_lock_record_t *record)
 {
-    switch (result)
-    {
-        case ASR_WORD_HALF_WATER:
-        case ASR_WORD_FULL_WATER:
-        case ASR_WORD_HALF_HOT_WATER:
-        case ASR_WORD_FULL_HOT_WATER:
-            return 1U;
+    uint32_t flags;
 
-        default:
-            return 0U;
+    flags = ((uint32_t)record->version << 16U) |
+            ((uint32_t)record->enabled << 8U) |
+            (uint32_t)record->reserved;
+    return record->magic ^ flags ^ 0xA55A39C3UL;
+}
+
+static uint8_t camera_app_parental_lock_save(void)
+{
+    const camera_parental_lock_record_t *flash_record =
+        (const camera_parental_lock_record_t *)(0x90000000UL + PARENTAL_LOCK_FLASH_OFFSET);
+    camera_parental_lock_record_t record = {0};
+    uint8_t status = 0U;
+    uint8_t map_status;
+
+    record.magic = PARENTAL_LOCK_MAGIC;
+    record.version = PARENTAL_LOCK_VERSION;
+    record.enabled = (g_pump_ctrl.parental_lock_enabled != 0U) ? 1U : 0U;
+    record.checksum = camera_app_parental_lock_checksum(&record);
+    g_parental_lock_persist_dirty = 1U;
+
+    if (MX_QUADSPI_DisableMemoryMapped() != 0U)
+    {
+        return 1U;
     }
+    if (MX_QUADSPI_EraseRange(PARENTAL_LOCK_FLASH_OFFSET,
+                              PARENTAL_LOCK_FLASH_SIZE) != 0U)
+    {
+        status = 2U;
+    }
+    if ((status == 0U) &&
+        (MX_QUADSPI_ProgramRange(PARENTAL_LOCK_FLASH_OFFSET,
+                                 (const uint8_t *)&record,
+                                 (uint32_t)sizeof(record)) != 0U))
+    {
+        status = 3U;
+    }
+    map_status = MX_QUADSPI_EnableMemoryMapped();
+    if (map_status != 0U)
+    {
+        status = 4U;
+    }
+    else
+    {
+        SCB_CleanInvalidateDCache();
+        if ((status == 0U) &&
+            (memcmp(flash_record, &record, sizeof(record)) != 0))
+        {
+            status = 5U;
+        }
+    }
+    g_parental_lock_persist_dirty = (status == 0U) ? 0U : 1U;
+    return status;
+}
+
+static void camera_app_parental_lock_load(void)
+{
+    const camera_parental_lock_record_t *record =
+        (const camera_parental_lock_record_t *)(0x90000000UL + PARENTAL_LOCK_FLASH_OFFSET);
+
+    uint8_t record_valid;
+
+    SCB_CleanInvalidateDCache();
+    record_valid = ((record->magic == PARENTAL_LOCK_MAGIC) &&
+                    (record->version == PARENTAL_LOCK_VERSION) &&
+                    (record->enabled <= 1U) &&
+                    (record->checksum == camera_app_parental_lock_checksum(record))) ? 1U : 0U;
+    if (record_valid != 0U)
+    {
+        g_pump_ctrl.parental_lock_enabled = record->enabled;
+    }
+    else
+    {
+        g_pump_ctrl.parental_lock_enabled = 0U;
+    }
+    g_parental_lock_persist_dirty = (record_valid != 0U) ? 0U : 1U;
+    g_pump_ctrl.parental_lock_session_authorized = 0U;
+    camera_app_esp32_log("[CHILD_LOCK] boot enabled=%u persisted=%u\r\n",
+                         (unsigned int)g_pump_ctrl.parental_lock_enabled,
+                         (unsigned int)record_valid);
+}
+
+static uint8_t camera_app_parental_lock_blocks_dispense(void)
+{
+    if (g_pump_ctrl.child_lock_active != 0U)
+    {
+        return 1U;
+    }
+    return ((g_pump_ctrl.parental_lock_enabled != 0U) &&
+            (g_pump_ctrl.parental_lock_session_authorized == 0U)) ? 1U : 0U;
+}
+
+static void camera_app_parental_lock_reject(const char *source)
+{
+    uint32_t now_ms = HAL_GetTick();
+
+    g_pump_ctrl.requested_state = PUMP_COMMAND_STOP;
+    camera_app_pump_ctrl_apply_state(PUMP_COMMAND_STOP);
+    camera_app_esp32_log("[CHILD_LOCK] blocked source=%s\r\n",
+                         (source != NULL) ? source : "unknown");
+    if ((g_parental_lock_last_block_prompt_ms == 0U) ||
+        ((uint32_t)(now_ms - g_parental_lock_last_block_prompt_ms) >=
+         PUMP_CHILD_LOCK_PROMPT_GUARD_MS))
+    {
+        g_parental_lock_last_block_prompt_ms = now_ms;
+        camera_app_voice_speak(ASR_SPEAK_CHILD_LOCK_BLOCKED);
+    }
+}
+
+static void camera_app_parental_lock_set(uint8_t enabled)
+{
+    uint8_t next = (enabled != 0U) ? 1U : 0U;
+    uint8_t save_status;
+
+    if (g_pump_ctrl.parental_lock_enabled == next)
+    {
+        save_status = (g_parental_lock_persist_dirty != 0U) ?
+                      camera_app_parental_lock_save() : 0U;
+        camera_app_esp32_log("[CHILD_LOCK] unchanged enabled=%u save=%u\r\n",
+                             (unsigned int)next,
+                             (unsigned int)save_status);
+        camera_app_voice_speak(next ? ASR_SPEAK_CHILD_LOCK_ON_DONE :
+                                      ASR_SPEAK_CHILD_LOCK_OFF_DONE);
+        return;
+    }
+
+    g_pump_ctrl.parental_lock_enabled = next;
+    if (next != 0U)
+    {
+        g_face_identity_runtime_enabled = 1U;
+    }
+    g_parental_lock_persist_dirty = 1U;
+    g_pump_ctrl.parental_lock_session_authorized =
+        ((next != 0U) &&
+         (g_pump_ctrl.session_user_id != 0U) &&
+         (camera_app_pump_ctrl_session_active() != 0U)) ? 1U : 0U;
+    if ((next != 0U) &&
+        (g_pump_ctrl.parental_lock_session_authorized == 0U) &&
+        ((g_pump_ctrl.pump_run_active != 0U) ||
+         (camera_app_pump_ctrl_session_active() != 0U)))
+    {
+        camera_app_pump_ctrl_voice_stop(0U);
+    }
+
+    save_status = camera_app_parental_lock_save();
+    camera_app_esp32_log("[CHILD_LOCK] set enabled=%u authorized=%u save=%u\r\n",
+                         (unsigned int)g_pump_ctrl.parental_lock_enabled,
+                         (unsigned int)g_pump_ctrl.parental_lock_session_authorized,
+                         (unsigned int)save_status);
+    camera_app_voice_speak(next ? ASR_SPEAK_CHILD_LOCK_ON_DONE :
+                                  ASR_SPEAK_CHILD_LOCK_OFF_DONE);
 }
 
 #if (CAMERA_FINGERPRINT_ENABLE != 0U)
@@ -2247,18 +2479,27 @@ static void camera_app_finger_log(const char *fmt, ...)
 }
 #endif
 
-static uint16_t camera_app_pump_ctrl_calc_volume_ml(uint32_t fill_time_ms)
+static uint16_t camera_app_pump_ctrl_calc_volume_ml(void)
 {
+    uint64_t duty_ms = g_pump_ctrl.pump_run_duty_ms;
+    uint64_t denominator;
     uint64_t scaled;
 
-    if (fill_time_ms == 0U)
+    if ((g_pump_ctrl.pump_run_active != 0U) &&
+        (g_pump_ctrl.applied_state != PUMP_COMMAND_STOP))
+    {
+        duty_ms += (uint64_t)(HAL_GetTick() - g_pump_ctrl.pump_run_started_ms) *
+                   (uint64_t)g_pump_ctrl.pump_run_duty;
+    }
+    if (duty_ms == 0ULL)
     {
         return 0U;
     }
 
-    scaled = ((uint64_t)fill_time_ms * (uint64_t)PUMP_FLOW_CAL_VOLUME_ML) +
-             ((uint64_t)PUMP_FLOW_CAL_TIME_MS / 2ULL);
-    return (uint16_t)(scaled / (uint64_t)PUMP_FLOW_CAL_TIME_MS);
+    denominator = (uint64_t)PUMP_FLOW_CAL_TIME_MS * (uint64_t)PUMP_FLOW_CAL_DUTY;
+    scaled = (duty_ms * (uint64_t)PUMP_FLOW_CAL_VOLUME_ML) + (denominator / 2ULL);
+    scaled /= denominator;
+    return (scaled > UINT16_MAX) ? UINT16_MAX : (uint16_t)scaled;
 }
 
 static uint32_t camera_app_pump_ctrl_get_fill_time_ms(void)
@@ -2329,6 +2570,20 @@ static uint8_t camera_app_esp32_send_fp_event(uint16_t user_id)
     char buf[32];
     int len = snprintf(buf, sizeof(buf), "STM_FP:%u\r\n", (unsigned int)user_id);
 
+    if (user_id != 0U)
+    {
+        if (g_voice_user_context_id != user_id)
+        {
+            g_esp32_cloud_user_valid = 0U;
+            g_esp32_cloud_advice_valid = 0U;
+            g_esp32_cloud_user_id = 0U;
+            g_esp32_cloud_advice_user_id = 0U;
+        }
+        g_voice_user_context_id = user_id;
+        g_esp32_expected_user_id = user_id;
+        LCD_UI_SelectUser(user_id);
+    }
+
     if ((len > 0) && (camera_app_esp32_send_text(buf) == 0U))
     {
         camera_app_esp32_log("[ESP32_TX] STM_FP:%u ok\r\n", (unsigned int)user_id);
@@ -2377,7 +2632,7 @@ static void camera_app_esp32_volume_poll(uint32_t now_ms)
     }
 
     g_pump_ctrl.esp32_last_volume_report_ms = now_ms;
-    volume_ml = camera_app_pump_ctrl_calc_volume_ml(camera_app_pump_ctrl_get_fill_time_ms());
+    volume_ml = camera_app_pump_ctrl_calc_volume_ml();
     g_pump_ctrl.last_volume_ml = volume_ml;
     (void)camera_app_esp32_send_volume_event(volume_ml);
 }
@@ -2395,8 +2650,10 @@ static void camera_app_pump_ctrl_report_session_to_esp32(void)
         return;
     }
 
-    volume_ml = camera_app_pump_ctrl_calc_volume_ml(fill_time_ms);
+    volume_ml = camera_app_pump_ctrl_calc_volume_ml();
     g_pump_ctrl.last_volume_ml = volume_ml;
+    g_pump_ctrl.last_completed_volume_ml = volume_ml;
+    g_pump_ctrl.last_completed_volume_valid = 1U;
 
     if (g_pump_ctrl.esp32_fp_reported == 0U)
     {
@@ -2432,6 +2689,7 @@ static void camera_app_pump_ctrl_reset_fingerprint_session(void)
     g_pump_ctrl.fingerprint_match_score = 0U;
     g_pump_ctrl.esp32_fp_reported = 0U;
     g_pump_ctrl.esp32_done_reported = 0U;
+    g_pump_ctrl.parental_lock_session_authorized = 0U;
 }
 
 static uint8_t camera_app_face_user_is_child(uint16_t user_id)
@@ -2461,6 +2719,12 @@ static uint8_t camera_app_face_identity_try_window(const char *reason)
     face_ai_result_t face_result;
     char msg[192];
     int len;
+
+    if (g_face_identity_runtime_enabled == 0U)
+    {
+        camera_app_log("[FACE] skipped runtime disabled\r\n");
+        return CAMERA_FACE_CHECK_NO_FACE;
+    }
 
     if (g_pump_ctrl.fingerprint_session_locked != 0U)
     {
@@ -2550,6 +2814,12 @@ static uint8_t camera_app_face_identity_try_window(const char *reason)
                     {
                         match_confirmed = 1U;
                         g_pump_ctrl.session_user_id = face_result.matched_id;
+                        if (g_pump_ctrl.parental_lock_enabled != 0U)
+                        {
+                            g_pump_ctrl.parental_lock_session_authorized = 1U;
+                            camera_app_esp32_log("[CHILD_LOCK] authorized id=%u\r\n",
+                                                 (unsigned int)face_result.matched_id);
+                        }
                         g_pump_ctrl.fingerprint_session_locked = 1U;
                         g_pump_ctrl.fingerprint_match_score = 0U;
                         if (camera_app_esp32_send_fp_event(face_result.matched_id) == 0U)
@@ -2667,7 +2937,8 @@ static uint8_t camera_app_face_identity_try_window(const char *reason)
     {
         if ((OV2640_Init() == OV2640_OK) &&
             (OV2640_SetOutputFormatJPEG() == OV2640_OK) &&
-            (OV2640_SetOutputSize(CAMERA_WIDTH, CAMERA_HEIGHT) == OV2640_OK))
+            (OV2640_SetOutputSize(CAMERA_WIDTH, CAMERA_HEIGHT) == OV2640_OK) &&
+            (OV2640_SetWideView320x240() == OV2640_OK))
         {
             HAL_Delay(150U);
             g_camera_ready = 1U;
@@ -2824,6 +3095,10 @@ static void camera_app_finger_poll(uint32_t now_ms)
 
     g_pump_ctrl.fingerprint_session_locked = 1U;
     g_pump_ctrl.session_user_id = result.page_id;
+    if (g_pump_ctrl.parental_lock_enabled != 0U)
+    {
+        g_pump_ctrl.parental_lock_session_authorized = 1U;
+    }
     g_pump_ctrl.fingerprint_match_score = result.match_score;
     if (camera_app_esp32_send_fp_event(result.page_id) == 0U)
     {
@@ -3068,25 +3343,25 @@ static uint8_t camera_app_esp32_play_text(const char *text)
 
     if (strcmp(text, "正在放水") == 0)
     {
-        Asr_Speak(ASR_ANNOUNCER, ASR_SPEAK_DISPENSING);
+        camera_app_voice_speak(ASR_SPEAK_DISPENSING);
         return 1U;
     }
 
     if (strcmp(text, "出水已完成") == 0)
     {
-        Asr_Speak(ASR_ANNOUNCER, ASR_SPEAK_DONE);
+        camera_app_voice_speak(ASR_SPEAK_DONE);
         return 1U;
     }
 
     if (strcmp(text, "出现异常，已停水") == 0)
     {
-        Asr_Speak(ASR_ANNOUNCER, ASR_SPEAK_ABORTED);
+        camera_app_voice_speak(ASR_SPEAK_ABORTED);
         return 1U;
     }
 
     if (strcmp(text, "检测到水杯") == 0)
     {
-        Asr_Speak(ASR_ANNOUNCER, ASR_SPEAK_CUP_DETECTED);
+        camera_app_voice_speak(ASR_SPEAK_CUP_DETECTED);
         return 1U;
     }
 
@@ -3095,21 +3370,27 @@ static uint8_t camera_app_esp32_play_text(const char *text)
 
 static void camera_app_pump_ctrl_start_remote_cold(const char *reason)
 {
+    if (camera_app_parental_lock_blocks_dispense() != 0U)
+    {
+        camera_app_parental_lock_reject(reason);
+        return;
+    }
+
     if ((camera_work_state_t)g_pump_ctrl.workflow_state == CAMERA_WORK_STATE_STANDBY)
     {
         camera_app_pump_ctrl_reset_fingerprint_session();
     }
 
     g_pump_ctrl.auto_rearm_wait_no_cup = 0U;
-    g_pump_ctrl.dispense_target = CAMERA_DISPENSE_TARGET_FULL;
+    g_pump_ctrl.dispense_target = CAMERA_DISPENSE_TARGET_MANUAL_CONTINUOUS;
     g_pump_ctrl.water_temp = CAMERA_WATER_TEMP_COLD;
     g_pump_ctrl.target_reached_count = 0U;
     memset(g_pump_ctrl.reg_hist, 0, sizeof(g_pump_ctrl.reg_hist));
     g_pump_ctrl.reg_hist_count = 0U;
     g_pump_ctrl.requested_state = PUMP_COMMAND_FAST;
-    camera_app_pump_ctrl_set_work_state(CAMERA_WORK_STATE_DISPENSING_VOICE, reason);
+    camera_app_pump_ctrl_set_work_state(CAMERA_WORK_STATE_DISPENSING_MANUAL_COLD, reason);
     camera_app_pump_ctrl_apply_state(PUMP_COMMAND_FAST);
-    Asr_Speak(ASR_ANNOUNCER, ASR_SPEAK_DISPENSING);
+    camera_app_voice_speak(ASR_SPEAK_DISPENSING);
 }
 
 static void camera_app_esp32_process_pending(void)
@@ -3161,10 +3442,15 @@ static void camera_app_esp32_process_pending(void)
         start_pending = 0U;
         if (g_pump_ctrl.pump_run_active != 0U)
         {
-            g_pump_ctrl.pump_run_total_ms +=
+            uint32_t elapsed_ms =
                 (uint32_t)(stop_received_ms - g_pump_ctrl.pump_run_started_ms);
+
+            g_pump_ctrl.pump_run_total_ms += elapsed_ms;
+            g_pump_ctrl.pump_run_duty_ms +=
+                (uint64_t)elapsed_ms * (uint64_t)g_pump_ctrl.pump_run_duty;
             g_pump_ctrl.pump_run_started_ms = 0U;
             g_pump_ctrl.pump_run_active = 0U;
+            g_pump_ctrl.pump_run_duty = 0U;
         }
         if (camera_app_pump_ctrl_session_active() != 0U)
         {
@@ -3179,13 +3465,10 @@ static void camera_app_esp32_process_pending(void)
 
     if (start_pending != 0U)
     {
-        if (g_pump_ctrl.child_lock_active != 0U)
+        if (camera_app_parental_lock_blocks_dispense() != 0U)
         {
             camera_app_esp32_log("[ESP32] start ignored child_lock\r\n");
-        }
-        else if (g_camera_ready == 0U)
-        {
-            camera_app_esp32_log("[ESP32] start ignored vision_not_ready\r\n");
+            camera_app_parental_lock_reject("app_cmd_start");
         }
         else
         {
@@ -3201,6 +3484,7 @@ static void camera_app_esp32_process_pending(void)
                     {
                         camera_app_pump_ctrl_set_work_state(CAMERA_WORK_STATE_STANDBY, "app_cmd_recover");
                     }
+                    /* APP_CMD:START is an explicit traditional-control bypass. */
                     camera_app_pump_ctrl_start_remote_cold("app_cmd_start");
                     break;
 
@@ -3223,30 +3507,52 @@ static void camera_app_esp32_process_pending(void)
 
     if (user_pending != 0U)
     {
-        g_esp32_cloud_user = user;
-        g_esp32_cloud_user_valid = 1U;
-        g_esp32_cloud_advice_valid = 0U;
-        memset(&g_esp32_cloud_advice, 0, sizeof(g_esp32_cloud_advice));
-        camera_app_esp32_log("[ESP32_RX] USER name=%s today=%lu count=%lu remaining=%lu\r\n",
-                             user.name,
-                             (unsigned long)user.today_ml,
-                             (unsigned long)user.use_count,
-                             (unsigned long)user.remaining_ml);
+        if (g_esp32_expected_user_id != 0U)
+        {
+            g_esp32_cloud_user = user;
+            g_esp32_cloud_user_id = g_esp32_expected_user_id;
+            g_esp32_cloud_user_received_ms = HAL_GetTick();
+            g_esp32_cloud_user_valid = 1U;
+            g_esp32_cloud_advice_valid = 0U;
+            g_esp32_cloud_advice_user_id = 0U;
+            memset(&g_esp32_cloud_advice, 0, sizeof(g_esp32_cloud_advice));
+            camera_app_esp32_log("[ESP32_RX] USER id=%u name=%s today=%lu count=%lu remaining=%lu\r\n",
+                                 (unsigned int)g_esp32_cloud_user_id,
+                                 user.name,
+                                 (unsigned long)user.today_ml,
+                                 (unsigned long)user.use_count,
+                                 (unsigned long)user.remaining_ml);
+        }
+        else
+        {
+            camera_app_esp32_log("[ESP32_RX] USER ignored no_user_context\r\n");
+        }
     }
 
     if (advice_pending != 0U)
     {
-        g_esp32_cloud_advice = advice;
-        g_esp32_cloud_advice_valid = 1U;
-        camera_app_esp32_log("[ESP32_RX] ADVICE interval=%lu suggested=%lu text=%s\r\n",
-                             (unsigned long)advice.interval_min,
-                             (unsigned long)advice.suggested_ml,
-                             advice.text);
+        if ((g_esp32_cloud_user_valid != 0U) && (g_esp32_cloud_user_id != 0U))
+        {
+            g_esp32_cloud_advice = advice;
+            g_esp32_cloud_advice_user_id = g_esp32_cloud_user_id;
+            g_esp32_cloud_advice_received_ms = HAL_GetTick();
+            g_esp32_cloud_advice_valid = 1U;
+            camera_app_esp32_log("[ESP32_RX] ADVICE id=%u interval=%lu suggested=%lu text=%s\r\n",
+                                 (unsigned int)g_esp32_cloud_advice_user_id,
+                                 (unsigned long)advice.interval_min,
+                                 (unsigned long)advice.suggested_ml,
+                                 advice.text);
+        }
+        else
+        {
+            camera_app_esp32_log("[ESP32_RX] ADVICE ignored no_user_context\r\n");
+        }
     }
 
     if ((user_pending != 0U) || (advice_pending != 0U))
     {
         OLED_Status_ShowCloud(g_esp32_cloud_user_valid ? g_esp32_cloud_user.name : "",
+                              g_esp32_cloud_user_id,
                               g_esp32_cloud_user.today_ml,
                               g_esp32_cloud_user.use_count,
                               g_esp32_cloud_user.remaining_ml,
@@ -3272,6 +3578,17 @@ static void camera_app_esp32_init(void)
     g_esp32_advice_pending = 0U;
     g_esp32_cloud_user_valid = 0U;
     g_esp32_cloud_advice_valid = 0U;
+    g_esp32_expected_user_id = 0U;
+    g_esp32_cloud_user_id = 0U;
+    g_esp32_cloud_advice_user_id = 0U;
+    g_voice_user_context_id = 0U;
+    g_esp32_cloud_user_received_ms = 0U;
+    g_esp32_cloud_advice_received_ms = 0U;
+    g_voice_last_poll_ms = 0U;
+    g_voice_ignore_until_ms = 0U;
+    g_voice_last_error_log_ms = 0U;
+    g_voice_retry_after_ms = 0U;
+    g_voice_stop_latched = 0U;
     memset(g_esp32_rx_line, 0, sizeof(g_esp32_rx_line));
     memset(g_esp32_speak_text, 0, sizeof(g_esp32_speak_text));
     memset(&g_esp32_user_pending_data, 0, sizeof(g_esp32_user_pending_data));
@@ -3399,6 +3716,14 @@ static void camera_app_pump_ctrl_apply_state(uint8_t state)
     {
         next_state = PUMP_COMMAND_STOP;
     }
+    if ((next_state != PUMP_COMMAND_STOP) &&
+        (camera_app_parental_lock_blocks_dispense() != 0U))
+    {
+        camera_app_log("[CHILD_LOCK] invariant forced pump stop\r\n");
+        Pump_Stop();
+        next_state = PUMP_COMMAND_STOP;
+        g_pump_ctrl.requested_state = PUMP_COMMAND_STOP;
+    }
 
     if (g_pump_ctrl.applied_state == next_state)
     {
@@ -3413,6 +3738,7 @@ static void camera_app_pump_ctrl_apply_state(uint8_t state)
     {
         g_pump_ctrl.pump_run_started_ms = now_ms;
         g_pump_ctrl.pump_run_active = 1U;
+        g_pump_ctrl.pump_run_duty = Pump_GetLastDuty();
         g_pump_ctrl.esp32_last_volume_report_ms = now_ms;
         g_pump_ctrl.last_volume_ml = 0U;
         (void)camera_app_esp32_send_volume_event(0U);
@@ -3420,9 +3746,26 @@ static void camera_app_pump_ctrl_apply_state(uint8_t state)
     else if ((prev_state != PUMP_COMMAND_STOP) && (next_state == PUMP_COMMAND_STOP) &&
              (g_pump_ctrl.pump_run_active != 0U))
     {
-        g_pump_ctrl.pump_run_total_ms += (now_ms - g_pump_ctrl.pump_run_started_ms);
+        uint32_t elapsed_ms = now_ms - g_pump_ctrl.pump_run_started_ms;
+
+        g_pump_ctrl.pump_run_total_ms += elapsed_ms;
+        g_pump_ctrl.pump_run_duty_ms +=
+            (uint64_t)elapsed_ms * (uint64_t)g_pump_ctrl.pump_run_duty;
         g_pump_ctrl.pump_run_started_ms = 0U;
         g_pump_ctrl.pump_run_active = 0U;
+        g_pump_ctrl.pump_run_duty = 0U;
+    }
+    else if ((prev_state != PUMP_COMMAND_STOP) &&
+             (next_state != PUMP_COMMAND_STOP) &&
+             (g_pump_ctrl.pump_run_active != 0U))
+    {
+        uint32_t elapsed_ms = now_ms - g_pump_ctrl.pump_run_started_ms;
+
+        g_pump_ctrl.pump_run_total_ms += elapsed_ms;
+        g_pump_ctrl.pump_run_duty_ms +=
+            (uint64_t)elapsed_ms * (uint64_t)g_pump_ctrl.pump_run_duty;
+        g_pump_ctrl.pump_run_started_ms = now_ms;
+        g_pump_ctrl.pump_run_duty = Pump_GetLastDuty();
     }
     g_pump_ctrl.action_count++;
 
@@ -3464,18 +3807,22 @@ static void camera_app_pump_ctrl_clear_flow_context(void)
     g_pump_ctrl.stable_candidate_count = 0U;
     g_pump_ctrl.cup_lost_count = 0U;
     g_pump_ctrl.abnormal_count = 0U;
+    g_pump_ctrl.low_confidence_count = 0U;
     g_pump_ctrl.target_reached_count = 0U;
     g_pump_ctrl.decision_deadline_ms = 0U;
     g_pump_ctrl.voice_accept_after_ms = 0U;
     g_pump_ctrl.voice_command_armed = 0U;
+    g_pump_ctrl.parental_lock_session_authorized = 0U;
     g_pump_ctrl.stop_request = 0U;
     g_pump_ctrl.half_start_reg = 0.0f;
     memset(g_pump_ctrl.reg_hist, 0, sizeof(g_pump_ctrl.reg_hist));
     g_pump_ctrl.reg_hist_count = 0U;
     g_pump_ctrl.last_volume_ml = 0U;
     g_pump_ctrl.pump_run_active = 0U;
+    g_pump_ctrl.pump_run_duty = 0U;
     g_pump_ctrl.pump_run_started_ms = 0U;
     g_pump_ctrl.pump_run_total_ms = 0U;
+    g_pump_ctrl.pump_run_duty_ms = 0ULL;
     g_pump_ctrl.esp32_last_volume_report_ms = 0U;
 }
 
@@ -3494,9 +3841,9 @@ static void camera_app_pump_ctrl_return_to_standby(const char *reason)
     g_pump_ctrl.requested_state = PUMP_COMMAND_STOP;
     camera_app_pump_ctrl_apply_state(PUMP_COMMAND_STOP);
     camera_app_pump_ctrl_report_session_to_esp32();
-    Asr_Speak(ASR_ANNOUNCER, ASR_SPEAK_DONE);
+    camera_app_voice_speak(ASR_SPEAK_DONE);
     camera_app_pump_ctrl_set_work_state(CAMERA_WORK_STATE_DONE, reason);
-    camera_app_pump_ctrl_hold_oled_status(0U);
+    camera_app_pump_ctrl_hold_oled_status(3U);
     g_pump_ctrl.auto_rearm_wait_no_cup = 1U;
     camera_app_pump_ctrl_clear_flow_context();
     camera_app_pump_ctrl_set_work_state(CAMERA_WORK_STATE_STANDBY, "ready");
@@ -3508,7 +3855,7 @@ static void camera_app_pump_ctrl_fault_to_standby(const char *reason)
     g_pump_ctrl.requested_state = PUMP_COMMAND_STOP;
     camera_app_pump_ctrl_apply_state(PUMP_COMMAND_STOP);
     camera_app_pump_ctrl_report_session_to_esp32();
-    Asr_Speak(ASR_ANNOUNCER, ASR_SPEAK_ABORTED);
+    camera_app_voice_speak(ASR_SPEAK_ABORTED);
     camera_app_pump_ctrl_set_work_state(CAMERA_WORK_STATE_FAULT, reason);
     camera_app_pump_ctrl_hold_oled_status(2U);
     g_pump_ctrl.auto_rearm_wait_no_cup = 1U;
@@ -3529,20 +3876,30 @@ static uint8_t camera_app_pump_ctrl_service_half_timeout(void)
     return 1U;
 }
 
+static uint8_t camera_app_pump_ctrl_service_run_timeout(void)
+{
+    if ((g_pump_ctrl.pump_run_active == 0U) ||
+        (camera_app_pump_ctrl_get_fill_time_ms() < PUMP_MAX_RUN_TIMEOUT_MS))
+    {
+        return 0U;
+    }
+
+    camera_app_pump_ctrl_return_to_standby("run_timeout");
+    return 1U;
+}
+
 static void camera_app_pump_ctrl_enter_decision_window(uint32_t now_ms)
 {
-    uint8_t stale_voice_result;
     uint8_t face_check;
     uint32_t decision_window_ms;
     char buf[128];
     int len;
 
-    stale_voice_result = camera_app_voice_result_read();
     g_pump_ctrl.dispense_target = CAMERA_DISPENSE_TARGET_NONE;
     g_pump_ctrl.water_temp = CAMERA_WATER_TEMP_COLD;
     g_pump_ctrl.voice_command_armed = 0U;
     camera_app_pump_ctrl_set_work_state(CAMERA_WORK_STATE_DECISION_WINDOW, "cup_stable");
-    Asr_Speak(ASR_ANNOUNCER, ASR_SPEAK_CUP_DETECTED);
+    camera_app_voice_speak(ASR_SPEAK_CUP_DETECTED);
     face_check = camera_app_face_identity_try_window("cup_stable");
     if (face_check == CAMERA_FACE_CHECK_CHILD_LOCKED)
     {
@@ -3554,6 +3911,14 @@ static void camera_app_pump_ctrl_enter_decision_window(uint32_t now_ms)
         camera_app_log("[CHILD_LOCK] pump disabled until cup removed\r\n");
         return;
     }
+    if (camera_app_parental_lock_blocks_dispense() != 0U)
+    {
+        camera_app_parental_lock_reject("face_required");
+        g_pump_ctrl.auto_rearm_wait_no_cup = 1U;
+        camera_app_pump_ctrl_clear_flow_context();
+        camera_app_pump_ctrl_set_work_state(CAMERA_WORK_STATE_STANDBY, "child_lock_face_required");
+        return;
+    }
 
     decision_window_ms = (face_check == CAMERA_FACE_CHECK_FACE_DETECTED) ?
                          PUMP_FACE_DECISION_WINDOW_MS : PUMP_DECISION_WINDOW_MS;
@@ -3562,11 +3927,10 @@ static void camera_app_pump_ctrl_enter_decision_window(uint32_t now_ms)
     g_pump_ctrl.decision_deadline_ms = g_pump_ctrl.voice_accept_after_ms + decision_window_ms;
 
     len = snprintf(buf, sizeof(buf),
-                   "[PUMP] voice_window path=%s guard_ms=%lu cmd_ms=%lu stale=%u\r\n",
+                   "[PUMP] voice_window path=%s guard_ms=%lu cmd_ms=%lu\r\n",
                    (face_check == CAMERA_FACE_CHECK_FACE_DETECTED) ? "face" : "normal",
                    (unsigned long)PUMP_VOICE_PROMPT_GUARD_MS,
-                   (unsigned long)decision_window_ms,
-                   (unsigned int)stale_voice_result);
+                   (unsigned long)decision_window_ms);
     if (len > 0)
     {
         HAL_UART_Transmit(&huart1, (uint8_t *)buf, (uint16_t)len, HAL_MAX_DELAY);
@@ -3575,9 +3939,18 @@ static void camera_app_pump_ctrl_enter_decision_window(uint32_t now_ms)
 
 static void camera_app_pump_ctrl_start_manual_cold(const char *reason)
 {
+    if (camera_app_parental_lock_blocks_dispense() != 0U)
+    {
+        camera_app_parental_lock_reject(reason);
+        return;
+    }
+
     g_pump_ctrl.dispense_target = CAMERA_DISPENSE_TARGET_MANUAL_CONTINUOUS;
     g_pump_ctrl.water_temp = CAMERA_WATER_TEMP_COLD;
     g_pump_ctrl.target_reached_count = 0U;
+    g_pump_ctrl.cup_lost_count = 0U;
+    g_pump_ctrl.abnormal_count = 0U;
+    g_pump_ctrl.low_confidence_count = 0U;
     g_pump_ctrl.requested_state = PUMP_COMMAND_FAST;
     camera_app_pump_ctrl_set_work_state(CAMERA_WORK_STATE_DISPENSING_MANUAL_COLD, reason);
     camera_app_pump_ctrl_apply_state(PUMP_COMMAND_FAST);
@@ -3585,17 +3958,25 @@ static void camera_app_pump_ctrl_start_manual_cold(const char *reason)
 
 static void camera_app_pump_ctrl_start_auto_cold(void)
 {
+    if (camera_app_parental_lock_blocks_dispense() != 0U)
+    {
+        camera_app_parental_lock_reject("timeout_auto");
+        camera_app_pump_ctrl_cancel_pre_dispense("child_lock_auto");
+        return;
+    }
+
     g_pump_ctrl.dispense_target = CAMERA_DISPENSE_TARGET_FULL;
     g_pump_ctrl.water_temp = CAMERA_WATER_TEMP_COLD;
     g_pump_ctrl.target_reached_count = 0U;
     g_pump_ctrl.cup_lost_count = 0U;
     g_pump_ctrl.abnormal_count = 0U;
+    g_pump_ctrl.low_confidence_count = 0U;
     memset(g_pump_ctrl.reg_hist, 0, sizeof(g_pump_ctrl.reg_hist));
     g_pump_ctrl.reg_hist_count = 0U;
     g_pump_ctrl.requested_state = PUMP_COMMAND_FAST;
     camera_app_pump_ctrl_set_work_state(CAMERA_WORK_STATE_DISPENSING_AUTO_COLD, "timeout_auto");
     camera_app_pump_ctrl_apply_state(PUMP_COMMAND_FAST);
-    Asr_Speak(ASR_ANNOUNCER, ASR_SPEAK_DISPENSING);
+    camera_app_voice_speak(ASR_SPEAK_DISPENSING);
 }
 
 #if ((CAMERA_FACE_IDENTITY_ENABLE != 0U) && (CAMERA_FACE_BACKEND_OPENMV != 0U))
@@ -3661,7 +4042,8 @@ static void camera_app_face_manager_restore_water(void)
     {
         if ((OV2640_Init() == OV2640_OK) &&
             (OV2640_SetOutputFormatJPEG() == OV2640_OK) &&
-            (OV2640_SetOutputSize(CAMERA_WIDTH, CAMERA_HEIGHT) == OV2640_OK))
+            (OV2640_SetOutputSize(CAMERA_WIDTH, CAMERA_HEIGHT) == OV2640_OK) &&
+            (OV2640_SetWideView320x240() == OV2640_OK))
         {
             HAL_Delay(150U);
             g_camera_ready = 1U;
@@ -3851,6 +4233,13 @@ static void camera_app_pump_ctrl_start_voice_dispense(uint8_t target,
                                                       uint8_t temp,
                                                       const char *reason)
 {
+    if (camera_app_parental_lock_blocks_dispense() != 0U)
+    {
+        camera_app_parental_lock_reject(reason);
+        camera_app_pump_ctrl_cancel_pre_dispense("child_lock_voice");
+        return;
+    }
+
     if ((target != CAMERA_DISPENSE_TARGET_HALF) &&
         (target != CAMERA_DISPENSE_TARGET_FULL))
     {
@@ -3863,17 +4252,24 @@ static void camera_app_pump_ctrl_start_voice_dispense(uint8_t target,
     g_pump_ctrl.target_reached_count = 0U;
     g_pump_ctrl.cup_lost_count = 0U;
     g_pump_ctrl.abnormal_count = 0U;
+    g_pump_ctrl.low_confidence_count = 0U;
     memset(g_pump_ctrl.reg_hist, 0, sizeof(g_pump_ctrl.reg_hist));
     g_pump_ctrl.reg_hist_count = 0U;
     g_pump_ctrl.requested_state = PUMP_COMMAND_FAST;
     camera_app_pump_ctrl_set_work_state(CAMERA_WORK_STATE_DISPENSING_VOICE, reason);
     camera_app_pump_ctrl_apply_state(PUMP_COMMAND_FAST);
-    Asr_Speak(ASR_ANNOUNCER, ASR_SPEAK_DISPENSING);
+    camera_app_voice_speak(ASR_SPEAK_DISPENSING);
 }
 
 static void camera_app_pump_ctrl_start_manual_lcd(uint8_t temp,
                                                   const char *reason)
 {
+    if (camera_app_parental_lock_blocks_dispense() != 0U)
+    {
+        camera_app_parental_lock_reject(reason);
+        return;
+    }
+
     if ((temp != CAMERA_WATER_TEMP_COLD) &&
         (temp != CAMERA_WATER_TEMP_HOT))
     {
@@ -3883,10 +4279,13 @@ static void camera_app_pump_ctrl_start_manual_lcd(uint8_t temp,
     g_pump_ctrl.dispense_target = CAMERA_DISPENSE_TARGET_MANUAL_CONTINUOUS;
     g_pump_ctrl.water_temp = temp;
     g_pump_ctrl.target_reached_count = 0U;
+    g_pump_ctrl.cup_lost_count = 0U;
+    g_pump_ctrl.abnormal_count = 0U;
+    g_pump_ctrl.low_confidence_count = 0U;
     g_pump_ctrl.requested_state = PUMP_COMMAND_FAST;
     camera_app_pump_ctrl_set_work_state(CAMERA_WORK_STATE_DISPENSING_MANUAL_COLD, reason);
     camera_app_pump_ctrl_apply_state(PUMP_COMMAND_FAST);
-    Asr_Speak(ASR_ANNOUNCER, ASR_SPEAK_DISPENSING);
+    camera_app_voice_speak(ASR_SPEAK_DISPENSING);
 }
 
 static void camera_app_pump_ctrl_start_voice_wait(uint8_t target,
@@ -3894,6 +4293,12 @@ static void camera_app_pump_ctrl_start_voice_wait(uint8_t target,
                                                   uint32_t now_ms,
                                                   const char *reason)
 {
+    if (camera_app_parental_lock_blocks_dispense() != 0U)
+    {
+        camera_app_parental_lock_reject(reason);
+        return;
+    }
+
     if ((target != CAMERA_DISPENSE_TARGET_HALF) &&
         (target != CAMERA_DISPENSE_TARGET_FULL))
     {
@@ -3910,6 +4315,322 @@ static void camera_app_pump_ctrl_start_voice_wait(uint8_t target,
     g_pump_ctrl.requested_state = PUMP_COMMAND_STOP;
     camera_app_pump_ctrl_set_work_state(CAMERA_WORK_STATE_DISPENSING_VOICE_WAIT, reason);
     camera_app_pump_ctrl_apply_state(PUMP_COMMAND_STOP);
+}
+
+static uint8_t camera_app_cloud_user_is_current(uint32_t now_ms)
+{
+    return ((g_esp32_cloud_user_valid != 0U) &&
+            (g_voice_user_context_id != 0U) &&
+            (g_esp32_cloud_user_id == g_voice_user_context_id) &&
+            ((uint32_t)(now_ms - g_esp32_cloud_user_received_ms) <=
+             ESP32_CLOUD_DATA_MAX_AGE_MS)) ? 1U : 0U;
+}
+
+static uint8_t camera_app_cloud_advice_is_current(uint32_t now_ms)
+{
+    return ((camera_app_cloud_user_is_current(now_ms) != 0U) &&
+            (g_esp32_cloud_advice_valid != 0U) &&
+            (g_esp32_cloud_advice_user_id == g_voice_user_context_id) &&
+            ((uint32_t)(now_ms - g_esp32_cloud_advice_received_ms) <=
+             ESP32_CLOUD_DATA_MAX_AGE_MS)) ? 1U : 0U;
+}
+
+static uint8_t camera_app_voice_amount_prompt(uint32_t amount_ml,
+                                              uint32_t maximum_ml,
+                                              uint8_t zero_prompt,
+                                              uint8_t first_prompt,
+                                              uint8_t over_prompt)
+{
+    uint32_t bucket;
+
+    if (amount_ml == 0U)
+    {
+        return zero_prompt;
+    }
+    if (amount_ml > maximum_ml)
+    {
+        return over_prompt;
+    }
+
+    bucket = (amount_ml + 50U) / 100U;
+    if (bucket == 0U)
+    {
+        bucket = 1U;
+    }
+    if (bucket > (maximum_ml / 100U))
+    {
+        bucket = maximum_ml / 100U;
+    }
+    return (uint8_t)(first_prompt + bucket - 1U);
+}
+
+static uint8_t camera_app_voice_temperature_prompt(void)
+{
+    static const int16_t centers[] = {100, 200, 250, 300, 400};
+    static const uint8_t prompts[] = {
+        ASR_SPEAK_TEMP_10,
+        ASR_SPEAK_TEMP_20,
+        ASR_SPEAK_TEMP_25,
+        ASR_SPEAK_TEMP_30,
+        ASR_SPEAK_TEMP_40,
+    };
+    int16_t temperature;
+    uint32_t best_difference;
+    uint8_t best_index = 0U;
+    uint8_t i;
+
+    if (EnvironmentSensors_IsTemperatureValid() == 0U)
+    {
+        return ASR_SPEAK_TEMP_INVALID;
+    }
+    temperature = EnvironmentSensors_GetTemperatureTenths();
+    if (temperature < 100)
+    {
+        return ASR_SPEAK_TEMP_BELOW_10;
+    }
+    if (temperature > 400)
+    {
+        return ASR_SPEAK_TEMP_OVER_40;
+    }
+
+    best_difference = (uint32_t)abs((int)temperature - (int)centers[0]);
+    for (i = 1U; i < (uint8_t)(sizeof(centers) / sizeof(centers[0])); i++)
+    {
+        uint32_t difference = (uint32_t)abs((int)temperature - (int)centers[i]);
+        if (difference < best_difference)
+        {
+            best_difference = difference;
+            best_index = i;
+        }
+    }
+    return prompts[best_index];
+}
+
+static uint8_t camera_app_voice_interval_prompt(uint32_t minutes)
+{
+    static const uint16_t centers[] = {10U, 20U, 30U, 40U, 60U, 90U, 120U};
+    uint32_t best_difference;
+    uint8_t best_index = 0U;
+    uint8_t i;
+
+    if (minutes == 0U)
+    {
+        return ASR_SPEAK_INTERVAL_NOW;
+    }
+
+    best_difference = (minutes > centers[0]) ?
+                      (minutes - centers[0]) : (centers[0] - minutes);
+    for (i = 1U; i < (uint8_t)(sizeof(centers) / sizeof(centers[0])); i++)
+    {
+        uint32_t difference = (minutes > centers[i]) ?
+                              (minutes - centers[i]) : (centers[i] - minutes);
+        if (difference < best_difference)
+        {
+            best_difference = difference;
+            best_index = i;
+        }
+    }
+    return (uint8_t)(ASR_SPEAK_INTERVAL_10 + best_index);
+}
+
+static void camera_app_pump_ctrl_voice_stop(uint8_t announce)
+{
+    uint8_t had_session = ((g_pump_ctrl.pump_run_active != 0U) ||
+                           (camera_app_pump_ctrl_session_active() != 0U)) ? 1U : 0U;
+
+    g_lcd_request_pending = 0U;
+    g_pump_ctrl.requested_state = PUMP_COMMAND_STOP;
+    camera_app_pump_ctrl_apply_state(PUMP_COMMAND_STOP);
+    if (had_session != 0U)
+    {
+        camera_app_pump_ctrl_report_session_to_esp32();
+        camera_app_pump_ctrl_set_work_state(CAMERA_WORK_STATE_DONE, "voice_stop");
+        camera_app_pump_ctrl_hold_oled_status(0U);
+        g_pump_ctrl.auto_rearm_wait_no_cup = 1U;
+        camera_app_pump_ctrl_clear_flow_context();
+        camera_app_pump_ctrl_set_work_state(CAMERA_WORK_STATE_STANDBY, "ready");
+    }
+    if (announce != 0U)
+    {
+        camera_app_voice_speak(ASR_SPEAK_STOPPED);
+    }
+    camera_app_esp32_log("[VOICE] stop had_session=%u\r\n", (unsigned int)had_session);
+}
+
+static void camera_app_voice_dispatch(uint8_t command, uint32_t now_ms)
+{
+    uint8_t prompt = 0U;
+
+    switch (command)
+    {
+        case ASR_WORD_HALF_WATER:
+        case ASR_WORD_FULL_WATER:
+        case ASR_WORD_HALF_HOT_WATER:
+        case ASR_WORD_FULL_HOT_WATER:
+            if (((camera_work_state_t)g_pump_ctrl.workflow_state ==
+                 CAMERA_WORK_STATE_DECISION_WINDOW) &&
+                ((int32_t)(now_ms - g_pump_ctrl.voice_accept_after_ms) >= 0))
+            {
+                uint8_t target = CAMERA_DISPENSE_TARGET_NONE;
+                uint8_t temp = CAMERA_WATER_TEMP_COLD;
+
+                if (camera_app_parental_lock_blocks_dispense() != 0U)
+                {
+                    camera_app_parental_lock_reject("voice_water");
+                    break;
+                }
+                camera_app_voice_apply_request(command, &target, &temp);
+                camera_app_pump_ctrl_start_voice_wait(target, temp, now_ms, "voice_cmd");
+            }
+            else
+            {
+                camera_app_esp32_log("[VOICE] water ignored cmd=0x%02X wf=%s\r\n",
+                                     (unsigned int)command,
+                                     camera_app_work_state_name(g_pump_ctrl.workflow_state));
+            }
+            break;
+
+        case ASR_WORD_TODAY_CONSUMED:
+            prompt = (camera_app_cloud_user_is_current(now_ms) != 0U) ?
+                     camera_app_voice_amount_prompt(g_esp32_cloud_user.today_ml,
+                                                    2000U,
+                                                    ASR_SPEAK_TODAY_NONE,
+                                                    ASR_SPEAK_TODAY_100,
+                                                    ASR_SPEAK_TODAY_OVER) :
+                     ASR_SPEAK_TODAY_INVALID;
+            camera_app_voice_speak(prompt);
+            break;
+
+        case ASR_WORD_TODAY_REMAINING:
+            prompt = (camera_app_cloud_user_is_current(now_ms) != 0U) ?
+                     camera_app_voice_amount_prompt(g_esp32_cloud_user.remaining_ml,
+                                                    2000U,
+                                                    ASR_SPEAK_REMAINING_DONE,
+                                                    ASR_SPEAK_REMAINING_100,
+                                                    ASR_SPEAK_REMAINING_OVER) :
+                     ASR_SPEAK_REMAINING_INVALID;
+            camera_app_voice_speak(prompt);
+            break;
+
+        case ASR_WORD_ROOM_TEMPERATURE:
+            camera_app_voice_speak(camera_app_voice_temperature_prompt());
+            break;
+
+        case ASR_WORD_CHILD_LOCK_STATE:
+            camera_app_voice_speak((g_pump_ctrl.parental_lock_enabled != 0U) ?
+                                   ASR_SPEAK_CHILD_LOCK_ON_STATE :
+                                   ASR_SPEAK_CHILD_LOCK_OFF_STATE);
+            break;
+
+        case ASR_WORD_CHILD_LOCK_ON:
+            camera_app_parental_lock_set(1U);
+            break;
+
+        case ASR_WORD_CHILD_LOCK_OFF:
+            camera_app_parental_lock_set(0U);
+            break;
+
+        case ASR_WORD_STOP_WATER:
+            camera_app_pump_ctrl_voice_stop(1U);
+            break;
+
+        case ASR_WORD_NEXT_INTERVAL:
+            prompt = (camera_app_cloud_advice_is_current(now_ms) != 0U) ?
+                     camera_app_voice_interval_prompt(g_esp32_cloud_advice.interval_min) :
+                     ASR_SPEAK_INTERVAL_INVALID;
+            camera_app_voice_speak(prompt);
+            break;
+
+        case ASR_WORD_LAST_VOLUME:
+            prompt = (g_pump_ctrl.last_completed_volume_valid != 0U) ?
+                     camera_app_voice_amount_prompt(g_pump_ctrl.last_completed_volume_ml,
+                                                    500U,
+                                                    ASR_SPEAK_LAST_NONE,
+                                                    ASR_SPEAK_LAST_100,
+                                                    ASR_SPEAK_LAST_OVER) :
+                     ASR_SPEAK_LAST_NONE;
+            camera_app_voice_speak(prompt);
+            break;
+
+        case ASR_WORD_NEXT_VOLUME:
+            prompt = (camera_app_cloud_advice_is_current(now_ms) != 0U) ?
+                     camera_app_voice_amount_prompt(g_esp32_cloud_advice.suggested_ml,
+                                                    500U,
+                                                    ASR_SPEAK_NEXT_NONE,
+                                                    ASR_SPEAK_NEXT_100,
+                                                    ASR_SPEAK_NEXT_OVER) :
+                     ASR_SPEAK_NEXT_INVALID;
+            camera_app_voice_speak(prompt);
+            break;
+
+        case ASR_WORD_TANK_STATE:
+            camera_app_voice_speak((EnvironmentSensors_GetWaterPresent() != 0U) ?
+                                   ASR_SPEAK_TANK_NORMAL : ASR_SPEAK_TANK_EMPTY);
+            break;
+
+        default:
+            camera_app_esp32_log("[VOICE] unsupported cmd=0x%02X\r\n", (unsigned int)command);
+            break;
+    }
+}
+
+static void camera_app_voice_service(uint32_t now_ms)
+{
+    uint8_t result = 0U;
+    HAL_StatusTypeDef status;
+
+    if (((int32_t)(now_ms - g_voice_retry_after_ms) < 0) ||
+        ((uint32_t)(now_ms - g_voice_last_poll_ms) < PUMP_VOICE_POLL_MS))
+    {
+        return;
+    }
+    g_voice_last_poll_ms = now_ms;
+    status = Asr_ResultRead(&result);
+    if (status != HAL_OK)
+    {
+        g_voice_retry_after_ms = now_ms + PUMP_VOICE_ERROR_BACKOFF_MS;
+        if ((g_voice_last_error_log_ms == 0U) ||
+            ((uint32_t)(now_ms - g_voice_last_error_log_ms) >= 5000U))
+        {
+            g_voice_last_error_log_ms = now_ms;
+            camera_app_esp32_log("[VOICE] read status=%u\r\n", (unsigned int)status);
+        }
+        return;
+    }
+    g_voice_retry_after_ms = 0U;
+
+    if (result == 0U)
+    {
+        g_voice_stop_latched = 0U;
+        if ((int32_t)(now_ms - g_voice_ignore_until_ms) >= 0)
+        {
+            g_pump_ctrl.voice_command_armed = 1U;
+        }
+        return;
+    }
+    if (result == ASR_WORD_STOP_WATER)
+    {
+        if (g_voice_stop_latched == 0U)
+        {
+            g_voice_stop_latched = 1U;
+            g_pump_ctrl.voice_command_armed = 0U;
+            camera_app_esp32_log("[VOICE] emergency stop\r\n");
+            camera_app_voice_dispatch(result, now_ms);
+        }
+        return;
+    }
+    if ((int32_t)(now_ms - g_voice_ignore_until_ms) < 0)
+    {
+        return;
+    }
+    if (g_pump_ctrl.voice_command_armed == 0U)
+    {
+        return;
+    }
+
+    g_pump_ctrl.voice_command_armed = 0U;
+    camera_app_esp32_log("[VOICE] command=0x%02X\r\n", (unsigned int)result);
+    camera_app_voice_dispatch(result, now_ms);
 }
 
 static void camera_app_pump_ctrl_push_reg(float reg)
@@ -4151,6 +4872,19 @@ static uint8_t camera_app_pump_ctrl_has_stable_class(uint8_t class_id)
     return (g_pump_ctrl.stable_candidate_count >= PUMP_STABLE_FRAME_COUNT) ? 1U : 0U;
 }
 
+static uint8_t camera_app_pump_ctrl_start_ready(const camera_ai_result_t *result)
+{
+    if ((result == NULL) ||
+        (camera_app_pump_ctrl_has_stable_cup() == 0U) ||
+        (camera_app_pump_ctrl_is_cup_class(result->class_id) == 0U) ||
+        (result->confidence < PUMP_AI_CONF_MIN))
+    {
+        return 0U;
+    }
+
+    return 1U;
+}
+
 static uint8_t camera_app_pump_ctrl_abnormal_guard_active(void)
 {
     switch ((camera_work_state_t)g_pump_ctrl.workflow_state)
@@ -4171,12 +4905,12 @@ static void camera_app_pump_ctrl_update_guard_counts(const camera_ai_result_t *r
         return;
     }
 
-    if ((camera_app_pump_ctrl_abnormal_guard_active() != 0U) &&
-        (g_pump_ctrl.pump_run_active != 0U) &&
-        (camera_app_pump_ctrl_get_fill_time_ms() < PUMP_FAULT_GUARD_START_DELAY_MS))
+    if ((camera_app_pump_ctrl_abnormal_guard_active() == 0U) ||
+        (g_pump_ctrl.pump_run_active == 0U))
     {
         g_pump_ctrl.cup_lost_count = 0U;
         g_pump_ctrl.abnormal_count = 0U;
+        g_pump_ctrl.low_confidence_count = 0U;
         return;
     }
 
@@ -4192,11 +4926,24 @@ static void camera_app_pump_ctrl_update_guard_counts(const camera_ai_result_t *r
         g_pump_ctrl.cup_lost_count = 0U;
     }
 
+    if (result->confidence < PUMP_AI_CONF_MIN)
+    {
+        if (g_pump_ctrl.low_confidence_count < 0xFFU)
+        {
+            g_pump_ctrl.low_confidence_count++;
+        }
+    }
+    else
+    {
+        g_pump_ctrl.low_confidence_count = 0U;
+    }
+
     if ((camera_app_pump_ctrl_abnormal_guard_active() != 0U) &&
         (result->class_id == 4U) &&
         (result->confidence >= PUMP_ABNORMAL_CONF_MIN))
     {
-        if (camera_app_pump_ctrl_has_recent_reg_above(PUMP_ABNORMAL_WATER_REG) != 0U)
+        if ((camera_app_pump_ctrl_get_fill_time_ms() < PUMP_FAULT_GUARD_START_DELAY_MS) ||
+            (camera_app_pump_ctrl_has_recent_reg_above(PUMP_ABNORMAL_WATER_REG) != 0U))
         {
             g_pump_ctrl.abnormal_count = 0U;
         }
@@ -4257,9 +5004,12 @@ static uint8_t camera_app_pump_ctrl_service_manual_fastpath(uint8_t vision_ready
     uint8_t key_cold_pressed = camera_app_pump_ctrl_cold_key_pressed();
     uint8_t lcd_temp = CAMERA_WATER_TEMP_COLD;
 
-    if (g_pump_ctrl.child_lock_active != 0U)
+    if (camera_app_parental_lock_blocks_dispense() != 0U)
     {
-        (void)camera_app_lcd_request_take(NULL);
+        if (camera_app_lcd_request_take(NULL) != 0U)
+        {
+            camera_app_parental_lock_reject("lcd_touch");
+        }
         g_pump_ctrl.requested_state = PUMP_COMMAND_STOP;
         camera_app_pump_ctrl_apply_state(PUMP_COMMAND_STOP);
         return 0U;
@@ -4331,7 +5081,22 @@ static uint8_t camera_app_pump_ctrl_service_manual_fastpath(uint8_t vision_ready
                 camera_app_pump_ctrl_apply_state(PUMP_COMMAND_FAST);
             }
             camera_app_oled_refresh_stub();
+            (void)vision_ready;
             return 1U;
+
+        case CAMERA_WORK_STATE_DISPENSING_AUTO_COLD:
+        case CAMERA_WORK_STATE_DISPENSING_VOICE:
+            if (camera_app_lcd_request_pending() != 0U)
+            {
+                (void)camera_app_lcd_request_take(&lcd_temp);
+                if (lcd_temp == CAMERA_WATER_TEMP_COLD)
+                {
+                    camera_app_pump_ctrl_voice_stop(1U);
+                    camera_app_log("[LCD] cold stop during automatic dispense\r\n");
+                    return 1U;
+                }
+            }
+            break;
 
         case CAMERA_WORK_STATE_DONE:
         case CAMERA_WORK_STATE_FAULT:
@@ -4358,6 +5123,7 @@ static uint8_t camera_app_pump_ctrl_service_manual_fastpath(uint8_t vision_ready
 
 static void camera_app_pump_ctrl_report(const camera_ai_result_t *result)
 {
+    static uint32_t last_report_ms = 0U;
     char buf[256];
     int len;
     uint32_t conf_x10;
@@ -4369,12 +5135,19 @@ static void camera_app_pump_ctrl_report(const camera_ai_result_t *result)
         return;
     }
 
+    if ((last_report_ms != 0U) &&
+        ((uint32_t)(HAL_GetTick() - last_report_ms) < PUMP_STATUS_REPORT_PERIOD_MS))
+    {
+        return;
+    }
+    last_report_ms = HAL_GetTick();
+
     conf_x10 = camera_app_float_to_permille(result->confidence);
     reg_x1000 = camera_app_float_to_permille(result->level_reg);
     fill_time_ms = camera_app_pump_ctrl_get_fill_time_ms();
 
     len = snprintf(buf, sizeof(buf),
-                   "[PUMP] cls=%lu raw_cls=%lu conf=%lu.%lu%% reg=0.%03lu wf=%s target=%s temp=%s fid=%u req=%s applied=%s duty=%u ph6=%lu fill_ms=%lu vol=%u lost=%u abn=%u tgt=%u frames=%lu actions=%lu\r\n",
+                   "[PUMP] cls=%lu raw_cls=%lu conf=%lu.%lu%% reg=0.%03lu wf=%s target=%s temp=%s fid=%u req=%s applied=%s duty=%u ph6=%lu fill_ms=%lu vol=%u lost=%u abn=%u low=%u tgt=%u frames=%lu actions=%lu\r\n",
                    (unsigned long)result->class_id,
                    (unsigned long)result->raw_class_id,
                    (unsigned long)(conf_x10 / 10U),
@@ -4389,10 +5162,11 @@ static void camera_app_pump_ctrl_report(const camera_ai_result_t *result)
                    (unsigned)Pump_GetLastDuty(),
                    (unsigned long)Pump_GetPinLevel(),
                    (unsigned long)fill_time_ms,
-                   (unsigned int)camera_app_pump_ctrl_calc_volume_ml(fill_time_ms),
+                   (unsigned int)camera_app_pump_ctrl_calc_volume_ml(),
                    (unsigned int)g_pump_ctrl.cup_lost_count,
-                   (unsigned int)g_pump_ctrl.abnormal_count,
-                   (unsigned int)g_pump_ctrl.target_reached_count,
+                    (unsigned int)g_pump_ctrl.abnormal_count,
+                    (unsigned int)g_pump_ctrl.low_confidence_count,
+                    (unsigned int)g_pump_ctrl.target_reached_count,
                    (unsigned long)g_pump_ctrl.frame_count,
                    (unsigned long)g_pump_ctrl.action_count);
     if (len > 0)
@@ -4456,7 +5230,6 @@ static void camera_app_pump_ctrl_consume_result(const camera_ai_result_t *result
 {
     uint8_t key_cold_pressed;
     uint8_t lcd_temp;
-    uint8_t voice_result;
     char buf[96];
     int len;
     uint32_t now_ms;
@@ -4473,7 +5246,6 @@ static void camera_app_pump_ctrl_consume_result(const camera_ai_result_t *result
     g_pump_ctrl.stop_request = ((result->class_id == 0U) || (result->class_id == 4U)) ? 1U : 0U;
     key_cold_pressed = camera_app_pump_ctrl_cold_key_pressed();
     lcd_temp = CAMERA_WATER_TEMP_COLD;
-    voice_result = 0U;
     now_ms = HAL_GetTick();
     if (((camera_work_state_t)g_pump_ctrl.workflow_state == CAMERA_WORK_STATE_STANDBY) &&
         (g_pump_ctrl.oled_status_hold_until_ms != 0U) &&
@@ -4558,32 +5330,10 @@ static void camera_app_pump_ctrl_consume_result(const camera_ai_result_t *result
                 break;
             }
 
-            voice_result = camera_app_voice_result_read();
             now_ms = HAL_GetTick();
             if ((int32_t)(now_ms - g_pump_ctrl.voice_accept_after_ms) < 0)
             {
-                g_pump_ctrl.voice_command_armed = 0U;
                 camera_app_finger_poll(now_ms);
-                break;
-            }
-
-            if (g_pump_ctrl.voice_command_armed == 0U)
-            {
-                if (voice_result == 0U)
-                {
-                    g_pump_ctrl.voice_command_armed = 1U;
-                }
-            }
-            else if (camera_app_voice_result_is_supported(voice_result) != 0U)
-            {
-                uint8_t voice_target = CAMERA_DISPENSE_TARGET_NONE;
-                uint8_t voice_temp = CAMERA_WATER_TEMP_COLD;
-
-                camera_app_voice_apply_request(voice_result, &voice_target, &voice_temp);
-                camera_app_pump_ctrl_start_voice_wait(voice_target,
-                                                      voice_temp,
-                                                      HAL_GetTick(),
-                                                      "voice_cmd");
                 break;
             }
 
@@ -4591,13 +5341,17 @@ static void camera_app_pump_ctrl_consume_result(const camera_ai_result_t *result
             now_ms = HAL_GetTick();
             if ((int32_t)(now_ms - g_pump_ctrl.decision_deadline_ms) >= 0)
             {
-                if (camera_app_pump_ctrl_has_stable_cup() != 0U)
+                if (camera_app_pump_ctrl_start_ready(result) != 0U)
                 {
                     camera_app_pump_ctrl_start_auto_cold();
                 }
                 else if (camera_app_pump_ctrl_has_stable_non_cup() != 0U)
                 {
                     camera_app_pump_ctrl_cancel_pre_dispense("cup_removed_before_dispense");
+                }
+                else
+                {
+                    camera_app_pump_ctrl_cancel_pre_dispense("start_conf_low");
                 }
             }
             break;
@@ -4619,7 +5373,7 @@ static void camera_app_pump_ctrl_consume_result(const camera_ai_result_t *result
             }
             if ((int32_t)(now_ms - g_pump_ctrl.decision_deadline_ms) >= 0)
             {
-                if (camera_app_pump_ctrl_has_stable_cup() != 0U)
+                if (camera_app_pump_ctrl_start_ready(result) != 0U)
                 {
                     camera_app_pump_ctrl_start_voice_dispense(g_pump_ctrl.dispense_target,
                                                               g_pump_ctrl.water_temp,
@@ -4628,6 +5382,10 @@ static void camera_app_pump_ctrl_consume_result(const camera_ai_result_t *result
                 else if (camera_app_pump_ctrl_has_stable_non_cup() != 0U)
                 {
                     camera_app_pump_ctrl_cancel_pre_dispense("cup_removed_before_dispense");
+                }
+                else
+                {
+                    camera_app_pump_ctrl_cancel_pre_dispense("start_conf_low");
                 }
             }
             break;
@@ -4649,7 +5407,6 @@ static void camera_app_pump_ctrl_consume_result(const camera_ai_result_t *result
                 camera_app_pump_ctrl_fault_to_standby("abnormal");
                 break;
             }
-
             camera_app_pump_ctrl_push_reg(result->level_reg);
 
             if (camera_app_pump_ctrl_reg_target_reached(&reg_avg) != 0U)
@@ -5540,6 +6297,7 @@ void CameraApp_Init(void)
     Pump_Init();
     camera_app_log("[APP] pump init ok\r\n");
     camera_app_pump_ctrl_reset();
+    camera_app_parental_lock_load();
 #if (PUMP_FORCE_ON_TEST_MODE != 0U)
     Pump_StartFast();
     camera_app_log("[PUMP_TEST] force on PH6=1 duty=999\r\n");
@@ -5837,6 +6595,7 @@ void CameraApp_Run(void)
 
 #if (APP_MODE == APP_MODE_PUMP_CTRL)
     camera_app_esp32_process_pending();
+    camera_app_voice_service(HAL_GetTick());
     camera_app_esp32_volume_poll(HAL_GetTick());
 #if ((CAMERA_FACE_IDENTITY_ENABLE != 0U) && (CAMERA_FACE_BACKEND_OPENMV != 0U))
     if (camera_app_face_manager_service() != 0U)
@@ -5856,6 +6615,11 @@ void CameraApp_Run(void)
     return;
 #endif
     camera_app_tank_level_poll(HAL_GetTick());
+    if (camera_app_pump_ctrl_service_run_timeout() != 0U)
+    {
+        HAL_Delay(20U);
+        return;
+    }
     if (camera_app_pump_ctrl_service_half_timeout() != 0U)
     {
         HAL_Delay(20U);

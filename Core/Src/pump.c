@@ -2,14 +2,13 @@
 #include "gpio.h"
 #include "pump.h"
 
-#define PUMP_PWM_MAX           999U
-#define PUMP_DUTY_FAST         950U
+#define PUMP_DUTY_FAST_DEFAULT 600U
 #define PUMP_DUTY_SLOW         450U
 #define PUMP_GPIO_TEST_MODE    0U
-#define PUMP_FAST_DC_TEST_MODE 1U
 
 static uint8_t s_pump_initialized = 0U;
 static uint16_t s_pump_last_duty = 0U;
+static uint16_t s_pump_fast_duty = PUMP_DUTY_FAST_DEFAULT;
 
 void Pump_Init(void)
 {
@@ -68,13 +67,27 @@ void Pump_Start(void)
 void Pump_StartFast(void)
 {
     Pump_Start();
-    Pump_SetSpeed(PUMP_DUTY_FAST);
+    Pump_SetSpeed(s_pump_fast_duty);
 }
 
 void Pump_StartSlow(void)
 {
     Pump_Start();
     Pump_SetSpeed(PUMP_DUTY_SLOW);
+}
+
+void Pump_SetFastDuty(uint16_t duty)
+{
+    if (duty > PUMP_PWM_MAX)
+    {
+        duty = PUMP_PWM_MAX;
+    }
+    s_pump_fast_duty = duty;
+}
+
+uint16_t Pump_GetFastDuty(void)
+{
+    return s_pump_fast_duty;
 }
 
 void Pump_ApplyCommand(uint8_t command)

@@ -81,44 +81,61 @@ public class ApiController : ControllerBase
             });
         }
 
-        // 新增饮水记录明细（volume_ml 是本次增量）
-        _db.Records.Add(new Record
+        var recordUsers = new List<User> { user };
+        if (user.Section == "elderly" && user.Role == 2 && user.FpId.HasValue)
         {
-            UserId = user_id,
-            VolumeMl = volume_ml,
-            RecordedAt = now
-        });
-
-        // 每日汇总：网页端权威累加（不再被 C6 的总量覆盖）
-        var summary = await _db.DailySummaries
-            .FirstOrDefaultAsync(d => d.UserId == user_id && d.Date == today);
-
-        if (summary == null)
-        {
-            var targetMl = target_ml ?? _advice.CalculateTargetMl(user.WeightKg);
-            summary = new DailySummary
-            {
-                UserId = user_id,
-                Date = today,
-                TotalMl = volume_ml,
-                UseCount = 1,
-                TargetMl = targetMl,
-                Advice = _advice.GenerateAdvice(user.Name, user.Age, user.Gender,
-                    targetMl, volume_ml, 1)
-            };
-            _db.DailySummaries.Add(summary);
+            var familyUser = await _db.Users
+                .Where(u => u.Section == "home" && (u.Role == 0 || u.Role == 2) && u.FpId == user.FpId)
+                .OrderBy(u => u.Id)
+                .FirstOrDefaultAsync();
+            if (familyUser != null)
+                recordUsers.Add(familyUser);
         }
-        else
+
+        var summaries = new Dictionary<int, DailySummary>();
+        foreach (var recordUser in recordUsers)
         {
-            summary.TotalMl += volume_ml;                     // 权威累加
-            summary.UseCount += 1;
-            if (target_ml.HasValue) summary.TargetMl = target_ml.Value;
-            summary.Advice = _advice.GenerateAdvice(user.Name, user.Age, user.Gender,
-                summary.TargetMl, summary.TotalMl, summary.UseCount);
-            summary.UpdatedAt = now;
+            _db.Records.Add(new Record
+            {
+                UserId = recordUser.Id,
+                VolumeMl = volume_ml,
+                RecordedAt = now
+            });
+
+            var recordSummary = await _db.DailySummaries
+                .FirstOrDefaultAsync(d => d.UserId == recordUser.Id && d.Date == today);
+            var submittedTarget = recordUser.Id == user.Id ? target_ml : null;
+
+            if (recordSummary == null)
+            {
+                var targetMl = submittedTarget ?? _advice.CalculateTargetMl(recordUser.WeightKg);
+                recordSummary = new DailySummary
+                {
+                    UserId = recordUser.Id,
+                    Date = today,
+                    TotalMl = volume_ml,
+                    UseCount = 1,
+                    TargetMl = targetMl,
+                    Advice = _advice.GenerateAdvice(recordUser.Name, recordUser.Age, recordUser.Gender,
+                        targetMl, volume_ml, 1)
+                };
+                _db.DailySummaries.Add(recordSummary);
+            }
+            else
+            {
+                recordSummary.TotalMl += volume_ml;
+                recordSummary.UseCount += 1;
+                if (submittedTarget.HasValue) recordSummary.TargetMl = submittedTarget.Value;
+                recordSummary.Advice = _advice.GenerateAdvice(recordUser.Name, recordUser.Age, recordUser.Gender,
+                    recordSummary.TargetMl, recordSummary.TotalMl, recordSummary.UseCount);
+                recordSummary.UpdatedAt = now;
+            }
+
+            summaries[recordUser.Id] = recordSummary;
         }
 
         await _db.SaveChangesAsync();
+        var summary = summaries[user.Id];
 
         // 计费板块：自动扣费（仅真实出水量时扣费，纯同步请求 volume_ml==0 不扣）
         if (volume_ml > 0 && user.Section == "billing" && user.Role == 3)
@@ -161,46 +178,51 @@ public class ApiController : ControllerBase
         }
 
         // 后台调用 DeepSeek 生成 AI 建议（不阻塞 ESP32 返回；纯同步请求 volume_ml==0 已在前面提前返回）
-        var dbUserId = user.Id;
-        var summaryId = summary.Id;
+        var adviceTargets = summaries
+            .Select(pair => (UserId: pair.Key, SummaryId: pair.Value.Id))
+            .ToArray();
 
         _ = Task.Run(async () =>
         {
-            try
+            using var scope = _scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var deepSeek = scope.ServiceProvider.GetRequiredService<DeepSeekService>();
+            var pushPlus = scope.ServiceProvider.GetRequiredService<PushPlusService>();
+
+            foreach (var target in adviceTargets)
             {
-                using var scope = _scopeFactory.CreateScope();
-                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-                var deepSeek = scope.ServiceProvider.GetRequiredService<DeepSeekService>();
-                var pushPlus = scope.ServiceProvider.GetRequiredService<PushPlusService>();
-                var latestUser = await db.Users.FindAsync(dbUserId);
-                var latestSummary = await db.DailySummaries.FindAsync(summaryId);
-                if (latestUser == null || latestSummary == null) return;
-
-                var aiAdvice = await deepSeek.GenerateAdviceAsync(
-                    latestUser.Name, latestUser.Age, latestUser.Gender,
-                    latestUser.HeightCm, latestUser.WeightKg,
-                    latestSummary.TotalMl, latestSummary.TargetMl, latestSummary.UseCount
-                );
-
-                latestSummary.AiAdvice = aiAdvice;
-                await db.SaveChangesAsync();
-                _logger.LogInformation("AI建议已生成: 用户 {Name}", latestUser.Name);
-
-                // 若用户绑定了微信token，推送DeepSeek建议
-                if (!string.IsNullOrEmpty(latestUser.Phone))
+                try
                 {
-                    var (ok, msg) = await pushPlus.SendAsync(latestUser.Phone,
-                        $"💧 {latestUser.Name}的饮水建议", aiAdvice);
-                    _logger.LogInformation("推送饮水建议到微信 {Name}: {Ok} ({Msg})", latestUser.Name, ok, msg);
+                    var latestUser = await db.Users.FindAsync(target.UserId);
+                    var latestSummary = await db.DailySummaries.FindAsync(target.SummaryId);
+                    if (latestUser == null || latestSummary == null) continue;
+
+                    var aiAdvice = await deepSeek.GenerateAdviceAsync(
+                        latestUser.Name, latestUser.Age, latestUser.Gender,
+                        latestUser.HeightCm, latestUser.WeightKg,
+                        latestSummary.TotalMl, latestSummary.TargetMl, latestSummary.UseCount
+                    );
+
+                    latestSummary.AiAdvice = aiAdvice;
+                    await db.SaveChangesAsync();
+                    _logger.LogInformation("AI建议已生成: 用户 {Name}", latestUser.Name);
+
+                    if (!string.IsNullOrEmpty(latestUser.Phone))
+                    {
+                        var (ok, msg) = await pushPlus.SendAsync(latestUser.Phone,
+                            $"💧 {latestUser.Name}的饮水建议", aiAdvice);
+                        _logger.LogInformation("推送饮水建议到微信 {Name}: {Ok} ({Msg})", latestUser.Name, ok, msg);
+                    }
                 }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "AI建议生成失败: 用户 {Name}", user.Name);
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "AI建议生成失败: 用户 {UserId}", target.UserId);
+                }
             }
         });
 
-        _logger.LogInformation("饮水记录: 用户 {Name}({UserId}) 饮水 {Volume}ml", user.Name, user_id, volume_ml);
+        _logger.LogInformation("饮水记录: 用户 {Name}({UserId}) 饮水 {Volume}ml，同步 {Count} 个账户",
+            user.Name, user_id, volume_ml, recordUsers.Count);
 
         return Ok(new
         {

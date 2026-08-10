@@ -724,7 +724,7 @@ STMicroelectronics.X-CUBE-AI.10.2.0.IPParameters=HeapSize,StackSize,ModelHashLis
 STMicroelectronics.X-CUBE-AI.10.2.0.InternalRamActivationBufferMaxSize=AI_WATERLEVEL_DATA_ACTIVATIONS_SIZE
 STMicroelectronics.X-CUBE-AI.10.2.0.LatestDirectoryUsed-d03a5daad28e796dada4b3d81b5b95cdf6c02e5ab22478ae2e92aee2ed7456e2=C\:\\Users\\heshizhe\\Desktop\\STM32\\H7serial\\models\\face
 STMicroelectronics.X-CUBE-AI.10.2.0.LatestDirectoryUsed-2b0e941e6f16cc048c20aee0c8e31f569118f65d702914540f7bfdc14048d78a=C\:\\Users\\heshizhe\\Desktop\\STM32\\H7serial\\models\\face
-STMicroelectronics.X-CUBE-AI.10.2.0.LatestDirectoryUsed-e1f2f966a8f24512d56db1f2ac5999c9a4b31a567fc9011c52fa71a225c07176=D\:\\
+STMicroelectronics.X-CUBE-AI.10.2.0.LatestDirectoryUsed-e1f2f966a8f24512d56db1f2ac5999c9a4b31a567fc9011c52fa71a225c07176=C\:\\Users\\heshizhe\\Desktop\\STM32\\H7serial\\models\\waterlevel
 STMicroelectronics.X-CUBE-AI.10.2.0.MaximumNumberOfInputLayer=1
 STMicroelectronics.X-CUBE-AI.10.2.0.MaximumNumberOfOutputLayer=12
 STMicroelectronics.X-CUBE-AI.10.2.0.MaximumSizeOfInputLayer=1
@@ -754,7 +754,7 @@ STMicroelectronics.X-CUBE-AI.10.2.0.ModelRamOccupation-2b0e941e6f16cc048c20aee0c
 STMicroelectronics.X-CUBE-AI.10.2.0.ModelRamOccupation-e1f2f966a8f24512d56db1f2ac5999c9a4b31a567fc9011c52fa71a225c07176=187088
 STMicroelectronics.X-CUBE-AI.10.2.0.ModelStructureFile-d03a5daad28e796dada4b3d81b5b95cdf6c02e5ab22478ae2e92aee2ed7456e2=models/face/yunetn_320_qdq_int8.onnx
 STMicroelectronics.X-CUBE-AI.10.2.0.ModelStructureFile-2b0e941e6f16cc048c20aee0c8e31f569118f65d702914540f7bfdc14048d78a=models/face/face_recognition_sface_2021dec_int8.onnx
-STMicroelectronics.X-CUBE-AI.10.2.0.ModelStructureFile-e1f2f966a8f24512d56db1f2ac5999c9a4b31a567fc9011c52fa71a225c07176=D\:\\v3_w05_origline_plus_newdata_qat_st_pure_int8.onnx
+STMicroelectronics.X-CUBE-AI.10.2.0.ModelStructureFile-e1f2f966a8f24512d56db1f2ac5999c9a4b31a567fc9011c52fa71a225c07176=models/waterlevel/waterlevel_st_roi_x50_y-1_fill180_clahe_r100_v4c_cupmix_live_empty_pure_int8.onnx
 STMicroelectronics.X-CUBE-AI.10.2.0.ModelType-d03a5daad28e796dada4b3d81b5b95cdf6c02e5ab22478ae2e92aee2ed7456e2=STM32Cube.AI MCU runtime
 STMicroelectronics.X-CUBE-AI.10.2.0.ModelType-2b0e941e6f16cc048c20aee0c8e31f569118f65d702914540f7bfdc14048d78a=STM32Cube.AI MCU runtime
 STMicroelectronics.X-CUBE-AI.10.2.0.ModelType-e1f2f966a8f24512d56db1f2ac5999c9a4b31a567fc9011c52fa71a225c07176=STM32Cube.AI MCU runtime
@@ -792,7 +792,7 @@ STMicroelectronics.X-CUBE-AI.10.2.0.optimization-2b0e941e6f16cc048c20aee0c8e31f5
 STMicroelectronics.X-CUBE-AI.10.2.0.optimization-e1f2f966a8f24512d56db1f2ac5999c9a4b31a567fc9011c52fa71a225c07176=time
 STMicroelectronics.X-CUBE-AI.10.2.0.outputDirectory-d03a5daad28e796dada4b3d81b5b95cdf6c02e5ab22478ae2e92aee2ed7456e2=C\:\\Users\\heshizhe\\Desktop\\STM32\\H7serial\\st_ai_output\\yunet
 STMicroelectronics.X-CUBE-AI.10.2.0.outputDirectory-2b0e941e6f16cc048c20aee0c8e31f569118f65d702914540f7bfdc14048d78a=C\:\\Users\\heshizhe\\Desktop\\STM32\\H7serial\\st_ai_output\\sface
-STMicroelectronics.X-CUBE-AI.10.2.0.outputDirectory-e1f2f966a8f24512d56db1f2ac5999c9a4b31a567fc9011c52fa71a225c07176=D\:\\
+STMicroelectronics.X-CUBE-AI.10.2.0.outputDirectory-e1f2f966a8f24512d56db1f2ac5999c9a4b31a567fc9011c52fa71a225c07176=C\:\\Users\\heshizhe\\Desktop\\STM32\\H7serial\\st_ai_output\\waterlevel
 STMicroelectronics.X-CUBE-AI.10.2.0.useActivationBuffer-d03a5daad28e796dada4b3d81b5b95cdf6c02e5ab22478ae2e92aee2ed7456e2=true
 STMicroelectronics.X-CUBE-AI.10.2.0.useActivationBuffer-2b0e941e6f16cc048c20aee0c8e31f569118f65d702914540f7bfdc14048d78a=true
 STMicroelectronics.X-CUBE-AI.10.2.0.useExternalFlash-d03a5daad28e796dada4b3d81b5b95cdf6c02e5ab22478ae2e92aee2ed7456e2=true

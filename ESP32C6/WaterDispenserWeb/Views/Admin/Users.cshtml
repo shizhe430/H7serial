@@ -61,6 +61,12 @@
                         </td>
                         <td>@user.CreatedAt.ToString("yyyy-MM-dd")</td>
                         <td>
+                            @if (!string.IsNullOrEmpty(user.Phone))
+                            {
+                                <form asp-action="TestPush" asp-route-id="@user.Id" method="post" style="display:inline">
+                                    <button type="submit" class="btn btn-sm btn-outline-success">测试推送</button>
+                                </form>
+                            }
                             <a asp-action="EditUser" asp-route-id="@user.Id" class="btn btn-sm btn-outline-primary">编辑</a>
                             @if (user.Role != 0)
                             {

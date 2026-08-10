@@ -22,8 +22,9 @@ extern "C" {
 #define APP_MODE_OPENMV_HOST_DIAG 12U
 #define APP_MODE_OPENMV_BOARD_DIAG 13U
 #define APP_MODE_WATER_ROI_CALIB 14U
+#define APP_MODE_LCD_TEST 15U
 #ifndef APP_MODE
-#define APP_MODE  APP_MODE_AI_VISUAL
+#define APP_MODE  APP_MODE_PUMP_CTRL
 #endif
 
 /* Calibrated dataset view: SVGA sensor window, 320x240 JPEG and shifted ROI. */
@@ -134,6 +135,8 @@ void CameraApp_Init(void);
 void CameraApp_Run(void);
 void CameraApp_LcdHotPressed(void);
 void CameraApp_LcdColdPressed(void);
+uint8_t CameraApp_GetFaceIdentityEnabled(void);
+uint8_t CameraApp_SetFaceIdentityEnabled(uint8_t enabled);
 
 /* ISR 回调 —— 由 HAL_DCMI_FrameEventCallback 调用 */
 void CameraApp_SignalFrameDone(void);

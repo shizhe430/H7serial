@@ -1,13 +1,14 @@
+using System.Net.Http.Json;
 using System.Text.Json;
 
 namespace WaterDispenserWeb.Services;
 
 /// <summary>
-/// PushPlus 微信推送服务
-/// 通过微信接收饮水提醒消息，免费版每日约200条
+/// Sends per-user notifications through PushPlus.
 /// </summary>
 public class PushPlusService
 {
+    private const string SendEndpoint = "https://www.pushplus.plus/send";
     private readonly HttpClient _httpClient;
 
     public PushPlusService(HttpClient httpClient)
@@ -15,35 +16,52 @@ public class PushPlusService
         _httpClient = httpClient;
     }
 
-    /// <summary>
-    /// 发送微信推送消息
-    /// </summary>
-    /// <param name="token">用户微信绑定的PushPlus token</param>
-    /// <param name="title">消息标题</param>
-    /// <param name="content">消息内容（饮水建议）</param>
-    /// <returns>(成功与否, 返回信息)</returns>
-    public async Task<(bool success, string message)> SendAsync(string token, string title, string content)
+    public async Task<(bool success, string message)> SendAsync(
+        string token,
+        string title,
+        string content,
+        CancellationToken cancellationToken = default)
     {
+        token = token?.Trim() ?? "";
         if (string.IsNullOrEmpty(token))
-            return (false, "未配置微信token");
-
-        var url = $"http://www.pushplus.plus/send?token={Uri.EscapeDataString(token)}" +
-                  $"&title={Uri.EscapeDataString(title)}" +
-                  $"&content={Uri.EscapeDataString(content)}";
+            return (false, "未配置 PushPlus Token");
 
         try
         {
-            var response = await _httpClient.GetAsync(url);
-            var body = await response.Content.ReadAsStringAsync();
+            using var response = await _httpClient.PostAsJsonAsync(
+                SendEndpoint,
+                new
+                {
+                    token,
+                    title,
+                    content,
+                    template = "txt",
+                    channel = "wechat"
+                },
+                cancellationToken);
+
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (!response.IsSuccessStatusCode)
+                return (false, $"PushPlus HTTP {(int)response.StatusCode}");
 
             using var doc = JsonDocument.Parse(body);
-            if (doc.RootElement.TryGetProperty("code", out var codeEl))
-            {
-                int code = codeEl.GetInt32();
-                string msg = doc.RootElement.TryGetProperty("msg", out var msgEl) ? msgEl.GetString() ?? "" : "";
-                return code == 200 ? (true, msg) : (false, msg);
-            }
-            return (false, body);
+            if (!doc.RootElement.TryGetProperty("code", out var codeElement))
+                return (false, "PushPlus 返回格式异常");
+
+            var code = codeElement.ValueKind == JsonValueKind.Number
+                ? codeElement.GetInt32()
+                : int.TryParse(codeElement.GetString(), out var parsedCode) ? parsedCode : 0;
+            var message = doc.RootElement.TryGetProperty("msg", out var messageElement)
+                ? messageElement.GetString() ?? ""
+                : "";
+
+            return code == 200
+                ? (true, string.IsNullOrWhiteSpace(message) ? "发送成功" : message)
+                : (false, string.IsNullOrWhiteSpace(message) ? $"PushPlus 错误码 {code}" : message);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return (false, "PushPlus 请求超时");
         }
         catch (Exception ex)
         {

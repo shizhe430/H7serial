@@ -403,6 +403,10 @@ uint8_t jpeg_to_ai_input_view(const uint8_t *jpg, uint32_t jpg_len, void *dst_in
 
     s_last_width = (uint16_t)jd.width;
     s_last_height = (uint16_t)jd.height;
+    if ((jd.width != SRC_W) || (jd.height != SRC_H))
+    {
+        return 4U;
+    }
     jr = jd_decomp(&jd, tjpgd_output, 0);
     s_last_decomp_status = (uint8_t)jr;
     if (jr != JDR_OK)

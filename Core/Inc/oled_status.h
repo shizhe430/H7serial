@@ -15,6 +15,7 @@ void OLED_Status_Show(uint8_t water_level,
                       uint8_t hot_cold_mode,
                       uint16_t dev_id);
 void OLED_Status_ShowCloud(const char *username_utf8,
+                           uint16_t user_id,
                            uint32_t today_ml,
                            uint32_t use_count,
                            uint32_t remaining_ml,

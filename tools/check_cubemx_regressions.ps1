@@ -32,6 +32,8 @@ function Assert-FileExcludes {
 }
 
 Assert-FileContains 'H7serial.ioc' 'ModelNameList=waterlevel,yunet,sface' 'CubeMX model list is not waterlevel/yunet/sface'
+Assert-FileContains 'H7serial.ioc' 'ModelStructureFile-[^=]+=models/waterlevel/waterlevel_st_roi_x50_y-1_fill180_clahe_r100_v4c_cupmix_live_empty_pure_int8\.onnx' 'Water-level model is not the validated project-local v4c model'
+Assert-FileContains 'H7serial.ioc' 'outputDirectory-[^=]+=C\\:\\\\Users\\\\heshizhe\\\\Desktop\\\\STM32\\\\H7serial\\\\st_ai_output\\\\waterlevel' 'Water-level Cube.AI output directory is not project-local'
 Assert-FileContains 'H7serial.ioc' 'ModelStructureFile-[^=]+=models/face/yunetn_320_qdq_int8\.onnx' 'YuNet does not use the project-local ONNX file'
 Assert-FileContains 'H7serial.ioc' 'ModelStructureFile-[^=]+=models/face/face_recognition_sface_2021dec_int8\.onnx' 'SFace does not use the project-local ONNX file'
 Assert-FileExcludes 'H7serial.ioc' '(facedet|faceid|buffalo_sc)' 'legacy InsightFace model metadata returned'
@@ -59,9 +61,10 @@ foreach ($configuration in @('Debug', 'Release')) {
     $objects = "$configuration/objects.list"
     Assert-FileContains $subdir '\.\./X-CUBE-AI/App/yunet\.c' 'YuNet sources are missing from the build'
     Assert-FileContains $subdir '\.\./X-CUBE-AI/App/sface\.c' 'SFace sources are missing from the build'
-    Assert-FileExcludes $subdir 'X-CUBE-AI/App/(facedet|faceid)\.c' 'legacy face model sources returned to the build'
+    Assert-FileExcludes $subdir 'X-CUBE-AI/App/(facedet|faceid|water_detect)\.c' 'legacy model sources returned to the build'
     Assert-FileContains $objects 'X-CUBE-AI/App/yunet\.o' 'YuNet objects are missing from the link'
     Assert-FileContains $objects 'X-CUBE-AI/App/sface\.o' 'SFace objects are missing from the link'
+    Assert-FileExcludes $objects 'X-CUBE-AI/App/(facedet|faceid|water_detect)\.o' 'legacy model objects returned to the link'
 }
 
 if ($failures.Count -ne 0) {

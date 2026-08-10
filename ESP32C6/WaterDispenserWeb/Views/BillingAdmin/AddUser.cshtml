@@ -45,8 +45,8 @@
             <div class="row">
                 <div class="col-md-12 mb-3">
                     <label asp-for="Phone" class="form-label">信息推送Token（选填）</label>
-                    <input asp-for="Phone" class="form-control" placeholder="PushPlus微信token，填写后每次更新数据会推送扣费/余额提醒到该用户微信；不填则不推送" />
-                    <span class="form-text text-muted">在 pushplus.plus 微信扫码注册获取token，可留空</span>
+                    <input asp-for="Phone" type="password" autocomplete="off" class="form-control" placeholder="PushPlus微信token，填写后每次更新数据会推送扣费/余额提醒到该用户微信；不填则不推送" />
+                    <span class="form-text text-muted"><a href="https://www.pushplus.plus/" target="_blank" rel="noopener">前往 PushPlus 官网注册并复制 Token</a>；可留空</span>
                 </div>
             </div>
             <button type="submit" class="btn btn-primary">保存</button>

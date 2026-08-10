@@ -27,7 +27,7 @@ if (-not (Get-NetTCPConnection -State Listen -LocalPort 3306 -ErrorAction Silent
     }
 
     Start-Process -FilePath $mysqlExe `
-        -ArgumentList "--defaults-file=$mysqlConfig" `
+        -ArgumentList "--defaults-file=`"$mysqlConfig`"" `
         -WindowStyle Hidden
 
     for ($attempt = 0; $attempt -lt 20; $attempt++) {

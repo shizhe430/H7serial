@@ -16,11 +16,13 @@ CREATE TABLE IF NOT EXISTS users (
   password VARCHAR(256) NOT NULL COMMENT '密码',
   name VARCHAR(32) NOT NULL COMMENT '姓名',
   role TINYINT NOT NULL DEFAULT 2 COMMENT '角色:0=管理员 1=护工 2=饮水者',
+  section VARCHAR(32) NOT NULL DEFAULT 'elderly' COMMENT '所属板块',
   gender TINYINT DEFAULT 0 COMMENT '性别:0=未知 1=男 2=女',
   age INT DEFAULT 0,
   height_cm FLOAT DEFAULT 0 COMMENT '身高(cm)',
   weight_kg FLOAT DEFAULT 0 COMMENT '体重(kg)',
   fp_id INT DEFAULT NULL COMMENT '预留:指纹ID',
+  phone VARCHAR(64) DEFAULT NULL COMMENT 'PushPlus用户Token',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -59,5 +61,5 @@ CREATE TABLE IF NOT EXISTS login_logs (
 
 -- 初始化默认管理员账号
 -- 编号: admin  密码: admin123
-INSERT INTO users (username, password, name, role) VALUES
-('admin', 'admin123', '系统管理员', 0);
+INSERT INTO users (username, password, name, role, section) VALUES
+('admin', 'admin123', '系统管理员', 0, '*');

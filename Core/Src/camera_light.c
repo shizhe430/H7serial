@@ -2,7 +2,7 @@
 
 #include "main.h"
 
-#define CAMERA_LIGHT_DEFAULT_DUTY 180U
+#define CAMERA_LIGHT_DEFAULT_DUTY 400U
 
 static uint16_t s_camera_light_duty;
 static uint8_t s_camera_light_initialized;
