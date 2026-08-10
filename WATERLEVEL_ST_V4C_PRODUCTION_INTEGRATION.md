@@ -50,6 +50,8 @@ The repository remains in `APP_MODE_AI_VISUAL` because that is the independently
 5. Keep input dump, dump-only inference, gray diagnostic streaming, model self-test, and forced-pump test disabled.
 6. Build Release and confirm RAM and Flash usage remain within the validated H743 placement.
 
+The committed Release build list includes `camera_light.c` and `environment_sensors.c`; removing either entry causes unresolved references before the water-level firmware can link.
+
 Do not commit a production-mode switch until the complete integrated application is ready, because pump-control mode also enables the project's unrelated face, voice, cloud, and safety flows.
 
 ## Acceptance Order

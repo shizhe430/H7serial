@@ -19,3 +19,4 @@
 - Sequence acceptance after the threshold change: at `0.470`, 82/100 low and 18/100 half with a maximum half-cup run of two frames. The existing three-frame production decision therefore rejects every observed false half-cup run.
 - Added the production integration record and retained AI visual mode as the safe validated rollback configuration. The production build changes only `APP_MODE` after completing independent inference acceptance.
 - Audited the production camera path and added pump-control mode to both SVGA wide-view setup conditions; this prevents a silent camera-domain change when moving from visual validation to the working state machine.
+- A clean worktree build exposed missing Release registrations for the already tracked camera-light and environment-sensor sources. Added their source, object, and dependency entries without importing unrelated OpenMV or face-model build changes.

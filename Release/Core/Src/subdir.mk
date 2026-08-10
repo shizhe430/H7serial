@@ -5,16 +5,19 @@
 
 # Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS += \
+../Core/Src/as608.c \
 ../Core/Src/background_img.c \
 ../Core/Src/camera_app.c \
+../Core/Src/camera_light.c \
 ../Core/Src/character_library.c \
 ../Core/Src/ctiic.c \
 ../Core/Src/dcmi.c \
 ../Core/Src/delay.c \
 ../Core/Src/dma.c \
+../Core/Src/environment_sensors.c \
 ../Core/Src/face_ai.c \
-../Core/Src/font.c \
 ../Core/Src/fmc.c \
+../Core/Src/font.c \
 ../Core/Src/geren_logo.c \
 ../Core/Src/gpio.c \
 ../Core/Src/i2c.c \
@@ -46,16 +49,19 @@ C_SRCS += \
 ../Core/Src/yue_logo.c 
 
 OBJS += \
+./Core/Src/as608.o \
 ./Core/Src/background_img.o \
 ./Core/Src/camera_app.o \
+./Core/Src/camera_light.o \
 ./Core/Src/character_library.o \
 ./Core/Src/ctiic.o \
 ./Core/Src/dcmi.o \
 ./Core/Src/delay.o \
 ./Core/Src/dma.o \
+./Core/Src/environment_sensors.o \
 ./Core/Src/face_ai.o \
-./Core/Src/font.o \
 ./Core/Src/fmc.o \
+./Core/Src/font.o \
 ./Core/Src/geren_logo.o \
 ./Core/Src/gpio.o \
 ./Core/Src/i2c.o \
@@ -87,16 +93,19 @@ OBJS += \
 ./Core/Src/yue_logo.o 
 
 C_DEPS += \
+./Core/Src/as608.d \
 ./Core/Src/background_img.d \
 ./Core/Src/camera_app.d \
+./Core/Src/camera_light.d \
 ./Core/Src/character_library.d \
 ./Core/Src/ctiic.d \
 ./Core/Src/dcmi.d \
 ./Core/Src/delay.d \
 ./Core/Src/dma.d \
+./Core/Src/environment_sensors.d \
 ./Core/Src/face_ai.d \
-./Core/Src/font.d \
 ./Core/Src/fmc.d \
+./Core/Src/font.d \
 ./Core/Src/geren_logo.d \
 ./Core/Src/gpio.d \
 ./Core/Src/i2c.d \
